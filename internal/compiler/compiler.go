@@ -552,6 +552,13 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.loadSigs(sources)
 	tick("prelude")
 	c.evalSites = map[boot.Loc]bool{}
+	if opts.boot != nil {
+		for _, e := range opts.boot.Evals { // a gem file the entry loads collects its class_eval before main's turn collects the evals (racc's do_parse)
+			if l, ok := boot.ParseLoc(e.Caller); ok && e.Kind == "class_eval" && e.Self != "" {
+				c.evalSites[boot.Loc{File: c.real(l.File), Line: l.Line}] = true
+			}
+		}
+	}
 	for i, src := range sources {
 		if i == len(sources)-1 && opts.mainLast && opts.boot != nil { // load-time evals run before the program's main file (decision 204)
 			c.collectBootEvals(ctx, opts.boot.Evals)

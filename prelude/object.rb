@@ -28,6 +28,10 @@ module Kernel
   #: () -> self
   def itself = self
 
+  # RubyGems' activation: the closed world fixed each gem's version when it compiled (prism's translation/parser.rb)
+  #: (String, *String) -> bool
+  private def gem(name, *requirements) = true
+
   #: () -> nil
   def display = %x{ rbWriteOut(string(rbToS(self))) }
 

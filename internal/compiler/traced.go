@@ -22,6 +22,10 @@ var (
 )
 
 // TracedEntry is a traced run's decision 197 entry for main, and the -I dirs its requires resolve from (decision 296).
+// pureFallback are gems whose C extension rugaroo does without: prism's is the prism/prism prelude lib, racc's parser.rb
+// rescues the LoadError of racc/cparse into its Ruby routines (decision 427).
+var pureFallback = map[string]bool{"prism": true, "racc": true}
+
 func TracedEntry(l *boot.Loaded, main string) (src []byte, dirs []string) {
 	var b bytes.Buffer
 	seen := map[string]bool{}
@@ -52,7 +56,7 @@ func TracedEntry(l *boot.Loaded, main string) (src []byte, dirs []string) {
 		} else if lib := strings.ReplaceAll(m1(m), "-", "/"); m != nil && builtinLib(lib) {
 			add(lib) // the net-http gem is the prelude's net/http, by RubyGems' naming (decision 404)
 			continue
-		} else if m != nil && native[m[1]] {
+		} else if m != nil && native[m[1]] && !pureFallback[m[1]] {
 			continue
 		}
 		if dir, rel := under(f, l.StdDirs); dir != "" {

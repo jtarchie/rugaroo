@@ -691,6 +691,9 @@ func isClassEvalCall(n *parser.CallNode) bool {
 // would be a real eval, which the boot snapshot handles at compile time
 // (decision 161); block parameters belong to the *_exec forms, not supported.
 func (c *Compiler) collectClassEval(ctx context.Context, f *File, cls *Class, n *parser.CallNode, scope []*Class, loadTime bool) {
+	if len(callArgs(n)) > 0 && c.evalSites[f.bootLoc(n.Location.StartOffset)] {
+		return // boot ran it: its source is already this class's body (decision 204; racc's `class_eval <<~RUBY`)
+	}
 	if len(callArgs(n)) > 0 {
 		c.errorf(f, n, "%s with an argument is not supported (a String to eval is not)", n.Name)
 	}

@@ -320,7 +320,7 @@ func (c *Compiler) addAttrs(f *File, cls *Class, n *parser.CallNode, args []pars
 		}
 		rt = parsed
 	}
-	for _, a := range args {
+	for _, a := range c.splatConstSymbols(f, args, scope) {
 		sym, ok := a.(*parser.SymbolNode)
 		if !ok {
 			c.errorf(f, a, "%s argument must be a symbol", n.Name)
@@ -604,19 +604,84 @@ func (c *Compiler) aliasNew(ctx context.Context, d singletonMisc, m *Class, n *p
 // singletonAttrs are the attr calls singletonAlias takes onto a class's singleton.
 var singletonAttrs = map[string]bool{"attr_reader": true, "attr_writer": true, "attr_accessor": true}
 
-// sigFitsDef reports a sig arm whose positional params the def can bind: as many as the def's, or a rest on both sides.
+// sigFitsDef reports a sig arm the def can bind: as many positional params, a rest on both sides or neither, and each
+// keyword one the def names (prism's `lex_compat: (String, ?command_line: String, ...)` is `def lex_compat(source, **options)`).
 func sigFitsDef(o *rbs.MethodType, ps *parser.ParametersNode) bool {
 	n, rest := 0, false
+	var kws []string
 	for _, p := range o.Params {
 		switch p.Kind {
 		case rbs.ParamPositional:
 			n++
 		case rbs.ParamRest:
 			rest = true
+		case rbs.ParamKeyword:
+			kws = append(kws, p.Name)
 		}
 	}
 	if ps == nil {
-		return n == 0 && !rest
+		return n == 0 && !rest && len(kws) == 0
+	}
+	for _, kw := range kws {
+		if !slices.ContainsFunc(ps.Keywords, func(k parser.Node) bool {
+			switch k := k.(type) {
+			case *parser.RequiredKeywordParameterNode:
+				return k.Name == kw
+			case *parser.OptionalKeywordParameterNode:
+				return k.Name == kw
+			}
+			return false
+		}) {
+			return false
+		}
 	}
 	return n == len(ps.Requireds)+len(ps.Optionals)+len(ps.Posts) && rest == (ps.Rest != nil)
+}
+
+// splatConstSymbols spreads `*CONST` where CONST, already assigned, is a literal Array of Symbols (`%i[...]`, maybe
+// `.freeze`): parser's `attr_accessor(*FLAGS)` (decision 427). Anything else stays as it is.
+func (c *Compiler) splatConstSymbols(f *File, args []parser.Node, scope []*Class) []parser.Node {
+	var out []parser.Node
+	for i, a := range args {
+		sp, ok := a.(*parser.SplatNode)
+		var syms []parser.Node
+		if ok {
+			var k *Const
+			_ = catchCompileError(func() { _, k = c.lookupConst(f, sp.Expression, scope) })
+			if k != nil {
+				syms = literalSymbols(k.Value)
+			}
+		}
+		if syms == nil {
+			if out != nil {
+				out = append(out, a)
+			}
+			continue
+		}
+		if out == nil {
+			out = append(out, args[:i]...)
+		}
+		out = append(out, syms...)
+	}
+	if out == nil {
+		return args
+	}
+	return out
+}
+
+// literalSymbols is v's elements when v is an Array literal of Symbols, maybe `.freeze`d; else nil.
+func literalSymbols(v parser.Node) []parser.Node {
+	if call, ok := v.(*parser.CallNode); ok && call.Name == "freeze" && call.Arguments == nil {
+		v = call.Receiver
+	}
+	arr, ok := v.(*parser.ArrayNode)
+	if !ok || len(arr.Elements) == 0 {
+		return nil
+	}
+	for _, e := range arr.Elements {
+		if _, isSym := e.(*parser.SymbolNode); !isSym {
+			return nil
+		}
+	}
+	return arr.Elements
 }
