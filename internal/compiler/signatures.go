@@ -495,8 +495,11 @@ func protocolSig(n *parser.DefNode) string {
 func superPassesLocals(body parser.Node) bool {
 	return !anyNode(body, func(x parser.Node) bool {
 		sup, ok := x.(*parser.SuperNode)
-		if !ok || sup.Arguments == nil {
-			return false
+		if !ok {
+			return false // a zsuper is a ForwardingSuperNode: every parameter passed on
+		}
+		if sup.Arguments == nil || len(sup.Arguments.Arguments) == 0 {
+			return true // `super()`: the parent gets none of these parameters, so their types are this def's own (FormatterSet < Array's `initialize(options = {})`)
 		}
 		for _, a := range sup.Arguments.Arguments {
 			if sp, ok := a.(*parser.SplatNode); ok {
