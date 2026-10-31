@@ -797,6 +797,14 @@ func (f *fctx) selfCall(n parser.Node, recv expr, name string, args []parser.Nod
 	if td := f.c.topDefs[name]; td != nil {
 		return f.callEntry(n, &entry{M: td}, recv, args, block)
 	}
+	if f.owner.IsModule && (name == "<" || name == "<=" || name == ">" || name == ">=") && len(args) == 1 && block == nil &&
+		!slices.ContainsFunc(f.owner.includers, func(k *Class) bool { return k.metaOf == nil }) {
+		// a module only ever extended onto classes (regexp_parser's Shared::ClassMethods): self is a class object, and
+		// `self < Sequence` is an ancestry test (decision 255), not a Module method every class object would answer
+		a := f.genExpr(args[0], nil)
+		code := fmt.Sprintf("rbModuleCmp(%s, %s, %t, %t)", f.coerce(nil, recv, TAny{}), f.coerce(args[0], a, TAny{}), name[0] == '>', len(name) == 2)
+		return expr{code: code, typ: TOpt{Elem: f.cls("Boolean")}}
+	}
 	if f.owner.IsModule && f.lenient() && block == nil && f.c.classes["Class"].lookup(name) != nil {
 		// a module extended onto classes calling a Class method on self (bindata's DSLMixin: `superclass.dsl_parser`):
 		// the class object answers it, before the module's method_missing
