@@ -152,20 +152,25 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 	named, optNamed := map[string]bool{}, map[string]bool{}
 	note := func(f *File) {
 		opt := !c.bundledFile(f)
-		anyNode(f.Root, func(n parser.Node) bool {
-			var k string
-			switch n := n.(type) {
-			case *parser.ConstantReadNode:
-				k = n.Name
-			case *parser.ConstantPathNode:
-				k = *n.Name
-			case *parser.SymbolNode: // a symbol names it too: rubocop registers each cop as `register_cop :DuplicatedGem, path` and reaches it by `const_get`
-				k = n.Unescaped.Value
-			default:
-				return false
-			}
+		mark := func(k string) {
 			named[k] = true
 			optNamed[k] = optNamed[k] || opt
+		}
+		anyNode(f.Root, func(n parser.Node) bool {
+			switch n := n.(type) {
+			case *parser.ConstantReadNode:
+				mark(n.Name)
+			case *parser.ConstantPathNode:
+				mark(*n.Name)
+			case *parser.CallNode: // a symbol argument names it too: rubocop registers each cop as `register_cop :DuplicatedGem, path` and reaches it by `const_get`; an `autoload :X, path` registration itself does not
+				if n.Name != "autoload" && n.Arguments != nil {
+					for _, a := range n.Arguments.Arguments {
+						if sym, ok := a.(*parser.SymbolNode); ok {
+							mark(sym.Unescaped.Value)
+						}
+					}
+				}
+			}
 			return false
 		})
 	}
