@@ -239,7 +239,7 @@ func (c *Compiler) hookCall(h classHook) parser.Node {
 
 // genStandIn emits what main's statement list holds in place of source: a constant's assignment, a required file,
 // a class body's statement; false for an ordinary node.
-func (f *fctx) genStandIn(n parser.Node) bool {
+func (f *fctx) genStandIn(n parser.Node, t tail) bool {
 	switch n := n.(type) {
 	case *constInit:
 		f.genConstInit(n.k)
@@ -251,7 +251,7 @@ func (f *fctx) genStandIn(n parser.Node) bool {
 		if k := f.c.consts[qualify(f.lex, n.Name)]; k == nil || !f.bodyUnit && !k.inMain && !k.inBody { // nil: written inside a block, which collect never sees; inBody: also inside a body's begin (decision 334)
 			return false
 		}
-		f.genBodyConst(n)
+		f.genBodyConst(n, t)
 	default:
 		return false
 	}
@@ -259,13 +259,16 @@ func (f *fctx) genStandIn(n parser.Node) bool {
 }
 
 // genBodyConst assigns a constant that reads its class body's locals, inside the body's unit (decision 170).
-func (f *fctx) genBodyConst(n *parser.ConstantWriteNode) {
+func (f *fctx) genBodyConst(n *parser.ConstantWriteNode, t tail) {
 	k := f.c.consts[qualify(f.lex, n.Name)]
 	typ := f.c.constType(k)
 	f.lineOf(n)
 	f.emit("%s = %s", k.GoName, f.coerce(n.Value, f.genExpr(n.Value, typ), typ))
-	if t := cmp.Or(k.first, k); t.guarded {
-		f.emit("%s = true", constSet(t))
+	if g := cmp.Or(k.first, k); g.guarded {
+		f.emit("%s = true", constSet(g))
+	}
+	if t.kind != tailNone { // last in a block: the assignment's value is the block's
+		f.applyTail(n, expr{code: k.GoName, typ: typ}, t)
 	}
 }
 

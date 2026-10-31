@@ -657,7 +657,7 @@ func (f *fctx) emptyTail(n parser.Node, t tail) {
 }
 
 func (f *fctx) genStmt(n parser.Node, t tail) {
-	if f.genStandIn(n) || f.noopStmt(n, t) || f.genLogicJump(n, t) {
+	if f.genStandIn(n, t) || f.noopStmt(n, t) || f.genLogicJump(n, t) {
 		return
 	}
 	f.lineOf(n)

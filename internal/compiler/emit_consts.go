@@ -77,7 +77,7 @@ func (c *Compiler) constType(k *Const) (typ Type) {
 		return k.Type
 	}
 	if k.inBody {
-		c.errorf(k.File, k.Value, "constant %s reads a local of its class body: give it a type (`#: T`, or `%s: T` in a .rbs file)", k.RubyName, k.RubyName[strings.LastIndex(k.RubyName, ":")+1:])
+		c.errorf(k.File, k.Value, "constant %s is assigned inside its class body's statements (a local it reads, a begin or a block): give it a type (`#: T`, or `%s: T` in a .rbs file)", k.RubyName, k.RubyName[strings.LastIndex(k.RubyName, ":")+1:])
 	}
 	if k.resolving && c.gemFile(k.File) {
 		return TAny{} // gem code: a constant whose inferred type loops back to itself is untyped (decision 172)

@@ -9,6 +9,7 @@ require "ftpish"
 require "primeish"
 require "ctx"
 require "seqish"
+require "blkconst"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -74,3 +75,4 @@ c.in_def = true
 p c.in_def, c.in_class
 sq = SubSeqish.new([3, 1, 2])
 p sq.map { |e| e * 2 }, sq.sort, sq.to_h, sq.first_two, sq.each_with_index.to_a, sq.select(&:odd?)
+p BlkConstWidth::INDEX > 0, BlkConstWidth::FIRST == BlkConstWidth::INDEX + 1, BlkConstWidth.idx == BlkConstWidth::INDEX

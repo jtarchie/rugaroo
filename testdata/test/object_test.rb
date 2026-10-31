@@ -5342,7 +5342,20 @@ module ObjectTests
     NAMES = %w[a b].map { |s| s * factor } #: Array[String]
   end
 
+  # A constant assigned inside a class-body block is the class's, as unicode-display_width's
+  # `File.open(INDEX_FILENAME, "rb") { |file| INDEX = Marshal.load(...) }`.
+  class BodyBlockConst
+    [2, 3].tap do |pair|
+      PRODUCT = pair.fetch(0) * pair.fetch(1) #: Integer
+    end
+    NEXT = PRODUCT + 1
+  end
+
   class ObjectDupTest < Minitest::Test
+    def test_class_body_block_constant
+      assert_equal [6, 7], [BodyBlockConst::PRODUCT, BodyBlockConst::NEXT]
+    end
+
     def test_dup_is_shallow_and_calls_initialize_copy
       a = DupBox.new
       b = a.dup

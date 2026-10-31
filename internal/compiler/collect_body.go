@@ -48,6 +48,7 @@ func (c *Compiler) collectBody(ctx context.Context, f *File, cls *Class, body pa
 					c.scanAnon(ctx, f, n, scope)
 				}
 				if !c.collectClassCall(ctx, f, cls, n, vis, scope) {
+					c.declareBeginConsts(f, n, scope, loadTime) // `File.open(path) { |io| INDEX = Marshal.load(io.read) }` (unicode-display_width)
 					c.classBodyCall(f, n, scope, loadTime)
 				}
 			case *parser.SingletonClassNode:
@@ -89,18 +90,30 @@ func (c *Compiler) collectBody(ctx context.Context, f *File, cls *Class, body pa
 
 // declareBeginConsts declares the constants a class-body begin assigns, in its body, rescue or else clauses, where it
 // runs: kramdown's `begin; require 'rouge'; AVAILABLE = true; rescue LoadError; AVAILABLE = false; end`, which MRI's
-// `const_defined?(:AVAILABLE)` then sees (decision 334). The first assignment gives the type.
+// `const_defined?(:AVAILABLE)` then sees (decision 334). The first assignment gives the type. A class-body call's block
+// is the same: unicode-display_width's `File.open(INDEX_FILENAME, "rb") { |file| INDEX = Marshal.load(...) }`.
 func (c *Compiler) declareBeginConsts(f *File, s parser.Node, scope []*Class, loadTime bool) {
-	n, ok := s.(*parser.BeginNode)
-	if !ok || !loadTime {
+	if !loadTime {
 		return
 	}
-	clauses := []*parser.StatementsNode{n.Statements}
-	for rc := n.RescueClause; rc != nil; rc = rc.Subsequent {
-		clauses = append(clauses, rc.Statements)
-	}
-	if n.ElseClause != nil {
-		clauses = append(clauses, n.ElseClause.Statements)
+	var clauses []*parser.StatementsNode
+	switch n := s.(type) {
+	case *parser.BeginNode:
+		clauses = append(clauses, n.Statements)
+		for rc := n.RescueClause; rc != nil; rc = rc.Subsequent {
+			clauses = append(clauses, rc.Statements)
+		}
+		if n.ElseClause != nil {
+			clauses = append(clauses, n.ElseClause.Statements)
+		}
+	case *parser.CallNode:
+		if b, ok := n.Block.(*parser.BlockNode); ok {
+			if st, ok := b.Body.(*parser.StatementsNode); ok {
+				clauses = append(clauses, st)
+			}
+		}
+	default:
+		return
 	}
 	for _, st := range clauses {
 		if st == nil {
