@@ -265,7 +265,7 @@ func (c *Compiler) checkAdaptable(own, s slot) {
 		c.errorAt(m.srcPos, "%s: %s overrides %s: %s, but %s; give it the parent's signature or another name",
 			m, c.sigText(own), sm, c.sigText(s), why)
 	}
-	if (m.Block != nil || sm.Block != nil) && !c.sameIterator(own, s) {
+	if (m.Block != nil || sm.Block != nil) && !c.sameIterator(own, s) && !ignoresSlotBlock(m, sm) {
 		fail("a block-taking override must keep the signature")
 	}
 	if restSlot(own.e.M, sm) { // Object#to_json(*args) answered by `to_json(options = nil)`: by argument count
@@ -292,7 +292,7 @@ func (c *Compiler) checkAdaptable(own, s slot) {
 	}
 	req, maxArgs := arity(m)
 	if n := len(sm.Params); n < req || maxArgs >= 0 && n > maxArgs {
-		return // the adapter raises ArgumentError, as MRI would
+		return // the adapter raises ArgumentError, as MRI would (or checks the count passed, when the slot counts it: fewerParams)
 	}
 	env, oenv := c.slotEnv(s), c.slotEnv(own)
 	// a gem's Hash[String, untyped] over Hash[String, String]: the adapter converts a copy (rbAs, decision 172)
@@ -316,6 +316,23 @@ func (c *Compiler) checkAdaptable(own, s slot) {
 func kwSlot(m, sm *Method) bool {
 	kw := func(p Param) bool { return p.Keyword || p.KwRest }
 	return slices.ContainsFunc(m.Params, kw) && slices.ContainsFunc(sm.Params, kw) && m.Block == nil && sm.Block == nil
+}
+
+// ignoresSlotBlock reports an override without a block over a slot whose block is optional: as MRI's, a block passed to
+// a method that never yields is ignored (BlockNode#lambda? over Node's matcher).
+func ignoresSlotBlock(m, sm *Method) bool {
+	return m.Block == nil && sm.Block != nil && sm.Block.Optional && !sm.Iterator && !m.Iterator
+}
+
+// fewerParams reports an override taking fewer positional parameters than a slot that counts what a call passed
+// (rbArgc, decision 8): the adapter checks that count and passes the leading ones; the slot's keywords are not passed
+// on. ponytail: keywords a call did pass should raise ArgumentError, as MRI's; they are dropped.
+func fewerParams(m, sm *Method) bool {
+	if !sm.calleeDefaults || m.Block != nil || slices.ContainsFunc(m.Params, func(p Param) bool { return p.Rest || p.Keyword || p.KwRest || p.Post }) {
+		return false
+	}
+	_, maxArgs := arity(m)
+	return maxArgs >= 0 && len(sm.Params) > maxArgs
 }
 
 // positionals is m's leading positional parameters (no rest, keywords or post).
@@ -532,14 +549,19 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 	}
 	n := len(s.e.M.Params)
 	if req, maxArgs := arity(e.M); n < req || maxArgs >= 0 && n > maxArgs {
-		f.emit("rbArity(%d, %d, %d)\n\tpanic(\"unreachable\")", n, req, maxArgs)
-		return f.buf.String()
+		if fewerParams(e.M, s.e.M) { // `def lambda?` over a matcher's `lambda?(node = self, **defaults, &block)`: what the call passed decides (rubocop-ast)
+			f.emit("rbArity(rbArgc, %d, %d)", req, maxArgs)
+			n = maxArgs
+		} else {
+			f.emit("rbArity(%d, %d, %d)\n\tpanic(\"unreachable\")", n, req, maxArgs)
+			return f.buf.String()
+		}
 	}
 	recv := expr{code: "self", typ: TClass{C: cls}}
 	env, oenv := c.slotEnv(s), composeEnv(e.Env, nil)
 	oenv["Self"] = recv.typ
 	args := make([]parser.Node, n)
-	for i, p := range s.e.M.Params {
+	for i, p := range s.e.M.Params[:n] {
 		a := expr{code: goParamName(p.Name, i), typ: subst(p.Type, env)}
 		to := subst(paramAt(e.M, i).Type, oenv)
 		if tc, ok := to.(TClass); ok && tc.C.isStruct() && !c.adapts(a.typ, to, false) {
