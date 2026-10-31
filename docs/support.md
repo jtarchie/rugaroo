@@ -87,7 +87,7 @@ ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-10-30 (commit f393057d; 
 | `Thread`, `Queue`, `SizedQueue`, `Mutex`, `ThreadGroup` | stable | 158 of 240 (66%) | 238 | Goroutines and channels; `SizedQueue` is a Go channel (decision 403). |
 | `Fiber` | stable | 25 of 68 (37%) | 121 |  |
 | `Signal`, `Process` | stable | 35 of 81 (43%) | 236 | `trap`, `Process.kill`, `spawn`, `wait`. |
-| `Marshal` | stable | 30 of 255 (12%) | 97 | Round-trips its own bytes, not MRI's, so specs that compare bytes fail. |
+| `Marshal` | stable | 30 of 255 (12%) | 97 | Round-trips its own bytes, not MRI's, so specs that compare bytes fail; `load` also reads an MRI stream of core values (a gem's data file). |
 | `Encoding` | stable | 73 of 125 (58%) | 13 | 60 encodings ([list](#encodings)), no per-String tag ([decision 136](decisions/136.md)). |
 | `Warning`, `GC`, `ObjectSpace` | stable | 15 of 22 (68%) | 93 | The parts a program can observe; no heap walking. |
 | `Encoding::Converter` | not supported | 0 of 142 (0%) | 1 | Use `String#encode`. |
