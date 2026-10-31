@@ -1077,7 +1077,7 @@ func resolveOnPath(dirs []string, name string) string {
 		if dir != "" && !within(dir, target) { // `../x` climbs out of -I and the gem dirs
 			continue
 		}
-		info, err := os.Stat(target)
+		info, err := os.Stat(target) //nolint:gosec // a require path the program names, kept within -I and the gem dirs
 		if err == nil && !info.IsDir() {
 			return target
 		}
