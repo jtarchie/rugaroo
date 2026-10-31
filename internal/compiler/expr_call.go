@@ -86,6 +86,9 @@ func (f *fctx) genKernelIntrinsic(n *parser.CallNode, expected Type) (expr, bool
 		}
 		return f.genSend(n, expr{code: f.selfCode, typ: f.selfType, classObj: f.selfClassObj}, n.Name, callArgs(n), n.Block), true // `send(:x)` is self's
 	case "binding", "method_missing":
+		if e := f.resolve(f.selfType, n.Name); e != nil && e.M.File != nil && !e.M.File.isPrelude() {
+			return expr{}, false // the class's own (rubocop-ast's Compiler `attr_reader :binding`, a Binding of its own): an ordinary call
+		}
 		f.errorf(n, "%s is not supported", n.Name)
 	}
 	return expr{}, false

@@ -5363,7 +5363,28 @@ module ObjectTests
     end
   end
 
+  # A class's own `binding` (rubocop-ast's NodePattern::Compiler keeps a Binding of its own as an attr_reader) is an
+  # ordinary method, not Kernel#binding (which rugaroo does not support).
+  class OwnBinding
+    attr_reader :binding
+
+    def initialize
+      @binding = { bound: [] }
+    end
+
+    def bind(name)
+      binding[:bound] << name
+      binding[:bound].size
+    end
+  end
+
   class ObjectDupTest < Minitest::Test
+    def test_own_binding_method_is_ordinary
+      b = OwnBinding.new
+      assert_equal [1, 2], [b.bind(:x), b.bind(:y)]
+      assert_equal({ bound: [:x, :y] }, b.binding)
+    end
+
     def test_chained_assignment_through_untyped_ivars
       o = ChainedUntypedIvars.new
       assert_equal [0, 0, 0], [o.a, o.b, o.c]
