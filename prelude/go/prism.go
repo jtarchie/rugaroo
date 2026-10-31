@@ -17,9 +17,7 @@ import (
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
-// prism's backend (decision 427): the gem's Ruby loads what pm_serialize_* in prism.wasm writes, as its FFI backend does.
-
-// rbPrismFn indexes rbPrismInstance.fns, the exports a call names.
+// prism's backend (decision 427), as its FFI one: these index rbPrismInstance.fns, the pm_* exports a call names.
 const (
 	rbPrismParse = iota
 	rbPrismLex

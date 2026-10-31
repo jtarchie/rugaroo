@@ -192,7 +192,6 @@ module Prism
       if scopes
         out += [scopes.length].pack("L")
         scopes.each do |scope|
-          locals = [] #: Array[untyped]
           forwarding = 0
           case scope
           when Array
