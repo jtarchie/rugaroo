@@ -358,7 +358,7 @@ func (c *Compiler) shadowSlot(m *Method, own, s slot, of string) {
 	if catchCompileError(func() { c.checkAdaptable(own, s) }) != nil {
 		if c.dynAdaptable(m, s, own.in) {
 			s.dyn = true
-		} else if c.gemFile(m.File) {
+		} else if c.gemFile(m.File) && s.e.M.GoName != "Op_cmp" && m.GoName != "cmpNil" { // `<=>` has emitCmpAdapter
 			s.raise = true // rubocop's ConditionalAssignmentHelper#indent(cop, source) under Util#indent(node, offset: 0): the slot's call would be MRI's ArgumentError
 		} else {
 			return
