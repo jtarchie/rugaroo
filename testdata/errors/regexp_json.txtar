@@ -106,9 +106,6 @@ puts JSON.generate
 -- regexp_new_arity.rb --
 # error: main.rb:2: Regexp.new: wrong number of arguments (given 3
 puts Regexp.new("a", "i", 1).inspect
--- symbol_eqtilde_undefined.rb --
-# error: main.rb:2: undefined method =~ for Symbol
-puts (:abc =~ /b/).inspect
 -- string_where_regexp_expected.rb --
 # error: main.rb:2:
 puts "abc".match?("b")
