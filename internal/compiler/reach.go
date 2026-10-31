@@ -104,6 +104,10 @@ type pendingConst struct {
 
 // pruneGemMethods drops a gem's methods reachable code cannot call (decision 169): by name, and for a gem class's
 // methods only while the class is live (reachable code names it, a subclass, or an includer).
+// gemBackends are prelude libs that stand in for a gem's native code: compiled whole like any prelude file, so the gem
+// methods every def calls stay, called or not (prism's Prism.lex needs Serialize.load_lex; decision 427).
+var gemBackends = map[string]bool{"prelude/prism.rb": true}
+
 func (c *Compiler) pruneGemMethods() {
 	r := &reach{c: c, names: map[string]bool{}, consts: map[string]bool{}, aliases: map[string][]string{}, goNames: map[string][]string{},
 		named: map[*Class]bool{}, byName: map[string]bool{}, pending: map[string][]pendingConst{}, typed: map[string][]*Class{}}
@@ -125,7 +129,7 @@ func (c *Compiler) pruneGemMethods() {
 	}
 	for _, f := range c.files {
 		r.from, r.file, r.scope = f.Name, f, nil
-		r.walk(f.Root, !c.userFile(f)) // a user file is compiled whole; elsewhere a def runs only when called
+		r.walk(f.Root, !c.userFile(f) && !gemBackends[f.Name]) // a user file is compiled whole; elsewhere a def runs only when called
 	}
 	for _, f := range c.erbSnippets {
 		r.from, r.file, r.scope = f.Name, f, nil

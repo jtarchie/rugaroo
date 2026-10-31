@@ -972,6 +972,9 @@ func (c *Compiler) userRequireRelative(ctx context.Context, f *File, n *parser.C
 		c.errorf(f, n, "require_relative needs a string literal: rugaroo loads files at compile time")
 	}
 	target := relativeTarget(f, str.Unescaped.Value)
+	if shadowedGemFile(target) != "" {
+		return nil // the prelude lib the require scan loaded in its place
+	}
 	src, err := c.readUser(target)
 	if err != nil {
 		c.errorf(f, n, "cannot load such file -- %s", strings.TrimSuffix(target, ".rb"))

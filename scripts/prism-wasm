@@ -1,0 +1,10 @@
+#!/bin/sh
+# Writes prelude/go/prism_wasm.go: go-ruby-prism's prism.wasm, gzipped and base64'd, for require "prism"'s backend (decision 427). Rerun after bumping go-ruby-prism.
+set -eu
+cd "$(dirname "$0")/.."
+wasm="$(go list -m -f '{{.Dir}}' github.com/danielgatis/go-ruby-prism)/wasm/prism.wasm"
+{
+	printf '//go:build rugaroo_prelude\n\npackage main\n\n// rbPrismWasm is go-ruby-prism %s'"'"'s prism.wasm, gzipped and base64'"'"'d by scripts/prism-wasm (decision 427).\nconst rbPrismWasm = "' "$(go list -m -f '{{.Version}}' github.com/danielgatis/go-ruby-prism)"
+	gzip -9cn "$wasm" | base64 | tr -d '\n'
+	printf '"\n'
+} > prelude/go/prism_wasm.go

@@ -1239,7 +1239,7 @@ func TestGoModMatchesRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mod := range []string{"github.com/dlclark/regexp2", "github.com/ebitengine/purego", "github.com/goccy/go-yaml", "golang.org/x/text"} {
+	for _, mod := range []string{"github.com/dlclark/regexp2", "github.com/ebitengine/purego", "github.com/goccy/go-yaml", "github.com/tetratelabs/wazero", "golang.org/x/text"} {
 		m := regexp.MustCompile(`(?m)^\s*(?:require\s+)?` + regexp.QuoteMeta(mod) + ` (\S+)`).FindSubmatch(data)
 		if m == nil {
 			t.Fatalf("go.mod does not require %s", mod)
@@ -1251,8 +1251,8 @@ func TestGoModMatchesRepo(t *testing.T) {
 			t.Errorf("GoSum lacks %s %s's two lines:\n%s", mod, m[1], sum)
 		}
 	}
-	if n := strings.Count(GoSum(), "\n"); n != 8 {
-		t.Errorf("GoSum has %d lines, want 8", n)
+	if n := strings.Count(GoSum(), "\n"); n != 10 {
+		t.Errorf("GoSum has %d lines, want 10", n)
 	}
 }
 

@@ -211,6 +211,9 @@ func (c *Compiler) addDef(f *File, cls *Class, n *parser.DefNode, private bool, 
 		c.topDefList = append(c.topDefList, m)
 		return
 	}
+	if old := cls.Methods[n.Name]; old != nil && old.File != nil && gemBackends[old.File.Name] && c.gemFile(f) {
+		return // the gem's backend patches this method of the gem's, which loads after it (decision 427)
+	}
 	if old := cls.Methods[n.Name]; old != nil {
 		// reopening: replace
 		for i, x := range cls.MethodList {

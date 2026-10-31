@@ -501,7 +501,9 @@ func rbUnpackPad(n, have int) {
 }
 
 // rbUnpack is String#unpack; an unsigned value past 2**63 raises RangeError where MRI makes a Bignum (decision 35).
-func rbUnpack(s, format string, offset Integer) *Array[any] { return rbUnpackWrap(s, format, false, offset) }
+func rbUnpack(s, format string, offset Integer) *Array[any] {
+	return rbUnpackWrap(s, format, false, offset)
+}
 
 // rbUnpackWrap is rbUnpack; wrap keeps an unsigned value past 2**63 as its 64 bits (a gem's, decision 324). offset is
 // `offset:`, where reading starts (prism's serialize.rb reads its constant pool so); `@` stays from the string's start, as MRI's.

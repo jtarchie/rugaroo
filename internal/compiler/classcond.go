@@ -118,9 +118,11 @@ func (c *Compiler) foldCond(f *File, n parser.Node, scope []*Class) (value, ok b
 }
 
 // foldVersion compares as strings, not versions, because MRI does ("10.0" < "4.0").
+// RUBY_ENGINE is "ruby" (prelude/io.rb): `RUBY_ENGINE == "truffleruby"` folds too (prism's serialize.rb, decision 427).
 func foldVersion(n *parser.CallNode) (value, ok bool) {
 	args := callArgs(n)
-	if len(args) != 1 || !isRubyVersion(n.Receiver) {
+	engine := isTopConstNamed(n.Receiver, "RUBY_ENGINE")
+	if len(args) != 1 || !isTopConstNamed(n.Receiver, "RUBY_VERSION") && !engine {
 		return false, false
 	}
 	s, isStr := args[0].(*parser.StringNode)
@@ -128,6 +130,15 @@ func foldVersion(n *parser.CallNode) (value, ok bool) {
 		return false, false
 	}
 	v := s.Unescaped.Value
+	if engine {
+		switch n.Name {
+		case "==":
+			return v == "ruby", true
+		case "!=":
+			return v != "ruby", true
+		}
+		return false, false
+	}
 	switch n.Name {
 	case ">=":
 		return rubyVersion >= v, true
@@ -145,12 +156,12 @@ func foldVersion(n *parser.CallNode) (value, ok bool) {
 	return false, false
 }
 
-func isRubyVersion(n parser.Node) bool {
+func isTopConstNamed(n parser.Node, name string) bool {
 	switch n := n.(type) {
 	case *parser.ConstantReadNode:
-		return n.Name == "RUBY_VERSION"
+		return n.Name == name
 	case *parser.ConstantPathNode:
-		return n.Parent == nil && *n.Name == "RUBY_VERSION"
+		return n.Parent == nil && *n.Name == name
 	}
 	return false
 }
@@ -246,7 +257,7 @@ func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode
 		}
 		return
 	}
-	if c.gemFile(f) && c.booted && !c.autoloaded[c.real(target)] {
+	if sym, _ := symbolName(args[0]); c.gemFile(f) && c.booted && !c.autoloaded[c.real(target)] && !c.backendNamed(sym) {
 		return // a gem autoload boot never loaded: nothing the program runs reaches it (decision 175)
 	} // without a boot (cmd/rubyspec's in-memory suites) it loads where it registers, as a require (matrix's LUPDecomposition, decision 414)
 	src, err := os.ReadFile(target) //nolint:gosec // a gem file boot loaded
@@ -256,6 +267,20 @@ func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode
 	if uf := c.loadUserFile(ctx, target, src); uf != nil {
 		c.addMainStmt(f, &loadFile{call: n, file: uf})
 	}
+}
+
+// backendNamed reports a constant a loaded gem-backend prelude file names (prism's Serialize): MRI's boot ran the gem's C
+// extension instead, so it never resolved that autoload, but the backend needs it (decision 427).
+func (c *Compiler) backendNamed(name string) bool {
+	for _, f := range c.files {
+		if gemBackends[f.Name] && anyNode(f.Root, func(n parser.Node) bool {
+			r, ok := n.(*parser.ConstantReadNode)
+			return ok && r.Name == name
+		}) {
+			return true
+		}
+	}
+	return false
 }
 
 // staticPath folds a path expression known at compile time: a String, `__dir__`, `File.join(...)`,

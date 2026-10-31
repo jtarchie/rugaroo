@@ -485,7 +485,9 @@ func methodParams(m *Method, overloaded bool) (ps [][2]string, arity int) {
 		return [][2]string{{"req", ""}}, 1
 	case m.Kind == kindSynth && m.Name == "new":
 		return [][2]string{{"rest", ""}}, -1
-	case m.Node == nil || m.File == nil || m.File.isPrelude():
+	case m.Node == nil || m.File == nil || m.File.isPrelude() && (m.Node.Parameters == nil || len(m.Node.Parameters.Keywords) == 0):
+		// a prelude def with keywords stands for one MRI writes in Ruby (clone, unpack1, warn), whose names it reports: prism's
+		// unpack1 polyfill looks for `offset` (decision 427)
 		for _, p := range m.Params {
 			if overloaded || p.Rest || p.Keyword || p.Default != nil {
 				return [][2]string{{"rest", ""}}, -1

@@ -940,11 +940,11 @@ class String < Object
   def undump = %x{ return rbStrUndump(string(self)) }
 
   #: (String, ?offset: Integer) -> Array[untyped]
-  def unpack(format, offset: 0) = %x{ return rbUnpack(string(self), string(format), offset) }
+  def unpack(fmt, offset: 0) = %x{ return rbUnpack(string(self), string(fmt), offset) }
 
   #: (String, ?offset: Integer) -> untyped
-  def unpack1(format, offset: 0) = %x{
-    if out := rbUnpack(string(self), string(format), offset).s; len(out) > 0 {
+  def unpack1(fmt, offset: 0) = %x{
+    if out := rbUnpack(string(self), string(fmt), offset).s; len(out) > 0 {
       return out[0]
     }
     return nil

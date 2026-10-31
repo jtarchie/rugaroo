@@ -113,6 +113,14 @@ var vendoredLibs = map[string]string{
 	"sqlite3": "vendored/sqlite3-fiddle/sqlite3.rb",
 }
 
+// shadowedGemFile is the prelude lib that stands in for a gem file: prism's FFI backend, which the prism/prism lib replaces (decision 427).
+func shadowedGemFile(target string) string {
+	if strings.HasSuffix(filepath.ToSlash(target), "/lib/prism/ffi.rb") {
+		return "prism/prism"
+	}
+	return ""
+}
+
 // mriLib reports a require name MRI's standard library answers (mriLibs, by whole name or first path segment).
 func mriLib(name string) bool {
 	name = strings.TrimSuffix(name, ".rb")
@@ -283,6 +291,10 @@ func (sc *requireScan) require(f *File, call *parser.CallNode, top bool) {
 	var target string
 	if call.Name == "require_relative" {
 		target = relativeTarget(f, name)
+		if lib := shadowedGemFile(target); lib != "" {
+			sc.lib(lib)
+			return
+		}
 	} else if target = sc.c.findRequire(f, call); target == "" {
 		sc.lib(name)
 		return
