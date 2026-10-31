@@ -268,13 +268,13 @@ func (c *Compiler) parentSlots(cls *Class, m *Method) []slot {
 			out = append(append(out, slot{e: *pe, in: in}), pe.M.shadowed...)
 		}
 	}
-	if len(out) > 0 {
-		return out // the superclass's slot owns the Go name; an included module's same-named method cannot also be answered under it (Subexpression#to_h: Base's, not Enumerable's)
-	}
 	for _, inc := range cls.Includes {
 		mod := inc.Mod
 		if mod == nil || len(inc.Args) != len(mod.TypeParams) || mod.Methods[m.Name] == nil || mod.Methods[m.Name].Kind != kindDef {
 			continue
+		}
+		if len(out) > 0 && mod.Methods[m.Name].GoName == out[0].e.M.GoName {
+			continue // the superclass's slot owns the Go name; an included module's same-named method cannot also be answered under it (Subexpression#to_h: Base's, not Enumerable's); one renamed `_ofM` is its own slot (MethodDispatchNode#receiver under LambdaNode's)
 		}
 		env := map[string]Type{}
 		for i, tp := range mod.TypeParams {
