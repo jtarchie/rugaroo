@@ -237,8 +237,8 @@ func (c *Compiler) relinkModuleOverrides(cls *Class) {
 			}
 			pe := cls.Super.lookup(m.Name)
 			oe := cls.lookup(m.Name)
-			if pe == nil || oe == nil || oe.M != m || pe.M == m || pe.Owner.IsModule || !inInterface(pe.M) || pe.M.seqAdapter {
-				continue
+			if pe == nil || oe == nil || oe.M != m || pe.M == m || pe.Owner == mod || !inInterface(pe.M) || pe.M.seqAdapter {
+				continue // pe's owner may be another module a superclass includes (Util#indent under Cop::Base, shadowed by ConditionalAssignmentHelper#indent)
 			}
 			ps := slot{e: *pe, in: cls.Super}
 			if slices.ContainsFunc(m.shadowed, func(x slot) bool { return x.e.M == pe.M }) {
@@ -325,8 +325,8 @@ func (c *Compiler) dynAdaptable(m *Method, s slot, cls *Class) bool {
 	}
 	// a module cls includes itself: its slot is its Self constraint's, which names the module's own signature (one a
 	// superclass includes is that class's interface slot); `<=>`'s Op_cmp slot has emitCmpAdapter
-	if s.e.Owner != nil && s.e.Owner.IsModule && s.in == cls || sm.GoName == "Op_cmp" || m.GoName == "cmpNil" {
-		return false
+	if s.e.Owner != nil && s.e.Owner.IsModule && s.in == cls && sm.GoName == m.GoName || sm.GoName == "Op_cmp" || m.GoName == "cmpNil" {
+		return false // under another Go name (the module's own `_of` one) the adapter answers the constraint (LambdaNode#receiver under MethodDispatchNode's)
 	}
 	if slices.ContainsFunc(sm.Params, func(p Param) bool { return p.Keyword || p.KwRest }) {
 		return false
@@ -353,10 +353,13 @@ func (c *Compiler) shadowSlot(m *Method, own, s slot, of string) {
 		return
 	}
 	if catchCompileError(func() { c.checkAdaptable(own, s) }) != nil {
-		if !c.dynAdaptable(m, s, own.in) {
+		if c.dynAdaptable(m, s, own.in) {
+			s.dyn = true
+		} else if c.gemFile(m.File) {
+			s.raise = true // rubocop's ConditionalAssignmentHelper#indent(cop, source) under Util#indent(node, offset: 0): the slot's call would be MRI's ArgumentError
+		} else {
 			return
 		}
-		s.dyn = true
 	}
 	if same {
 		m.GoName = goMethodName(m.Name) + "_of" + of

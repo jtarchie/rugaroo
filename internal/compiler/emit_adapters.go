@@ -518,6 +518,17 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 	if s.dyn {
 		return c.dynAdapterBody(cls, e, s)
 	}
+	if s.raise {
+		req, maxArgs := arity(e.M)
+		given := len(positionals(s.e.M))
+		if given >= req && (maxArgs < 0 || given <= maxArgs) {
+			given = -1 // the counts agree, the types do not: MRI's TypeError would come from the body; say what rugaroo knows
+		}
+		if given >= 0 {
+			return fmt.Sprintf("\trbArity(%d, %d, %d)\n\tpanic(\"unreachable\")\n", given, req, maxArgs)
+		}
+		return fmt.Sprintf("\tpanic(NewTypeError(Ref(String(%q))))\n", fmt.Sprintf("%s: %s overrides %s with another signature", cls.RubyName, e.M, s.e.M))
+	}
 	file := cls.File
 	if e.M.File != nil {
 		file = e.M.File

@@ -262,9 +262,10 @@ func (m *Method) generic() bool { return len(m.TypeParams) > 0 }
 
 // slot is method entry e as its Go signature appears in class in's interface.
 type slot struct {
-	e   entry
-	in  *Class
-	dyn bool // a gem override no typed adapter fits: the slot boxes its arguments into a dynamic call (decision 249)
+	e     entry
+	in    *Class
+	dyn   bool // a gem override no typed adapter fits: the slot boxes its arguments into a dynamic call (decision 249)
+	raise bool // a gem override no adapter fits at all (another positional count, or keywords): the slot raises MRI's ArgumentError
 }
 
 // entry is a method as seen from a concrete class's method set.
