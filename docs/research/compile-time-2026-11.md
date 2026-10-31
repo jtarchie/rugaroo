@@ -33,7 +33,7 @@ The unmodified rubocop-ast 1.48 does not compile on main (4f61f0f2): the researc
 |---|---|---|---|---|
 | 124_liquid | 12 s | 10 s | 14,482 | identical |
 | 123_kramdown | 40 s | 36 s | 10,210 | identical |
-| tokenize | 139 s (profiled) / ~100 s est. | 79 s profiled, 64 s unprofiled | 46,546 | identical |
+| tokenize | 139 s (profiled) | 79 s profiled, 64 s unprofiled | 46,546 | identical |
 
 TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 
