@@ -192,8 +192,15 @@ func (c *Compiler) bundledOptional(path string) bool {
 // bundledRequireRelative loads a bundled gem's class-body require_relative at compile time, as a top-level one: prism's
 // Translation::Parser loads its builder so, which a traced compile would leave to a run-time require (decision 427).
 func (c *Compiler) bundledRequireRelative(ctx context.Context, f *File, n *parser.CallNode) bool {
-	if n.Receiver != nil || n.Name != "require_relative" || !c.bundledFile(f) {
+	if n.Receiver != nil || n.Name != "require_relative" && n.Name != "require" || !c.bundledFile(f) && !c.gemFile(f) {
 		return false
+	}
+	// a gem's module-body require loads where it is, as a top-level one does: the parser gem's `module Parser;
+	// require_relative 'parser/meta'; ...` defines Parser::Meta::NODE_TYPES, which rubocop-ast's class bodies read; left
+	// to the traced entry's own require (decision 197) it loaded after them
+	if n.Name == "require" {
+		c.collectTopRequire(ctx, f, n)
+		return true
 	}
 	if uf := c.userRequireRelative(ctx, f, n); uf != nil {
 		c.addMainStmt(f, &loadFile{call: n, file: uf})

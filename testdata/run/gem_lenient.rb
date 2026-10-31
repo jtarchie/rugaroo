@@ -15,6 +15,7 @@ require "autoish/lazy_width"
 require "autoish/lazy_name"
 require "outish"
 require "unitish"
+require "metaish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -84,3 +85,4 @@ p BlkConstWidth::INDEX > 0, BlkConstWidth::FIRST == BlkConstWidth::INDEX + 1, Bl
 p AutoishUser.show
 p Outish.new.build(%w[a bc]), Outish.new.build(%w[a bc]).bytesize
 p Unitish::NAMES.frozen?, Unitish::COUNT, Unitish::ARG.size
+p Metaish::TYPE_COUNT, Metaish::TYPE_SET.include?(:sym)

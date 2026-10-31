@@ -41,7 +41,7 @@ var laterBlocks = setOf("lambda", "proc", "new", "start", "fork", "define_method
 // freshStrCalls return a new String, never their receiver or an argument.
 var freshStrCalls = setOf("dup", "clone", "+", "*", "%", "join", "format", "sprintf", "upcase", "downcase",
 	"capitalize", "swapcase", "strip", "lstrip", "rstrip", "chomp", "chop", "center", "ljust", "rjust", "reverse",
-	"tr", "delete", "squeeze", "sub", "gsub", "inspect")
+	"tr", "delete", "squeeze", "sub", "gsub", "inspect", "b")
 
 // scalarStrMethods return no String, so none shares the receiver's bytes: the only reads a setbyte target allows before its last write (decision 395).
 // ponytail: by name; a per-method "always copies in Go" table would also allow upcase, center, ... before a write.

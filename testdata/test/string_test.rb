@@ -2467,10 +2467,15 @@ module StringTests
   class StringAppendAsBytesTest < Minitest::Test
     def test_append_as_bytes
       s = "".b
-      s.append_as_bytes("a", 0x62, "\xC3\xA9".b, 0x100 + 0x21)
-      assert_equal "ab\xC3\xA9!".b, s
+      s.append_as_bytes("a", 0x62)
+      s.append_as_bytes("\xC3\xA9".b, 0x100 + 0x21)
+      assert_equal [0x61, 0x62, 0xC3, 0xA9, 0x21], s.bytes
       assert_equal 5, s.bytesize
-      assert_raises(TypeError) { s.append_as_bytes(1.5) }
+      t = String.new
+      assert_raises(TypeError) do
+        t.append_as_bytes(1.5)
+        nil
+      end
     end
   end
 
