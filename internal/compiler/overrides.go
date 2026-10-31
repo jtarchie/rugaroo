@@ -237,8 +237,11 @@ func (c *Compiler) relinkModuleOverrides(cls *Class) {
 			}
 			pe := cls.Super.lookup(m.Name)
 			oe := cls.lookup(m.Name)
-			if pe == nil || oe == nil || oe.M != m || pe.M == m || pe.Owner == mod || !inInterface(pe.M) || pe.M.seqAdapter {
-				continue // pe's owner may be another module a superclass includes (Util#indent under Cop::Base, shadowed by ConditionalAssignmentHelper#indent)
+			if pe == nil || oe == nil || oe.M != m || pe.M == m || !inInterface(pe.M) || pe.M.seqAdapter {
+				continue
+			}
+			if pe.Owner.IsModule && (pe.Owner == mod || pe.Owner.universal || pe.Owner.File == nil || pe.Owner.File.isPrelude()) {
+				continue // a gem or user module a superclass includes is a slot to shadow (Util#indent under Cop::Base, by ConditionalAssignmentHelper#indent); the prelude's (Kernel#to_json) are not
 			}
 			ps := slot{e: *pe, in: cls.Super}
 			if slices.ContainsFunc(m.shadowed, func(x slot) bool { return x.e.M == pe.M }) {
