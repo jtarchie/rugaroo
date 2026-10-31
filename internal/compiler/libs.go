@@ -87,6 +87,7 @@ var preludeLibs = map[string]string{
 	"ffi":                      "prelude/ffi.rb",
 	"yaml":                     "prelude/yaml.rb",
 	"psych":                    "prelude/yaml.rb",
+	"prism/prism":              "prelude/prism.rb",
 }
 
 // mriLibs are MRI 4.0's standard library, by first path segment or whole name (`net/protocol` is the stdlib's; `net/ftp`,
@@ -98,7 +99,7 @@ var mriLibs = map[string]bool{
 	"error_highlight": true, "etc": true, "expect": true, "fcntl": true, "fiber": true, "fileutils": true, "find": true,
 	"forwardable": true, "io": true, "ipaddr": true, "json": true, "mkmf": true, "monitor": true, "net/protocol": true,
 	"objspace": true, "open-uri": true, "open3": true, "optionparser": true, "optparse": true,
-	"pathname": true, "pp": true, "prettyprint": true, "prism": true, "psych": true, "pty": true, "random": true,
+	"pathname": true, "pp": true, "prettyprint": true, "psych": true, "pty": true, "random": true,
 	"rational": true, "rbconfig": true, "resolv": true, "ripper": true, "ruby2_keywords": true, "rubygems": true,
 	"securerandom": true, "set": true, "shellwords": true, "singleton": true, "socket": true, "stringio": true,
 	"strscan": true, "syntax_suggest": true, "tempfile": true, "thread": true, "time": true, "timeout": true,

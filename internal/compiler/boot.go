@@ -98,7 +98,7 @@ func CompileTestsSkippingWithGems(ctx context.Context, preludeFS, gemSigs fs.FS,
 
 // bootSources runs boot on sources[0] and appends the files its resolved
 // autoloads loaded, in first-seen order, that are not already sources, with each one's constant by real path.
-func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]Source, map[string]string, *boot.Manifest, error) {
+func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]Source, map[string][]string, *boot.Manifest, error) {
 	entry := sourceName(sources[0])
 	_, statErr := os.Stat(entry)
 	if statErr != nil {
@@ -108,14 +108,21 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("boot: %w", err)
 	}
-	consts := map[string]string{}
+	consts := map[string][]string{}
 	seen := map[string]bool{}
 	for _, s := range sources {
 		seen[realPath(sourceName(s))] = true
 	}
 	out := sources
 	for _, a := range m.Autoloads {
-		if !a.Resolved || a.Loaded == "" || !strings.HasSuffix(a.Loaded, ".rb") || seen[realPath(a.Loaded)] {
+		if !a.Resolved || a.Loaded == "" || !strings.HasSuffix(a.Loaded, ".rb") {
+			continue
+		}
+		if _, ok := consts[realPath(a.Loaded)]; ok { // one file under several autoloads (prism's visitor.rb: BasicVisitor, Visitor)
+			consts[realPath(a.Loaded)] = append(consts[realPath(a.Loaded)], a.Const)
+			continue
+		}
+		if seen[realPath(a.Loaded)] {
 			continue
 		}
 		if d, _ := under(a.Loaded, m.StdDirs); d != "" { // MRI's own library (Bundler's and Thor's autoloads under `bundler/setup`): the prelude is rugaroo's copy, never a source (decisions 173, 404)
@@ -127,13 +134,13 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 			return nil, nil, nil, fmt.Errorf("boot: %w", rerr)
 		}
 		out = append(out, Source{Name: filepath.Base(a.Loaded), Src: data, Path: a.Loaded})
-		consts[realPath(a.Loaded)] = a.Const
+		consts[realPath(a.Loaded)] = []string{a.Const}
 	}
 	return out, consts, m, nil
 }
 
 // neededAutoloads keeps the boot-resolved autoload files whose constant another program file names (decision 175); the rest are marked loaded, so never compiled.
-func (c *Compiler) neededAutoloads(consts map[string]string) map[string]bool {
+func (c *Compiler) neededAutoloads(consts map[string][]string) map[string]bool {
 	if len(consts) == 0 {
 		return nil
 	}
@@ -157,8 +164,8 @@ func (c *Compiler) neededAutoloads(consts map[string]string) map[string]bool {
 	needed := map[string]bool{}
 	for changed := true; changed; {
 		changed = false
-		for path, k := range consts {
-			if !needed[path] && named[k] && c.parsed[path] != nil {
+		for path, ks := range consts {
+			if !needed[path] && slices.ContainsFunc(ks, func(k string) bool { return named[k] }) && c.parsed[path] != nil {
 				needed[path], changed = true, true
 				note(c.parsed[path])
 			}

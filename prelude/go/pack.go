@@ -501,12 +501,16 @@ func rbUnpackPad(n, have int) {
 }
 
 // rbUnpack is String#unpack; an unsigned value past 2**63 raises RangeError where MRI makes a Bignum (decision 35).
-func rbUnpack(s, format string) *Array[any] { return rbUnpackWrap(s, format, false) }
+func rbUnpack(s, format string, offset Integer) *Array[any] { return rbUnpackWrap(s, format, false, offset) }
 
-// rbUnpackWrap is rbUnpack; wrap keeps an unsigned value past 2**63 as its 64 bits (a gem's, decision 324).
-func rbUnpackWrap(s, format string, wrap bool) *Array[any] {
+// rbUnpackWrap is rbUnpack; wrap keeps an unsigned value past 2**63 as its 64 bits (a gem's, decision 324). offset is
+// `offset:`, where reading starts (prism's serialize.rb reads its constant pool so); `@` stays from the string's start, as MRI's.
+func rbUnpackWrap(s, format string, wrap bool, offset Integer) *Array[any] {
+	if offset < 0 || int(offset) > len(s) {
+		panic(NewArgumentError(Ref(String("offset outside of string"))))
+	}
 	out := &Array[any]{}
-	pos := 0
+	pos := int(offset)
 	big := func(u uint64) Integer {
 		if u > math.MaxInt64 && !wrap {
 			panic(NewRangeError(Ref(String(strconv.FormatUint(u, 10) + " overflows Integer (64-bit; no Bignum)"))))

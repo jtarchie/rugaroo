@@ -355,22 +355,22 @@ type options struct {
 	infer        *inference
 	round        bool
 	inferDone    bool
-	seed         *Inference        // types from an earlier compile of these sources, updated by this one
-	allLibs      bool              // load every prelude lib, required or not (the stub generator, decision 154)
-	gemSigs      fs.FS             // vendored `.rbs` signatures for gems (decision 160), or nil
-	pruneGems    bool              // drop gem methods no reachable code names (decision 169)
-	autoloaded   map[string]string // real path -> constant of each file boot's autoloads loaded (decision 175)
-	mainLast     bool              // traced mode: the last source is the program's main file, and a require in a method resolves at run time (decisions 197, 288)
-	boot         *boot.Manifest    // what boot recorded: define_method calls (decision 198), branches taken (decision 201)
-	goFuncs      map[string]goFunc // out: each gem method's Go func name -> its methodKey and name
-	noPrune      bool              // keep every declaration (RUGAROO_NO_PRUNE=1 also sets it): the whole-prelude program (decision 207)
-	env          envConfig         // the RUGAROO_* environment, read once by compile
-	testHook     func()            // tests only: runs at the start of compileWith, to inject a panic
-	genCount     *int              // test hook: genExpr calls, summed over every pass
-	genLimit     *int              // test hook: the count after which genExpr fails the compile
-	instances    []string          // generic instances to create before link, by instKey (decision 308)
-	instAt       map[string]srcPos // where each was first named
-	instRestarts int               // compiles and rounds rerun for a missing instance (RUGAROO_TIMING)
+	seed         *Inference          // types from an earlier compile of these sources, updated by this one
+	allLibs      bool                // load every prelude lib, required or not (the stub generator, decision 154)
+	gemSigs      fs.FS               // vendored `.rbs` signatures for gems (decision 160), or nil
+	pruneGems    bool                // drop gem methods no reachable code names (decision 169)
+	autoloaded   map[string][]string // real path -> constants of each file boot's autoloads loaded (decision 175)
+	mainLast     bool                // traced mode: the last source is the program's main file, and a require in a method resolves at run time (decisions 197, 288)
+	boot         *boot.Manifest      // what boot recorded: define_method calls (decision 198), branches taken (decision 201)
+	goFuncs      map[string]goFunc   // out: each gem method's Go func name -> its methodKey and name
+	noPrune      bool                // keep every declaration (RUGAROO_NO_PRUNE=1 also sets it): the whole-prelude program (decision 207)
+	env          envConfig           // the RUGAROO_* environment, read once by compile
+	testHook     func()              // tests only: runs at the start of compileWith, to inject a panic
+	genCount     *int                // test hook: genExpr calls, summed over every pass
+	genLimit     *int                // test hook: the count after which genExpr fails the compile
+	instances    []string            // generic instances to create before link, by instKey (decision 308)
+	instAt       map[string]srcPos   // where each was first named
+	instRestarts int                 // compiles and rounds rerun for a missing instance (RUGAROO_TIMING)
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.

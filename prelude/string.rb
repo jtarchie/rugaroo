@@ -939,24 +939,24 @@ class String < Object
   #: () -> String
   def undump = %x{ return rbStrUndump(string(self)) }
 
-  #: (String) -> Array[untyped]
-  def unpack(format) = %x{ return rbUnpack(string(self), string(format)) }
+  #: (String, ?offset: Integer) -> Array[untyped]
+  def unpack(format, offset: 0) = %x{ return rbUnpack(string(self), string(format), offset) }
 
-  #: (String) -> untyped
-  def unpack1(format) = %x{
-    if out := rbUnpack(string(self), string(format)).s; len(out) > 0 {
+  #: (String, ?offset: Integer) -> untyped
+  def unpack1(format, offset: 0) = %x{
+    if out := rbUnpack(string(self), string(format), offset).s; len(out) > 0 {
       return out[0]
     }
     return nil
   }
 
   # A gem's unpack (decision 324): an unsigned value past 2**63 is its 64 bits as an Integer, as the gem's Integer#<< wraps.
-  #: (String) -> Array[untyped]
-  def __unpack_wrap(format) = %x{ return rbUnpackWrap(string(self), string(format), true) }
+  #: (String, ?offset: Integer) -> Array[untyped]
+  def __unpack_wrap(format, offset: 0) = %x{ return rbUnpackWrap(string(self), string(format), true, offset) }
 
-  #: (String) -> untyped
-  def __unpack1_wrap(format) = %x{
-    if out := rbUnpackWrap(string(self), string(format), true).s; len(out) > 0 {
+  #: (String, ?offset: Integer) -> untyped
+  def __unpack1_wrap(format, offset: 0) = %x{
+    if out := rbUnpackWrap(string(self), string(format), true, offset).s; len(out) > 0 {
       return out[0]
     }
     return nil

@@ -184,7 +184,11 @@ func (c *Compiler) addDef(f *File, cls *Class, n *parser.DefNode, private bool, 
 	if m.sigText == "" && !f.isPrelude() {
 		// A `.rbs` signature fills a method with no inline `#:` (decision 160);
 		// overloads compile once, merged, and each call picks its arm (decision 12).
-		if sd := c.sigMethod(cls, n.Name); sd != nil && len(sd.Overloads) == 1 {
+		sd := c.sigMethod(cls, n.Name)
+		if sd != nil && c.gemFile(f) && !slices.ContainsFunc(sd.Overloads, func(o *rbs.MethodType) bool { return sigFitsDef(o, n.Parameters) }) {
+			sd = nil // a stale shipped sig (prism 1.9.0's `Source.for: (String) -> Source` for a 3-param def): infer, as without one (decision 427)
+		}
+		if sd != nil && len(sd.Overloads) == 1 {
 			m.sig = sd.Overloads[0]
 			if sd.Advisory {
 				c.inferAdvisoryParams(m, n)
@@ -596,3 +600,20 @@ func (c *Compiler) aliasNew(ctx context.Context, d singletonMisc, m *Class, n *p
 
 // singletonAttrs are the attr calls singletonAlias takes onto a class's singleton.
 var singletonAttrs = map[string]bool{"attr_reader": true, "attr_writer": true, "attr_accessor": true}
+
+// sigFitsDef reports a sig arm whose positional params the def can bind: as many as the def's, or a rest on both sides.
+func sigFitsDef(o *rbs.MethodType, ps *parser.ParametersNode) bool {
+	n, rest := 0, false
+	for _, p := range o.Params {
+		switch p.Kind {
+		case rbs.ParamPositional:
+			n++
+		case rbs.ParamRest:
+			rest = true
+		}
+	}
+	if ps == nil {
+		return n == 0 && !rest
+	}
+	return n == len(ps.Requireds)+len(ps.Optionals)+len(ps.Posts) && rest == (ps.Rest != nil)
+}
