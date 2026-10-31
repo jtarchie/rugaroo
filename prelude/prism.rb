@@ -1,6 +1,14 @@
 # Stands in for prism's C extension and prism/ffi.rb (decision 427): ffi.rb's API over prism.wasm; the gem's Serialize builds the tree.
 require_relative "stringio" # serialize.rb's: it loads through an autoload boot never resolved, which the require scan does not walk
 
+# ponytail: Kernel#gem lives here, not in core, since a core Kernel name adds a dynamic wrapper per class to programs that
+# dispatch dynamically (+37 funcs on example 64); move it to core if another gem needs it.
+module Kernel
+  # RubyGems' activation: the closed world fixed each gem's version when it compiled (prism's translation/parser.rb)
+  #: (String, *String) -> bool
+  private def gem(name, *requirements) = true
+end
+
 module Prism
   VERSION = "1.9.0"
 

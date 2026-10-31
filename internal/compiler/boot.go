@@ -51,6 +51,9 @@ func CompileWithGemDirs(ctx context.Context, preludeFS, gemSigs fs.FS, sources [
 	if err == nil && len(names) > 0 {
 		found, err = boot.FindGems(ctx, filepath.Dir(sourceName(sources[0])), names)
 	}
+	if err == nil {
+		err = checkPrismGem(names, append(slices.Clip(gemDirs), found...))
+	}
 	if err != nil {
 		return nil, nil, err //nolint:wrapcheck // the caller adds "rugaroo: "
 	}
