@@ -19,13 +19,13 @@ import (
 
 // TestPrismWasm: one wasm (go-ruby-prism's), one version across it, prismVersion and prelude/prism.rb (decision 427).
 func TestPrismWasm(t *testing.T) {
-	src, err := os.ReadFile("../../prelude/go/prism_wasm.go")
+	src, err := os.ReadFile("../../prelude/go/prismwasm.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := regexp.MustCompile(`const rbPrismWasm = "([^"]+)"`).FindSubmatch(src)
 	if m == nil {
-		t.Fatal("prism_wasm.go has no rbPrismWasm")
+		t.Fatal("prismwasm.go has no rbPrismWasm")
 	}
 	gz, err := gzip.NewReader(base64.NewDecoder(base64.StdEncoding, bytes.NewReader(m[1])))
 	if err != nil {
@@ -44,7 +44,7 @@ func TestPrismWasm(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(bin, want) {
-		t.Fatal("prelude/go/prism_wasm.go is not go-ruby-prism's prism.wasm: run scripts/prism-wasm")
+		t.Fatal("prelude/go/prismwasm.go is not go-ruby-prism's prism.wasm: run scripts/prism-wasm")
 	}
 	ctx := context.Background()
 	rt := wazero.NewRuntime(ctx)

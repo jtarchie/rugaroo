@@ -1,6 +1,6 @@
 //go:build rugaroo_prelude
 
-package main
+package prelude
 
 import (
 	"bytes"

@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// prismVersion is prism_wasm.go's release; the gem's Ruby must match, as serialize.rb rejects other versions' bytes (decision 427).
+// prismVersion is prismwasm.go's release; the gem's Ruby must match, as serialize.rb rejects other versions' bytes (decision 427).
 const prismVersion = "1.9.0"
 
 var prismGemDir = regexp.MustCompile(`/gems/prism-(\d[^/]*)/`)

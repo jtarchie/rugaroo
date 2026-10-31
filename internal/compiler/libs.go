@@ -325,7 +325,9 @@ func (sc *requireScan) require(f *File, call *parser.CallNode, top bool) {
 func (c *Compiler) loadLibs(ctx context.Context, libs []string, all bool) {
 	if all {
 		for _, lib := range slices.Sorted(maps.Keys(preludeLibs)) {
-			c.loadPrelude(ctx, preludeLibs[lib])
+			if !gemBackends[preludeLibs[lib]] { // it names its gem's classes: only a program with the gem compiles it (decision 427)
+				c.loadPrelude(ctx, preludeLibs[lib])
+			}
 		}
 		for _, lib := range slices.Sorted(maps.Keys(vendoredLibs)) {
 			c.loadVendored(ctx, vendoredLibs[lib])
