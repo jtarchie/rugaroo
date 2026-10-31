@@ -1069,4 +1069,40 @@ module EnumeratorTests
       assert_equal([r, 0, r, [r, 0]], [r.real, r.imaginary, r.conjugate, r.rectangular])
     end
   end
+
+  # An Enumerable includer whose each forwards its rest and block to a container (regexp_parser's Subexpression):
+  # Enumerable's slot passes no arguments, so the adapter drops the rest.
+  class RestForwarded
+    include Enumerable #[Integer]
+
+    #: (Array[Integer]) -> void
+    def initialize(items)
+      @items = items
+    end
+
+    #: (*untyped) { (Integer) -> void } -> void
+    def each(*args, &block)
+      @items.each(*args, &block)
+    end
+
+    #: () -> Hash[Symbol, Integer]
+    def to_h = { size: @items.size }
+  end
+
+  class RestForwardedSub < RestForwarded
+    #: () -> Array[Integer]
+    def first_two = take(2)
+  end
+
+  class EachRestForwardTest < Minitest::Test
+    def test_enumerable_through_rest_each
+      s = RestForwardedSub.new([3, 1, 2])
+      assert_equal([6, 2, 4], s.map { |x| x * 2 })
+      assert_equal([1, 2, 3], s.sort)
+      assert_equal({ size: 3 }, s.to_h)
+      assert_equal([3, 1], s.first_two)
+      assert_equal([[3, 0], [1, 1], [2, 2]], s.each_with_index.to_a)
+      assert_equal([3, 1], s.select(&:odd?))
+    end
+  end
 end

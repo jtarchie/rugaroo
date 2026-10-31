@@ -687,7 +687,7 @@ func (f *fctx) withNextTail(t tail, gen func(tail)) {
 // iterClassTwin is an iterator call's twin for its one argument's class, as other calls take: (1.0..2.0).step(0.5) is __step_float (decision 299).
 func (f *fctx) iterClassTwin(n *parser.CallNode, e *entry, recvT Type) *entry {
 	args := callArgs(n)
-	if len(args) != 1 {
+	if len(args) != 1 || isSplat(args[0]) { // `each(*args, &block)`: the splat's class is not an argument's
 		return nil
 	}
 	f.curBlock = n.Block

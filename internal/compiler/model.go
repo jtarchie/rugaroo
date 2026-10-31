@@ -190,6 +190,7 @@ type Method struct {
 	Ret         Type
 	Iterator    bool   // block returns void → iter.Seq
 	seqAdapter  bool   // a closure overriding an iterator: GoName gains _blk, an iter.Seq adapter keeps the name
+	seqRest     bool   // an iterator `each(*args)` under Enumerable: GoName gains _rest, a no-argument iter.Seq adapter keeps the name
 	shadowed    []slot // ancestors' interface slots this override's signature differs from, nearest first; adapters answer them
 	BlockParam  string // name of an explicit &block parameter
 	forwardAll  bool   // `def f(...)`: its signature is its forwarding target's (resolveForwarding)

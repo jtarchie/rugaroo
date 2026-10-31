@@ -469,7 +469,7 @@ func (c *Compiler) emitEntrySigs(cls *Class) {
 		env["Self"] = c.selfTypeFor(e, cls)
 		ps, ret := c.sig(e.M, env)
 		c.w("\t%s(%s) %s\n", e.M.GoName, ps, ret)
-		if e.M.seqAdapter {
+		if e.M.seqAdapter || e.M.seqRest {
 			name, ps, ret := c.seqAdapterSig(e.M, env)
 			c.w("\t%s(%s) %s\n", name, ps, ret)
 		}

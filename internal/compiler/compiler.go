@@ -297,6 +297,9 @@ func (c *Compiler) errorf(f *File, n parser.Node, format string, args ...any) {
 }
 
 func (c *Compiler) unsupported(f *File, n parser.Node) {
+	if os.Getenv("RUGAROO_UNSUPPORTED_STACK") != "" {
+		debug.PrintStack()
+	}
 	c.errorf(f, n, "unsupported syntax: %s", nodeType(n))
 }
 

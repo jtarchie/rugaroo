@@ -51,6 +51,12 @@ func (c *Compiler) emitForwarders(cls *Class) {
 	}
 	c.emitBridges(cls, recv)
 	for _, e := range c.publicEntries(cls) {
+		if e.M.seqRest {
+			env := c.forwarderEnv(cls, e)
+			name, ps, ret := c.seqAdapterSig(e.M, env)
+			c.w("func (self %s) %s(%s) %s { return self.%s(%s) }\n", recv, name, ps, ret, e.M.GoName, c.seqArgs(e.M))
+			continue
+		}
 		if !e.M.seqAdapter {
 			continue
 		}
@@ -398,6 +404,10 @@ func seqDropped(m *Method) int {
 	k := 0
 	for i := len(m.Params) - 1; i >= 0; i-- {
 		p := m.Params[i]
+		if p.Rest && i == len(m.Params)-1 && (m.seqAdapter || m.seqRest) { // `each(*args, &block)` forwarding to a container (regexp_parser's Subexpression): the slot passes none
+			k++
+			continue
+		}
 		if p.Keyword || p.Rest || p.Default == nil {
 			break
 		}
@@ -417,6 +427,10 @@ func (c *Compiler) seqArgs(m *Method) string {
 	as := strings.Split(c.argNames(m), ", ")
 	dropped := seqDropped(m)
 	for _, p := range m.Params[len(m.Params)-dropped:] {
+		if p.Rest { // a dropped rest: the Go variadic gets no arguments
+			as = slices.DeleteFunc(as, func(a string) bool { return a == "rest_..." })
+			continue
+		}
 		if i := slices.Index(as, goLocalName(p.Name)); i >= 0 {
 			as[i] = "nil"
 			if t := c.goType(p.Type); m.calleeDefaults {

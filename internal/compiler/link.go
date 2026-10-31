@@ -57,6 +57,9 @@ func (c *Compiler) link(ctx context.Context) {
 			if c.overridesIterator(m) || c.blockEachOfEnumerable(cls, m) {
 				m.seqAdapter = true
 				m.GoName += "_blk"
+			} else if c.restEachOfEnumerable(cls, m) {
+				m.seqRest = true
+				m.GoName += "_rest"
 			}
 		}
 	}

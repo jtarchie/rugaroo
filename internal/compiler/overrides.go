@@ -165,6 +165,21 @@ func (c *Compiler) blockEachOfEnumerable(cls *Class, m *Method) bool {
 	return enum != nil && slices.Contains(cls.ancestors(), enum)
 }
 
+// restEachOfEnumerable reports an iterator `each(*args) { }` under Enumerable, whose slot is `each()`: the iterator
+// keeps its rest under GoName_rest and a no-argument adapter answers the slot, as seqAdapter does for a closure override.
+func (c *Compiler) restEachOfEnumerable(cls *Class, m *Method) bool {
+	if m.Name != "each" || !m.Iterator || cls.IsModule || len(m.Params) == 0 || !m.Params[len(m.Params)-1].Rest {
+		return false
+	}
+	for sup := cls.Super; sup != nil; sup = sup.Super {
+		if sup.lookup("each") != nil && sup.lookup("each").Owner == sup {
+			return false // a superclass's each is the slot it answers: shadowSlot adapts it (decision 206, ruby/spec's EachCounter)
+		}
+	}
+	enum := c.classes["Enumerable"]
+	return enum != nil && slices.Contains(cls.ancestors(), enum)
+}
+
 // relinkOverrides links, in gem code, the overrides only return inference tells apart from their parent's slot
 // (linkOverrides runs before decision 36), and overrides of an included module's method, which the module's Self
 // constraint calls through its own signature: each gets an adapter for the slot it no longer answers.

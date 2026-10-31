@@ -208,7 +208,7 @@ func CompileTrace(ctx context.Context, preludeFS, gemSigs fs.FS, main string, ru
 		return nil, nil, fmt.Errorf("trace: %w", err)
 	}
 	if keep := os.Getenv("RUGAROO_KEEP_ENTRY"); keep != "" { // experiment
-		_ = os.WriteFile(keep, src, 0o600)
+		_ = os.WriteFile(keep, src, 0o600) //nolint:gosec // a debugging aid: the developer names the path in the environment
 	}
 	srcs := []Source{{Name: "entry.rb", Src: src, Path: entry}}
 	return compileTraced(ctx, preludeFS, gemSigs, srcs, main, l.Evals, append(slices.Clone(loadPath), dirs...)...)

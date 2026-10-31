@@ -8,6 +8,7 @@ require "mx"
 require "ftpish"
 require "primeish"
 require "ctx"
+require "seqish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -71,3 +72,5 @@ p MxEigen.new(2, false).scale(0.25), MxEigen.new(1, true).scale(0.5)
 c = Ctx.new
 c.in_def = true
 p c.in_def, c.in_class
+sq = SubSeqish.new([3, 1, 2])
+p sq.map { |e| e * 2 }, sq.sort, sq.to_h, sq.first_two, sq.each_with_index.to_a, sq.select(&:odd?)

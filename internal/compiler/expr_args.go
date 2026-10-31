@@ -631,7 +631,7 @@ func (f *fctx) overload(e *entry, recvT Type, args []parser.Node) *entry {
 
 // classOverload is `__<name>_<class>` for the first argument's class (secondArgOverload adds the second's).
 func (f *fctx) classOverload(m *Method, owner *Class, name string, args []parser.Node) *entry {
-	if !(len(args) >= 1 && classTwins(m.Name) && !optOn(owner, m) && slices.ContainsFunc(owner.methodSet(), func(x entry) bool { return strings.HasPrefix(x.M.Name, name) })) {
+	if !(len(args) >= 1 && !isSplat(args[0]) && classTwins(m.Name) && !optOn(owner, m) && slices.ContainsFunc(owner.methodSet(), func(x entry) bool { return strings.HasPrefix(x.M.Name, name) })) {
 		return nil
 	}
 	var a expr
