@@ -310,11 +310,7 @@ func rbMarshalBodySize(head any) int {
 	}
 	if !strings.HasPrefix(string(h), rbMarshalMagic) {
 		if !strings.HasPrefix(rbMarshalMagic, string(h)) {
-			msg := "incompatible marshal file format (can't be read)\n\tformat RUGAROO 4.8 required"
-			if len(h) >= 2 && h[0] == 4 && h[1] == 8 {
-				msg += "; MRI's marshal data given (rugaroo reads only its own)"
-			}
-			panic(NewTypeError(Ref(String(msg))))
+			panic(NewTypeError(Ref(String("incompatible marshal file format (can't be read)\n\tformat RUGAROO 4.8 required"))))
 		}
 		panic(rbMarshalShort())
 	}
@@ -377,11 +373,21 @@ func rbMarshalLoadIO(src any) any {
 	if head == "" {
 		panic(NewEOFError(Ref(String("end of file reached"))))
 	}
+	if rbMarshalIsMRI(head) { // ponytail: MRI's stream carries no length, so an IO holding one dump is read to its end
+		return rbMarshalLoad(head, rbMarshalReadN(src, math.MaxInt32))
+	}
 	return rbMarshalLoad(head, rbMarshalReadN(src, rbMarshalBodySize(head)))
 }
 
 // rbMarshalLoad: from an IO, the body is read separately once the header gives its length.
 func rbMarshalLoad(head, body any) any {
+	if rbMarshalIsMRI(head) {
+		data := []byte(rbUnbox(head).(String))
+		if b, ok := rbUnbox(body).(String); ok {
+			data = append(data, b...)
+		}
+		return rbMarshalLoadMRI(data)
+	}
 	n := rbMarshalBodySize(head)
 	data := []byte(rbUnbox(head).(String)[len(rbMarshalMagic)+8:])
 	if b, ok := rbUnbox(body).(String); ok {

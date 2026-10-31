@@ -62,7 +62,7 @@ func (c *Compiler) collectTopCall(ctx context.Context, f *File, n *parser.CallNo
 		if sym, ok := symbolName(firstArg(callArgs(n))); ok {
 			c.noteAutoload(sym)
 		}
-		c.loadAutoload(ctx, f, n) // compile-time autoload (decision 161)
+		c.loadAutoload(ctx, f, n, nil) // compile-time autoload (decision 161)
 	default:
 		c.scanAnon(ctx, f, n, nil)
 		c.addMainStmt(f, n)

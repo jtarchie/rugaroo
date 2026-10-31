@@ -406,4 +406,31 @@ module MarshalTests
       end
     end
   end
+  # MRI's own 4.8 stream loads when it holds only core values (decision 137, amended): a gem's data file
+  # (unicode-display_width's and unicode-emoji's `*.marshal.gz`). The bytes are `Marshal.dump` of the value under MRI,
+  # pasted: longs of every width, an object link, symbol links, encoding-wrapped strings, a hash with a default.
+  class MarshalMRIStreamTest < Minitest::Test
+    MRI_BYTES = "\x04\b{\b:\bsym;\x00:\barr[\x1C[\ai\x06i\a@\aI\"\x06s\x06:\x06ET\"\x06sf\b1.5f\a-00TFl+\t\x00\x00\x00\x00\x00\x00\x00@l-\t\x00\x00\x00\x00\x00\x00\x00@i\x00i\x7Fi\x01{i\x01\xFFi\x02\x00\x01i\x03\x00\x00\x01l+\a\x00\x00\x00@i\xFAi\x80i\xFF\x84i\xFF\x00I\"\a\xC3\xA9\x06;\aT:\x06h}\x06:\x06k;\x00i\f".b
+
+    def test_core_values_of_an_mri_stream
+      v = Marshal.load(MRI_BYTES)
+      assert_equal [:sym, :arr, :h], v.keys
+      assert_equal :sym, v[:sym]
+      arr = v[:arr]
+      assert_equal [1, 2], arr[0]
+      assert_same arr[0], arr[1]
+      assert_equal ["s", "s", 1.5, -0.0, nil, true, false], arr[2..8]
+      assert_equal [2**62, -(2**62), 0, 122, 123, 255, 256, 65536, 2**30, -1, -123, -124, -256], arr[9..21]
+      assert_equal "é", arr[22]
+      assert_equal 23, arr.size
+      assert_equal({ k: :sym }, v[:h])
+      assert_equal 7, v[:h][:missing]
+    end
+
+    def test_mri_stream_from_an_io
+      v = Marshal.load(StringIO.new(MRI_BYTES))
+      assert_equal 1.5, v[:arr][4]
+    end
+  end
+
 end

@@ -107,6 +107,7 @@ type Compiler struct {
 	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
 	nilIvars              map[ivarKey]bool          // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)
 	autoloads             map[string]bool           // `autoload :X` constants by qualified name: defined? answers for them (decision 167)
+	pendingAutoloads      []pendingAutoload         // gem autoloads whose path is computed: placed by the constant's file once every file is collected (decision 175)
 	out                   strings.Builder
 	convs                 map[string]bool // conversion sites emitted during a refineIvars dry run
 	Warnings              []string
@@ -580,6 +581,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	}
 	c.collectSingletonTemplates(ctx)
 	c.collectObjectExtends(ctx)
+	c.placePendingAutoloads()
 	if len(c.kept) > 0 {
 		c.errorf(nil, nil, "%d collect errors:\n%s", len(c.kept), strings.Join(c.kept, "\n"))
 	}

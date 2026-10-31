@@ -486,7 +486,7 @@ func (c *Compiler) collectClassCall(ctx context.Context, f *File, cls *Class, n 
 			c.noteAutoload(qualify(scope, name))
 			one := &parser.CallNode{Location: al.Location, Name: "autoload", Arguments: &parser.ArgumentsNode{Location: al.Arguments.Location,
 				Arguments: []parser.Node{&parser.SymbolNode{Location: callArgs(al)[0].GetLocation(), Unescaped: parser.RubyString{Value: name}}, callArgs(al)[1]}}}
-			c.loadAutoload(ctx, f, one)
+			c.loadAutoload(ctx, f, one, scope)
 		}
 		return true
 	}
@@ -505,7 +505,7 @@ func (c *Compiler) collectClassCall(ctx context.Context, f *File, cls *Class, n 
 		// deprecate_constant warns only with Warning[:deprecated], off by default.
 		c.ruby2KeywordsDef(f, cls, n, args, vis.private, scope)
 		c.noteAutoloadCall(n, args, scope)
-		c.loadAutoload(ctx, f, n)
+		c.loadAutoload(ctx, f, n, scope)
 	case "include", "extend", "prepend", "mixes_in_class_methods":
 		c.collectMixinCall(ctx, f, cls, n, args, scope)
 	case "private", "public", "protected":

@@ -236,7 +236,7 @@ func (c *Compiler) absentGuard(f *File, pred parser.Node, scope []*Class) bool {
 }
 
 // loadAutoload loads a boot-resolved autoload's file where it registers, so its load-time code runs before main's (decision 175).
-func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode) {
+func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode, scope []*Class) {
 	args := callArgs(n)
 	if len(args) != 2 || f.isPrelude() {
 		return
@@ -255,6 +255,9 @@ func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode
 		if !c.gemFile(f) {
 			c.errorf(f, n, "autoload: cannot load such file -- %s (an autoload is a require at compile time, decision 195)", f.text(args[1].GetLocation()))
 		}
+		if sym, ok := symbolName(args[0]); ok { // a computed path (unicode-emoji's `File.join(dir, name.downcase)`): the file that defines the constant, once loaded
+			c.pendingAutoloads = append(c.pendingAutoloads, pendingAutoload{f: f, n: n, full: qualify(scope, sym)})
+		}
 		return
 	}
 	if sym, _ := symbolName(args[0]); c.gemFile(f) && (c.booted || c.bundledFile(f)) && !c.autoloaded[c.real(target)] && !c.backendNamed(sym) {
@@ -266,6 +269,36 @@ func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode
 	}
 	if uf := c.loadUserFile(ctx, target, src); uf != nil {
 		c.addMainStmt(f, &loadFile{call: n, file: uf})
+	}
+}
+
+// pendingAutoload is a gem's `autoload :X, computed_path` (decision 175): X's file is placed where it registers.
+type pendingAutoload struct {
+	f    *File
+	n    *parser.CallNode
+	full string
+}
+
+// placePendingAutoloads moves each pending autoload's file, when another require (a traced entry's, decision 296) loaded
+// it, to where the autoload registers, as a resolved autoload loads (decision 175): unicode-display_width's class body
+// reads Unicode::Emoji::REGEX_TEXT_PRESENTATION, which MRI autoloaded there and the traced entry requires only later.
+func (c *Compiler) placePendingAutoloads() {
+	for _, p := range c.pendingAutoloads {
+		var file *File
+		if k := c.consts[p.full]; k != nil {
+			file = k.File
+		} else if cls := c.classes[p.full]; cls != nil {
+			file = cls.File
+		}
+		if file == nil || file == p.f {
+			continue
+		}
+		for _, s := range c.mainStmts {
+			if lf, ok := s.(*loadFile); ok && lf.file == file && c.stmtFile[lf] != p.f {
+				c.stmtFile[lf], lf.call = p.f, p.n
+				break
+			}
+		}
 	}
 }
 
