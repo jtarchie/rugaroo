@@ -735,6 +735,32 @@ func rbViewSizeArg(args []any, msg string) int {
 // where each Array[E] instantiation compiled a wrapper and the Enumerable chain it names. Blocks get raw elements.
 func rbViewBlockCall(name string, s rbView, args []any) (any, bool) { //nolint:cyclop,gocognit,gocyclo,maintidx // one switch per name, as the dispatchers are
 	b, args := rbPopBlock(args)
+	if b == nil { // without a block: an Array standing in for the Enumerator, as the prelude's __each_enum twins (regexp_parser's `expressions.reverse_each.find { }`)
+		switch name {
+		case "each", "each_entry":
+			rbArity(len(args), 0, 0)
+			return &Array[any]{s: slices.Clone(rbViewElems(s))}, true
+		case "reverse_each":
+			rbArity(len(args), 0, 0)
+			xs := slices.Clone(rbViewElems(s))
+			slices.Reverse(xs)
+			return &Array[any]{s: xs}, true
+		case "each_with_index":
+			rbArity(len(args), 0, 0)
+			out := &Array[any]{}
+			for i, x := range rbViewElems(s) {
+				out.s = append(out.s, &Array[any]{s: []any{x, Integer(i)}})
+			}
+			return out, true
+		case "each_index":
+			rbArity(len(args), 0, 0)
+			out := &Array[any]{}
+			for i := range rbViewElems(s) {
+				out.s = append(out.s, Integer(i))
+			}
+			return out, true
+		}
+	}
 	switch name {
 	case "each", "each_entry":
 		rbArity(len(args), 0, 0)
