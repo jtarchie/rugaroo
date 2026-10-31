@@ -330,7 +330,9 @@ func (c *Compiler) inferRet(m *Method) {
 	m.inferring = true
 	m.recursed = false
 	defer func() { m.inferring = false }()
-	if m.inherited != nil {
+	if m.inherited != nil && !(c.gemFile(m.File) && onlyNil(m.inherited.Node)) {
+		// a gem parent that only answers nil is a placeholder (rubocop-ast's Node#receiver under MethodDispatchNode's):
+		// its overrides infer their own value, and typeAbstracts widens the parent to them
 		c.inferRet(m.inherited)
 		m.Ret = m.inherited.Ret
 		return
@@ -811,10 +813,13 @@ func (c *Compiler) checkKeywordSig(m *Method) {
 func (c *Compiler) typeAbstracts() {
 	for _, k := range c.classList {
 		for _, m := range k.MethodList {
-			if !m.inferRet || m.Kind != kindDef || !c.gemFile(m.File) || !onlyRaises(m.Node) {
+			if !m.inferRet || m.Kind != kindDef || !c.gemFile(m.File) || !onlyRaises(m.Node) && !onlyNil(m.Node) {
 				continue
 			}
 			var ret Type
+			if onlyNil(m.Node) {
+				ret = TNil{} // the parent's own nil stays an answer
+			}
 			for _, cls := range c.classList {
 				if cls == k || !cls.isSubclassOf(k) && !slices.Contains(cls.ancestors(), k) {
 					continue
@@ -836,6 +841,19 @@ func (c *Compiler) typeAbstracts() {
 			}
 		}
 	}
+}
+
+// onlyNil reports a def whose body is empty or one `nil`: a placeholder its overrides fill (rubocop-ast's `def receiver; nil; end`).
+func onlyNil(d *parser.DefNode) bool {
+	if d == nil || d.Body == nil {
+		return d != nil
+	}
+	st, ok := d.Body.(*parser.StatementsNode)
+	if !ok || len(st.Body) != 1 {
+		return false
+	}
+	_, isNil := st.Body[0].(*parser.NilNode)
+	return isNil
 }
 
 // onlyRaises reports a def whose body is one raise.
