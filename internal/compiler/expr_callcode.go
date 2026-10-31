@@ -1235,6 +1235,12 @@ func genericOpt(e expr) expr {
 		e.code = "rbOptFromPtr(" + e.code + ")"
 		return e
 	}
+	if o, ok := e.typ.(TOpt); ok {
+		if c, ok := o.Elem.(TClass); ok && nilObj(c) { // a leaf's C? is *C: Go's generic **C opened (decision 360; `a, b = tokens` of a Struct class, regexp_parser's Lexer)
+			e.code = "rbFlatNil(" + e.code + ")"
+			return e
+		}
+	}
 	return flatOpt(e)
 }
 
