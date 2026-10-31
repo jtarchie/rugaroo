@@ -34,6 +34,7 @@ import (
 // Compiler holds the whole program: the prelude and the user files, one closed world.
 type Compiler struct {
 	// grouped state; fields are promoted, so c.name still works
+	accessorAny map[string]bool // anyClassHasAccessor's memo
 	dynState
 	memoState
 	bootFacts

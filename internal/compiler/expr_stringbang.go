@@ -527,10 +527,24 @@ func (f *fctx) attrTarget(t *parser.CallNode) bool {
 	}
 	rt := stripOpt(f.probeType(t.Receiver, nil))
 	if isAny(rt) { // kramdown's `last.value << text` on an untyped tree's child: written back by a dynamic name= call
-		return slices.ContainsFunc(f.c.classList, func(k *Class) bool { return k.lookup(t.Name+"=") != nil && k.lookup(t.Name) != nil })
+		return f.c.anyClassHasAccessor(t.Name)
 	}
 	cls := classOf(rt)
 	return cls != nil && cls.lookup(t.Name+"=") != nil
+}
+
+// anyClassHasAccessor is whether some class has both `name` and `name=`: per name for the compile (the class list is closed once gen starts); the scan per call was 26% of a large gem compile's CPU.
+func (c *Compiler) anyClassHasAccessor(name string) bool {
+	if v, ok := c.accessorAny[name]; ok {
+		return v
+	}
+	setter := name + "="
+	v := slices.ContainsFunc(c.classList, func(k *Class) bool { return k.lookup(setter) != nil && k.lookup(name) != nil })
+	if c.accessorAny == nil {
+		c.accessorAny = map[string]bool{}
+	}
+	c.accessorAny[name] = v
+	return v
 }
 
 // freshAppend is a gem's `' ' * indent << "<" << tag << ">"`: appends onto a String nothing else holds (an operator's
