@@ -87,17 +87,44 @@ var dynPinned = map[string]bool{"<=>": true, "method_missing": true, "respond_to
 // arms shared by two or more classes. Growing with definitions, not with
 // classes × names, is what keeps a program of many classes buildable
 // (decision 85).
+// includedEntry is name's method from one of cls's included modules, the last include first, with the include's type
+// arguments bound, or nil.
+func (c *Compiler) includedEntry(cls *Class, name string) *entry {
+	for i := len(cls.Includes) - 1; i >= 0; i-- {
+		inc := cls.Includes[i]
+		if inc.Mod == nil {
+			continue
+		}
+		if e := inc.Mod.lookup(name); e != nil {
+			env := map[string]Type{}
+			for j, p := range inc.Mod.TypeParams {
+				if j < len(inc.Args) {
+					env[p] = inc.Args[j]
+				}
+			}
+			return &entry{M: e.M, Owner: e.Owner, Env: composeEnv(e.Env, env), Entry: cls}
+		}
+	}
+	return nil
+}
+
 func (c *Compiler) dynWrappers(name string) ([]dynWrapper, []*dynArm) {
 	var own []dynWrapper
 	arms := map[string]*dynArm{}
 	var keys []string
 	for _, cls := range c.classList {
 		e, private := c.dynEntry(cls, name)
+		if e == nil && !cls.IsModule && !cls.universal && cls.lookup(name) != nil {
+			// the own method cannot be called dynamically (Array#to_h is generic over its pairs' types): an included
+			// module's answers, as MRI's would for the elements it gets (Enumerable#to_h, decision 194)
+			if alt := c.includedEntry(cls, name); alt != nil && !alt.M.generic() && (alt.M.Block == nil || c.dynBlockable(name, alt.M)) && !growsTypeParams(cls, alt) {
+				e, private = alt, alt.M.Private && !rubyPrivate[name]
+			}
+		}
 		if e == nil {
 			continue
 		}
 		w := dynWrapper{cls: cls, e: e, private: private, body: c.dynWrapperBodyOrWarn(cls, e, name)}
-
 		if w.body == "" {
 			continue
 		}
