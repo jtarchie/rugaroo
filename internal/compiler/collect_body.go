@@ -467,6 +467,16 @@ func (c *Compiler) collectClassCall(ctx context.Context, f *File, cls *Class, n 
 		}
 		return true
 	}
+	if names := staticAutoloadLoop(n); len(names) > 0 { // `%w[A B].each { |c| autoload c, path }` (unicode-emoji's lazy constants): each name's autoload, as written out
+		al := n.Block.(*parser.BlockNode).Body.(*parser.StatementsNode).Body[0].(*parser.CallNode) //nolint:forcetypeassert // staticAutoloadLoop checked the shape
+		for _, name := range names {
+			c.noteAutoload(qualify(scope, name))
+			one := &parser.CallNode{Location: al.Location, Name: "autoload", Arguments: &parser.ArgumentsNode{Location: al.Arguments.Location,
+				Arguments: []parser.Node{&parser.SymbolNode{Location: callArgs(al)[0].GetLocation(), Unescaped: parser.RubyString{Value: name}}, callArgs(al)[1]}}}
+			c.loadAutoload(ctx, f, one)
+		}
+		return true
+	}
 	if n.Receiver != nil {
 		return false
 	}
@@ -778,4 +788,37 @@ func (c *Compiler) ruby2KeywordsDef(f *File, cls *Class, n *parser.CallNode, arg
 	if d, ok := firstArg(args).(*parser.DefNode); ok && n.Name == "ruby2_keywords" && len(args) == 1 {
 		c.addMethod(f, cls, d, private, scope)
 	}
+}
+
+// staticAutoloadLoop is the constant names of a class body's `[literal names].each do |c| autoload c, path end`, or nil.
+func staticAutoloadLoop(call *parser.CallNode) []string {
+	arr, ok := call.Receiver.(*parser.ArrayNode)
+	blk, ok2 := call.Block.(*parser.BlockNode)
+	if !ok || !ok2 || call.Name != "each" || blk.Body == nil {
+		return nil
+	}
+	params := blockParamNames(blk)
+	st, ok := blk.Body.(*parser.StatementsNode)
+	if len(params) != 1 || !ok || len(st.Body) != 1 {
+		return nil
+	}
+	al, ok := st.Body[0].(*parser.CallNode)
+	if !ok || al.Name != "autoload" || al.Receiver != nil || len(callArgs(al)) != 2 {
+		return nil
+	}
+	if lv, ok := callArgs(al)[0].(*parser.LocalVariableReadNode); !ok || lv.Name != params[0] {
+		return nil
+	}
+	var out []string
+	for _, el := range arr.Elements {
+		switch e := el.(type) {
+		case *parser.SymbolNode:
+			out = append(out, e.Unescaped.Value)
+		case *parser.StringNode:
+			out = append(out, e.Unescaped.Value)
+		default:
+			return nil
+		}
+	}
+	return out
 }
