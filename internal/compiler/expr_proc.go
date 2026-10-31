@@ -265,7 +265,7 @@ func (f *fctx) evalUntypedBlock(n parser.Node, p, recv expr, args []parser.Node,
 
 // procCall is a method on a Proc value.
 func (f *fctx) procCall(n parser.Node, recv expr, t TFunc, name string, args []parser.Node, block parser.Node) expr {
-	if block != nil && slices.Contains([]string{"call", "()", "[]", "yield", "===", "arity", "lambda?", "to_proc", ">>", "<<"}, name) {
+	if block != nil && slices.Contains([]string{"call", "()", "[]", "yield", "===", "arity", "lambda?", "parameters", "to_proc", ">>", "<<"}, name) {
 		f.errorf(n, "a Proc's %s does not take a block", name)
 	}
 	switch name {
@@ -281,6 +281,8 @@ func (f *fctx) procCall(n parser.Node, recv expr, t TFunc, name string, args []p
 	case "lambda?":
 		f.discard(recv)
 		return expr{code: "true", typ: f.cls("Boolean"), lit: true}
+	case "parameters":
+		return f.procParameters(recv, t)
 	case "to_proc":
 		return recv
 	case ">>", "<<":
@@ -293,6 +295,27 @@ func (f *fctx) procCall(n parser.Node, recv expr, t TFunc, name string, args []p
 		return f.callEntry(n, e, recv, args, block)
 	}
 	return f.universalCall(n, recv, name, args, block)
+}
+
+// procParameters is Proc#parameters from the Proc's Go type: each parameter `[:req, :name]` (`:rest` for a `*rest`), as a
+// lambda's (lambda? is always true here). A Go func carries no names, so they are positional (`:p1`, `:p2`, ...):
+// rubocop-ast's `with_temp_variables(&block)` reads `block.parameters.map(&:last)` only for the text of the Ruby
+// source it generates, which boot's eval record already compiled (decision 204). ponytail: a literal block's names
+// would need carrying beside the func.
+func (f *fctx) procParameters(recv expr, t TFunc) expr {
+	f.discard(recv)
+	items := make([]string, 0, len(t.Params))
+	for i := range t.Params {
+		kind := "req"
+		if t.Rest && i == len(t.Params)-1 {
+			kind = "rest"
+		}
+		items = append(items, fmt.Sprintf(`&Array[Symbol]{s: []Symbol{Symbol(%q), Symbol("p%d")}}`, kind, i+1))
+	}
+	sym := f.cls("Symbol")
+	inner := TClass{C: f.c.classes["Array"], Args: []Type{sym}}
+	code := fmt.Sprintf("&Array[*Array[Symbol]]{s: []*Array[Symbol]{%s}}", strings.Join(items, ", "))
+	return expr{code: code, typ: TClass{C: f.c.classes["Array"], Args: []Type{inner}}}
 }
 
 // procInvoke is a Proc's call/()/[]/yield/===: an arity check, each argument

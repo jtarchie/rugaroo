@@ -489,3 +489,18 @@ module MethodTests
     end
   end
 end
+
+module MethodTests
+  # Proc#parameters: one entry per parameter with its kind (lambda kinds, as rugaroo's lambda? answers; a Go func has no
+  # names, so only the kinds and the count are MRI's here).
+  class ProcParametersTest < Minitest::Test
+    def test_parameter_kinds_and_count
+      two = ->(a, b) { a + b }
+      splat = ->(a, *rest) { [a, rest] }
+      assert_equal 2, two.parameters.size
+      assert_equal %i[req req], two.parameters.map(&:first)
+      assert_equal %i[req rest], splat.parameters.map(&:first)
+      assert_equal 2, two.parameters.map(&:last).uniq.size
+    end
+  end
+end
