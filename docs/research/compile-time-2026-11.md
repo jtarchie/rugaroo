@@ -27,20 +27,30 @@ The unmodified rubocop-ast 1.48 does not compile on main (4f61f0f2): the researc
 | format (gofmt) | 6.4 s | gocheck 8.3 s |
 | `build -trace` after fix | 138 s total | ~72 s gen + ~65 s `go build`; 81.7 MB binary |
 
+## Three sizes, main vs fixed (`gen -trace`, wall, one run each, output compared with the random `rugaroo-entry-N` tmpdir name normalized)
+
+| program | main | fixed | funcs | output |
+|---|---|---|---|---|
+| 124_liquid | 12 s | 10 s | 14,482 | identical |
+| 123_kramdown | 40 s | 36 s | 10,210 | identical |
+| tokenize | 139 s (profiled) / ~100 s est. | 79 s profiled, 64 s unprofiled | 46,546 | identical |
+
+TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
+
 ## Profile findings
 
 1. **`attrTarget` scanned every class per call** (expr_stringbang.go): for an untyped receiver of `<<`/`gsub!`, `slices.ContainsFunc(c.classList, … lookup(name+"=") … lookup(name))`, per call, per round. 23.5 s of 89 s CPU (26%). The answer depends only on the name. **Fixed** (commit "memoize attrTarget…"): gen 139 s → 79 s profiled (64 s unprofiled), main.go byte-identical (`cmp`), `TestCompileCost` unchanged (2065 / 7950 / 30491 compiled; the same on main: cuba's 30,491 vs 30,379 in decision 427 predates this branch).
 2. After the fix the profile is flat: no leaf over 7% (madvise 6.3%, memclr 6.3% = allocation; map access 6.5%, walkNode 7.7%). Inclusive: `inferRounds` 34%, `collectUses` 18%, `emitMethod` 21%, `numericMix` (speculative gen via `attempt`) 17%, `probe` nested inside `try`: each expression is generated more than once (probe, then real).
-3. After the fix the 8 rounds are still ~46 s of 79 s (60%), and the loop stops because it hit the cap, not convergence (all 8 ran).
+3. After the fix the 8 rounds are still ~46 s of 79 s (60%). `RUGAROO_INFER_DEBUG=1` diff of consecutive rounds' inferred sets (keys / new / retyped): r1 328; r2 369 / 47 / 9; r3 396 / 29 / 4; r4 410 / 15 / 2; r5 416 / 11 / 3; r6 415 / 2 / 1; r7 416 / 3 / 0; r8 415 / 0 / 0. So the types are stable by round 6-7 and round 8 changes nothing, yet each of rounds 4-8 regenerates every body (4.5-6.6 s) to move 0-3 keys. One oscillation: `Parser_Lexer#e` Integer? ↔ Integer in rounds 3-5. The cap (8) is reached only because a key set still differs by one at round 8; not a convergence bug.
 4. **GC tuning is not a lever**: unprofiled gen, default 64 s / GOGC=400 70 s (1.7 GB RSS) / GOGC=800 69 s (2.4 GB). Output identical.
 
 ## Lever list, ranked (gain ÷ effort ÷ risk)
 
 | # | lever | evidence | expected | effort | risk |
 |---|---|---|---|---|---|
-| 1 | memoize `attrTarget` scan | measured | -43% tokenize gen (done) | tiny | none (byte-identical) |
-| 2 | persist `Inference` (param types from use, decision 146) on disk keyed by source+gem hashes+compiler version; rerun = 1 pass, no rounds | rounds = 60% of gen after #1; `Inference` already carries types between compiles in-process ("runs no rounds while they still cover every untyped parameter") | warm gen ~79 → ~25 s; no gain cold | medium (Type serialization) | stale cache on compiler change → key on binary build ID |
-| 3 | rounds re-gen only methods whose pending-param inputs changed (dirty set per round) | rounds 2..8 repeat unchanged bodies; per-round times 4.5-7.6 s after fix, not shrinking | up to ~-40 s cold | high (probe results feed each other) | medium: inference order determinism (decision 146) |
+| 1 | memoize `attrTarget` scan | measured | -43% tokenize gen (done) | tiny | none: keyed on `len(classList)` because `metaFor` (metaclass.go:52) and `declare` append during gen; outputs byte-identical on tokenize, 123, 124 |
+| 2 | persist `Inference` (param types from use, decision 146) on disk keyed by source+gem hashes+compiler version; rerun = 1 pass, no rounds | rounds = 60% of gen after #1; `Inference` already carries types between compiles in-process ("runs no rounds while they still cover every untyped parameter") | warm gen ~79 → ~25 s (**estimate: the in-process second-compile bound was not measured**); no gain cold | medium (Type serialization) | stale cache on compiler change → key on binary build ID |
+| 3 | rounds re-gen only methods whose pending-param inputs changed (dirty set per round) | measured above: rounds 4-8 move ≤3 keys but cost 4.5-6.6 s each (~26 s) | ~-20 s cold on tokenize | high (probe results feed each other) | medium: inference order determinism (decision 146) |
 | 4 | the subagent's code-read hot spots (below), after profiling each: #3 typeAbstracts, #4/5 pruneGemMethods fixpoint + computeLive, #10 realPath negative cache | read only, **not profiled**; none shows in the top flat list after fix #1 | small each; larger at rubocop scale (10k classes) | small | low |
 | 5 | emit-side: dynWrappers D×C codegen; refineIvars dry-runs (`c.out.String()` copy per try) | code read only | unknown | medium | low |
 | 6 | split output into packages | **not done** (see below) | go build 65 s is ~47% of the full build | high | high: closed-world dispatch crosses packages |

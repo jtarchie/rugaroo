@@ -533,8 +533,11 @@ func (f *fctx) attrTarget(t *parser.CallNode) bool {
 	return cls != nil && cls.lookup(t.Name+"=") != nil
 }
 
-// anyClassHasAccessor is whether some class has both `name` and `name=`: per name for the compile (the class list is closed once gen starts); the scan per call was 26% of a large gem compile's CPU.
+// anyClassHasAccessor is whether some class has both `name` and `name=`. Memoized per name; classList only grows (a metaclass is made on demand, metaclass.go), so a new length drops the memo. The scan per call was 26% of a large gem compile's CPU.
 func (c *Compiler) anyClassHasAccessor(name string) bool {
+	if len(c.classList) != c.accessorAnyN {
+		c.accessorAny, c.accessorAnyN = nil, len(c.classList)
+	}
 	if v, ok := c.accessorAny[name]; ok {
 		return v
 	}
