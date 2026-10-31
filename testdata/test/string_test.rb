@@ -2463,4 +2463,15 @@ module StringTests
       assert_equal(["220", "220", "2", "hel", "20", "20"], [u.slice(/\A([0-9]{3})-/, 1), u.slice(/\d+/), u.slice(0), u.slice("hel"), u.slice(1..2), u.slice(1, 2)])
     end
   end
+  # Ruby 3.4's String#append_as_bytes: a String's bytes or an Integer's low byte, appended with no encoding check.
+  class StringAppendAsBytesTest < Minitest::Test
+    def test_append_as_bytes
+      s = "".b
+      s.append_as_bytes("a", 0x62, "\xC3\xA9".b, 0x100 + 0x21)
+      assert_equal "ab\xC3\xA9!".b, s
+      assert_equal 5, s.bytesize
+      assert_raises(TypeError) { s.append_as_bytes(1.5) }
+    end
+  end
+
 end

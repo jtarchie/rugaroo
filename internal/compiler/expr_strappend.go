@@ -9,6 +9,10 @@ import (
 	"github.com/danielgatis/go-ruby-prism/parser"
 )
 
+// strAppendNames are the String appends rugaroo compiles as a rebinding or a buffer append: `<<`, `concat`, and Ruby 3.4's
+// `append_as_bytes` (each argument's bytes, an Integer's low byte; prism's translation lexer builds unescaped strings with it).
+var strAppendNames = setOf("<<", "concat", "append_as_bytes")
+
 // readOnlyStrMethods neither keep, return nor change their receiver, so calling one is not an alias (decision 382).
 var readOnlyStrMethods = setOf("size", "length", "bytesize", "empty?", "include?", "start_with?", "end_with?",
 	"getbyte", "[]", "byteslice", "slice", "==", "!=", "eql?", "hash", "=~", "match", "match?", "index", "rindex",
@@ -420,7 +424,7 @@ func (p *appendProof) read(n parser.Node, stack []parser.Node) {
 	}
 	parent := stack[len(stack)-1]
 	if p.later > 0 { // another goroutine or a later call would read the local while it is appended to
-		if c, ok := parent.(*parser.CallNode); !ok || c.Receiver != n || c.Name != "<<" && c.Name != "concat" && c.Name != "setbyte" {
+		if c, ok := parent.(*parser.CallNode); !ok || c.Receiver != n || !strAppendNames[c.Name] && c.Name != "setbyte" {
 			p.leak(n, fmt.Sprintf("`%s` is captured by a block that may run after its call returns", p.name))
 			return
 		}
@@ -433,7 +437,7 @@ func (p *appendProof) read(n parser.Node, stack []parser.Node) {
 			if why := p.use(c, stack[:len(stack)-1]); why != "" {
 				p.leak(c, why)
 			}
-		case (c.Name == "<<" || c.Name == "concat") && !p.ivar:
+		case strAppendNames[c.Name] && !p.ivar:
 			p.appendAt(c, stack[:len(stack)-1])
 		case p.strict:
 			if !scalarStrMethods[c.Name] || c.Block != nil {
@@ -583,9 +587,10 @@ func (p *appendProof) argSafe(g *parser.CallNode) bool {
 	return scalarArgCalls[g.Name] || g.Receiver == nil && (g.Name == "puts" || g.Name == "print")
 }
 
-// userAppend compiles user code's `s << x` (and chains of it) or `s.concat(a, ...)` on a String local (decision 382).
+// userAppend compiles user code's `s << x` (and chains of it), `s.concat(a, ...)` or `s.append_as_bytes(a, ...)` on a
+// String local (decision 382).
 func (f *fctx) userAppend(n *parser.CallNode) (expr, bool) {
-	if f.lenient() || n.Name != "<<" && n.Name != "concat" || n.Block != nil || n.IsSAFE_NAVIGATION() || f.c.classes["String"].lookup(n.Name) != nil {
+	if f.lenient() || !strAppendNames[n.Name] || n.Block != nil || n.IsSAFE_NAVIGATION() || f.c.classes["String"].lookup(n.Name) != nil {
 		return expr{}, false
 	}
 	links := []*parser.CallNode{n} // innermost last
@@ -625,6 +630,8 @@ func (f *fctx) userAppend(n *parser.CallNode) (expr, bool) {
 			}
 			x := f.genExpr(a, nil)
 			switch {
+			case n.Name == "append_as_bytes": // a String's bytes or an Integer's low byte, checked at run time as MRI does
+				codes[j] = "rbBytesArg(" + f.coerce(a, x, TAny{}) + ")"
 			case typeEq(x.typ, TOpt{Elem: str}): // `s << nil` raises TypeError in MRI too
 				codes[j] = "rbMustStr(" + x.code + ")"
 			case typeEq(x.typ, str):

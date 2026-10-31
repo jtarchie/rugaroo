@@ -352,6 +352,10 @@ func (f *fctx) genRespondTo(n parser.Node, recv expr, args []parser.Node) (expr,
 	if name == "" || cls == nil {
 		return expr{}, false
 	}
+	if cls.RubyName == "String" && stringMutators[name] { // MRI's in-place methods, which rugaroo compiles as rebinding (decisions 172, 382): answered, so prism's polyfill (`String.include(Module.new { def append_as_bytes ... })` unless `"".respond_to?(:append_as_bytes)`) stays out
+		f.discard(recv)
+		return expr{code: "Boolean(true)", typ: f.cls("Boolean")}, true
+	}
 	if e := cls.lookup(name); e != nil && e.M.File != nil && e.M.File.isPrelude() && notImplemented[name] {
 		f.discard(recv) // MRI's rb_f_notimplement: defined, raises NotImplementedError, and respond_to? is false
 		return expr{code: "Boolean(false)", typ: f.cls("Boolean")}, true

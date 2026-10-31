@@ -13,7 +13,7 @@ import (
 // ---- calls
 
 // stringMutators are MRI's in-place String methods without a bang, which rugaroo's immutable Strings lack.
-var stringMutators = map[string]bool{"<<": true, "concat": true, "[]=": true, "insert": true, "prepend": true, "replace": true, "clear": true, "setbyte": true}
+var stringMutators = map[string]bool{"<<": true, "concat": true, "append_as_bytes": true, "[]=": true, "insert": true, "prepend": true, "replace": true, "clear": true, "setbyte": true}
 
 const noEval = "rugaroo compiles the program ahead of time and the binary has no interpreter, so code cannot be built at run time"
 

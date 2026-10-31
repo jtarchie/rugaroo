@@ -183,6 +183,7 @@ func (c *Compiler) mainBodies() ([]parser.Node, []fileBody) {
 		slices.SortStableFunc(mine, func(a, b parser.Node) int {
 			return cmp.Compare(a.GetLocation().StartOffset, b.GetLocation().StartOffset)
 		})
+		mine = spliceIntoUnits(mine)
 		body := append([]parser.Node(nil), c.beginStmts[f]...)
 		for len(rest) > 0 || len(mine) > 0 {
 			if len(mine) > 0 && (len(rest) == 0 || mine[0].GetLocation().StartOffset < rest[0].GetLocation().StartOffset) {
@@ -194,6 +195,36 @@ func (c *Compiler) mainBodies() ([]parser.Node, []fileBody) {
 		bodies = append(bodies, fileBody{f: f, stmts: body})
 	}
 	return prelude, bodies
+}
+
+// spliceIntoUnits moves a constant's init that falls inside a class body's unit (decision 170: a body with locals runs
+// as one statement, placed at its first) into that unit, in source order: racc's generated parsers assign
+// `Racc_token_to_s_table = [...]` (no local read, so not the unit's) after the unit's first statements and read it in
+// the unit's `Ractor.make_shareable(Racc_token_to_s_table)` right after. The rest of mine is answered.
+func spliceIntoUnits(mine []parser.Node) []parser.Node {
+	for _, r := range slices.Clone(mine) {
+		cs, ok := r.(*classStmt)
+		if !ok || !cs.unit {
+			continue
+		}
+		st := cs.Node.(*parser.StatementsNode) //nolint:forcetypeassert // a unit's node is its statements
+		if len(st.Body) == 0 {
+			continue
+		}
+		first, last := st.Body[0].GetLocation().StartOffset, endOf(st.Body[len(st.Body)-1])
+		kept := mine[:0:0]
+		for _, m := range mine {
+			at := m.GetLocation().StartOffset
+			if _, isConst := m.(*constInit); !isConst || at <= first || at >= last {
+				kept = append(kept, m)
+				continue
+			}
+			i, _ := slices.BinarySearchFunc(st.Body, at, func(n parser.Node, off int) int { return cmp.Compare(n.GetLocation().StartOffset, off) })
+			st.Body = slices.Insert(st.Body, i, m)
+		}
+		mine = kept
+	}
+	return mine
 }
 
 // mainBody is everything main runs, flattened, required files where they load.

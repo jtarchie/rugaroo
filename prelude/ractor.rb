@@ -111,6 +111,19 @@ class Ractor < Object
   #: () -> Ractor
   def self.main = %x{ return rbMainRactor }
 
+  # Deep-freezes obj and answers it, as MRI does for the Arrays, Hashes and Strings a parser table holds (racc's
+  # generated parsers: `Ractor.make_shareable(Racc_arg) if defined?(Ractor)`). ponytail: MRI also freezes an object's
+  # ivars and raises for an unshareable Proc; a frozen value is already shared as is (see Ractor::Port).
+  #: (untyped, ?copy: bool) -> untyped
+  # @dynamic
+  def self.make_shareable(obj, copy: false)
+    case obj
+    when Array then obj.each { |e| make_shareable(e) }
+    when Hash then obj.each { |k, v| make_shareable(k); make_shareable(v) }
+    end
+    obj.freeze
+  end
+
   # Main plus the ractors still running.
   #: () -> Integer
   def self.count = %x{ Integer(1 + rbRactorLive.Load()) }

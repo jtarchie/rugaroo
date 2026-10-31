@@ -811,8 +811,24 @@ type rbStrOut struct {
 	b *[]byte
 }
 
+// rbBytesArg is one String#append_as_bytes argument as bytes: an Integer's low byte, a String's bytes (no encoding check),
+// anything else MRI's TypeError.
+func rbBytesArg(v any) String {
+	switch x := rbUnbox(v).(type) {
+	case Integer:
+		return String([]byte{byte(x)})
+	case String:
+		return x
+	}
+	panic(NewTypeError(Ref(String("wrong argument type " + rbClassName(v) + " (expected String or Integer)"))))
+}
+
 // rbStrAppend is an unaliased local's `s << x` (decision 382): buf is the local's own, so no other builder evicts it as in rbStrCat's slots.
+// A nil buf is a gem caller's out parameter (decision 405): the append takes a buffer of its own.
 func rbStrAppend(buf *[]byte, s, x String) String {
+	if buf == nil {
+		buf = new([]byte)
+	}
 	b := *buf
 	if len(s) == 0 || len(b) != len(s) || unsafe.SliceData(b) != unsafe.StringData(string(s)) { //nolint:gosec // pointer compare only
 		if len(x) == 0 {

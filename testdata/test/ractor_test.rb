@@ -229,3 +229,16 @@ def ractor_helper_receive
   v = Ractor.receive #: Integer
   v
 end
+
+module RactorTests
+  class RactorShareableTest < Minitest::Test
+    def test_make_shareable_deep_freezes_and_answers_the_object
+      a = [1, { k: "v" }] #: untyped
+      b = Ractor.make_shareable(a)
+      assert_equal a, b
+      assert a.frozen?
+      assert a[1].frozen?
+      assert a[1][:k].frozen?
+    end
+  end
+end

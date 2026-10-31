@@ -120,6 +120,26 @@ class StringScanner < Object
   #: (Integer) -> String
   def peek(n) = %x{ String(self.str[self.pos:min(len(self.str), self.pos+int(n))]) }
 
+  # Ruby 3.4's byte scanners (prism's polyfill checks `method_defined?(:scan_byte)` and includes its own otherwise).
+  #: () -> Integer?
+  def scan_byte = %x{
+    if self.pos >= len(self.str) {
+      self.groups = nil
+      return rbOpt[Integer]{}
+    }
+    b := self.str[self.pos]
+    self.advance(self.pos, self.pos+1)
+    return rbSome(Integer(b))
+  }
+
+  #: () -> Integer?
+  def peek_byte = %x{
+    if self.pos >= len(self.str) {
+      return rbOpt[Integer]{}
+    }
+    return rbSome(Integer(self.str[self.pos]))
+  }
+
   #: () -> StringScanner
   def unscan = %x{
     if self.groups == nil {

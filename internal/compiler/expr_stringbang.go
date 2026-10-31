@@ -72,7 +72,7 @@ func (f *fctx) genStringBang(n *parser.CallNode) (expr, bool) {
 		return f.genStringBang(&outer)
 	}
 	lv, write, ok := f.stringBangTarget(n, n.Receiver)
-	if !ok || !f.lenient() || !strings.HasSuffix(n.Name, "!") && n.Name != "<<" && n.Name != "concat" && n.Name != "replace" && n.Name != "clear" && n.Name != "[]=" {
+	if !ok || !f.lenient() || !strings.HasSuffix(n.Name, "!") && !strAppendNames[n.Name] && n.Name != "replace" && n.Name != "clear" && n.Name != "[]=" {
 		return expr{}, false
 	}
 	if n.IsSAFE_NAVIGATION() { // kramdown's `second&.gsub!(re, s)`: nothing when the local is nil
@@ -168,10 +168,10 @@ func (f *fctx) stringBangOn(n *parser.CallNode, lv parser.Node, write func(expr)
 			return f.untypedStringEdit(n, lv, func(sv string) (expr, bool) {
 				return f.stringReplaceBang(n, callArgs(n), func() string { return sv }, write)
 			}), true
-		case n.Name == "<<" || n.Name == "concat" || strings.HasSuffix(n.Name, "!") && f.c.classes["String"].lookup(strings.TrimSuffix(n.Name, "!")) != nil:
+		case strAppendNames[n.Name] || strings.HasSuffix(n.Name, "!") && f.c.classes["String"].lookup(strings.TrimSuffix(n.Name, "!")) != nil:
 			// kramdown's adapt_source: `source = source.encode('UTF-8'); source.gsub!(...); source << "\n"` (decision 330)
 			return f.untypedStringEdit(n, lv, func(sv string) (expr, bool) {
-				if n.Name == "<<" || n.Name == "concat" { // its value is the local re-read after the write: lv itself
+				if strAppendNames[n.Name] { // its value is the local re-read after the write: lv itself
 					return f.stringAppendBang(n, lv, callArgs(n), func() string { return sv }, write)
 				}
 				return f.stringBangOn(n, &exprNode{Node: lv, e: expr{code: sv, typ: str}}, write)
@@ -194,7 +194,7 @@ func (f *fctx) stringBangOn(n *parser.CallNode, lv parser.Node, write func(expr)
 	}
 	args := callArgs(n)
 	switch n.Name {
-	case "<<", "concat":
+	case "<<", "concat", "append_as_bytes":
 		return f.stringAppendBang(n, lv, args, cur, write)
 	case "replace", "clear": // rackup's Stream::Reader#read refills its buffer
 		return f.stringReplaceBang(n, args, cur, write)
@@ -334,9 +334,12 @@ func (f *fctx) stringAppendBang(n *parser.CallNode, lv parser.Node, args []parse
 	for _, arg := range args {
 		a := f.genExpr(arg, nil)
 		var code string
-		if typeEq(a.typ, TOpt{Elem: str}) { // `s << nil` raises in MRI too
+		switch {
+		case n.Name == "append_as_bytes": // a String's bytes or an Integer's low byte
+			code = "rbBytesArg(" + f.coerce(arg, a, TAny{}) + ")"
+		case typeEq(a.typ, TOpt{Elem: str}): // `s << nil` raises in MRI too
 			code = "rbMustStr(" + a.code + ")"
-		} else {
+		default:
 			code = f.coerce(arg, a, str)
 		}
 		acc = "String.Op_plus(" + acc + ", " + code + ")"

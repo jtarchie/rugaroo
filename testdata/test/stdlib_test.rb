@@ -732,6 +732,18 @@ module StdlibTests
     end
 
     # A String pattern matches itself literally (Homebrew's Locale.try_parse `scanner.scan("-")`)
+    def test_scan_byte_and_peek_byte
+      s = StringScanner.new("a\xC3\xA9".b)
+      assert_equal 0x61, s.peek_byte
+      assert_equal 0x61, s.scan_byte
+      assert_equal 0xC3, s.scan_byte
+      assert_equal 0xA9, s.peek_byte
+      assert_equal 0xA9, s.scan_byte
+      assert_nil s.peek_byte
+      assert_nil s.scan_byte
+      assert_equal 3, s.pos
+    end
+
     def test_scanner_string_patterns
       s = StringScanner.new("en-US.x")
       assert_equal ["en", "-", "-", 2, 1, nil], [s.scan(/[a-z]+/), s.check("-"), s.scan("-"), s.skip("US"), s.match?("."), s.scan("x")]
