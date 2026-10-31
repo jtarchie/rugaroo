@@ -270,6 +270,8 @@ func (c *Compiler) emitConstTable(cls *Class) {
 			inherited := strings.Contains(full, "::") && strings.TrimSuffix(full, "::"+short) != desc.RubyName
 			if k := c.classes[full]; k != nil && c.evalDefFlag(k) != "" { // defined when its eval runs (decision 324)
 				v = "rbEvalConst{&" + c.evalDefFlag(k) + ", " + v + "}"
+			} else if k := c.consts[full]; k != nil && k.guarded { // listed once main assigns it: `V2 = all(:V2)` must not find V2 itself (regexp_parser's UnicodeProperty)
+				v = "rbEvalConst{&" + constSet(k) + ", " + v + "}"
 			}
 			entry := fmt.Sprintf("{%q, %s, %t}", short, v, inherited)
 			all = append(all, entry)

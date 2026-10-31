@@ -77,23 +77,24 @@ type reachDef struct {
 }
 
 type reach struct {
-	c       *Compiler
-	names   map[string]bool     // method names reachable code calls
-	consts  map[string]bool     // constant names (last segment) reachable code may instantiate or call through
-	aliases map[string][]string // alias new name -> old names: reaching the new one reaches the old
-	defs    []*reachDef
-	goNames map[string][]string // Go method name -> Ruby names, for names Go code calls
-	live    map[*Class]bool
-	dynamic string // a computed reflective call, which reaches any name; "" when there is none
-	from    string
-	why     map[string]string // RUGAROO_PRUNE_DEBUG: what first reached each name
-	named   map[*Class]bool   // the classes reachable code's constants resolve to
-	byName  map[string]bool   // constants that resolve to no class here: live by last segment
-	file    *File             // what the walk is in, for resolving constants lexically
-	scope   []*Class
-	pending map[string][]pendingConst // a gem constant's effect-free initializer, walked once its name is reached
-	params  map[string]*Class         // the walked def's parameters its signature types as a prelude class
-	typed   map[string][]*Class       // names reached only on those classes (`res.cookies` with res a WEBrick::HTTPResponse)
+	c         *Compiler
+	names     map[string]bool     // method names reachable code calls
+	consts    map[string]bool     // constant names (last segment) reachable code may instantiate or call through
+	reflected []string            // module prefixes whose constants a computed const_get or a `constants` call may name: none are pruned (regexp_parser's UnicodeProperty.all)
+	aliases   map[string][]string // alias new name -> old names: reaching the new one reaches the old
+	defs      []*reachDef
+	goNames   map[string][]string // Go method name -> Ruby names, for names Go code calls
+	live      map[*Class]bool
+	dynamic   string // a computed reflective call, which reaches any name; "" when there is none
+	from      string
+	why       map[string]string // RUGAROO_PRUNE_DEBUG: what first reached each name
+	named     map[*Class]bool   // the classes reachable code's constants resolve to
+	byName    map[string]bool   // constants that resolve to no class here: live by last segment
+	file      *File             // what the walk is in, for resolving constants lexically
+	scope     []*Class
+	pending   map[string][]pendingConst // a gem constant's effect-free initializer, walked once its name is reached
+	params    map[string]*Class         // the walked def's parameters its signature types as a prelude class
+	typed     map[string][]*Class       // names reached only on those classes (`res.cookies` with res a WEBrick::HTTPResponse)
 }
 
 type pendingConst struct {
@@ -502,6 +503,7 @@ func (r *reach) constGet(n *parser.CallNode) {
 	if _, self := n.Receiver.(*parser.SelfNode); (self || n.Receiver == nil) && len(r.scope) > 0 {
 		prefix = r.scope[len(r.scope)-1].RubyName + "::"
 	}
+	r.reflected = append(r.reflected, prefix)
 	for _, cls := range r.c.classList {
 		if strings.HasPrefix(cls.RubyName, prefix) {
 			r.named[cls] = true
@@ -517,6 +519,9 @@ func (r *reach) call(n *parser.CallNode) bool {
 	}
 	r.add(n.Name)
 	args := callArgs(n)
+	if n.Name == "constants" && len(args) == 0 { // `constants.grep(/V1/).flat_map(&method(:const_get))`: every constant of the module may be named
+		r.constGet(n)
+	}
 	// respond_to_missing? forwarding respond_to?(name) passes on a name some other call already spelled
 	if reflectiveCalls[n.Name] && len(args) > 0 && (n.Name != "respond_to?" || r.from != "def respond_to_missing?") {
 		if name, ok := symbolName(args[0]); !ok && n.Name == "const_get" {
@@ -587,7 +592,7 @@ func (r *reach) pruneConsts() {
 	var keep []*Const
 	for _, k := range c.constList {
 		name := k.RubyName[strings.LastIndex(k.RubyName, ":")+1:]
-		if !c.gemFile(k.File) || r.consts[name] || !effectFree(k.Value) || k.typeAlias != "" { // a Sorbet type alias types sigs and includes, unread by name
+		if !c.gemFile(k.File) || r.consts[name] || !effectFree(k.Value) || k.typeAlias != "" || r.reflectedConst(k.RubyName) { // a Sorbet type alias types sigs and includes, unread by name
 			keep = append(keep, k)
 			continue
 		}
@@ -601,6 +606,11 @@ func (r *reach) pruneConsts() {
 		}
 	}
 	c.constList = keep
+}
+
+// reflectedConst reports a constant some reachable `constants` or computed `const_get` may name.
+func (r *reach) reflectedConst(full string) bool {
+	return slices.ContainsFunc(r.reflected, func(prefix string) bool { return strings.HasPrefix(full, prefix) })
 }
 
 // effectFree reports whether evaluating n can do nothing but build a value.
