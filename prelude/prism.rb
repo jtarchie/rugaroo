@@ -41,7 +41,7 @@ module Prism
     end
 
     # ponytail: reads the whole stream, where MRI stops at __END__; pm_serialize_parse_stream needs a host fgets callback.
-    #: (untyped, **untyped) -> ParseResult
+    #: (IO, **untyped) -> ParseResult
     def parse_stream(stream, **options)
       parse(stream.read, **options)
     end
@@ -157,8 +157,8 @@ module Prism
     #: (Hash[Symbol, untyped]) -> String
     def dump_options(options)
       out = ""
-      filepath = options[:filepath]
-      if filepath
+      if options[:filepath]
+        filepath = String(options[:filepath])
         out += [filepath.bytesize].pack("L") + filepath.b
       else
         out += [0].pack("L")
@@ -166,7 +166,7 @@ module Prism
       out += [options.fetch(:line, 1)].pack("l")
       encoding = options[:encoding]
       if encoding
-        name = encoding.is_a?(Encoding) ? encoding.name : encoding.to_s
+        name = encoding.is_a?(Encoding) ? encoding.name : String(encoding)
         out += [name.bytesize].pack("L") + name.b
       else
         out += [0].pack("L")
@@ -205,7 +205,7 @@ module Prism
           end
           out += [locals.length, forwarding].pack("LC")
           locals.each do |local|
-            name = local.name
+            name = String(local)
             out += [name.bytesize].pack("L") + name.b
           end
         end

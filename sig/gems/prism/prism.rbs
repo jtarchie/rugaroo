@@ -3,22 +3,27 @@
 module Prism
   class Node
     @location: Location | Integer
+    def location: () -> Location
   end
 
   class AliasGlobalVariableNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, GlobalVariableReadNode | BackReferenceReadNode | NumberedReferenceReadNode new_name, GlobalVariableReadNode | BackReferenceReadNode | NumberedReferenceReadNode | SymbolNode | MissingNode old_name, (Location | Integer) keyword_loc) -> void
+    def keyword_loc: () -> Location
   end
 
   class AliasMethodNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, SymbolNode | InterpolatedSymbolNode new_name, SymbolNode | InterpolatedSymbolNode | GlobalVariableReadNode | MissingNode old_name, (Location | Integer) keyword_loc) -> void
+    def keyword_loc: () -> Location
   end
 
   class AlternationPatternNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node left, Prism::node right, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class AndNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node left, Prism::node right, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class ArgumentsNode < Node
@@ -27,18 +32,24 @@ module Prism
 
   class ArrayNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Prism::node] elements, (Location | Integer)? opening_loc, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class ArrayPatternNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode | ConstantReadNode | nil constant, Array[Prism::node] requireds, Prism::node? rest, Array[Prism::node] posts, (Location | Integer)? opening_loc, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class AssocNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node key, Prism::node value, (Location | Integer)? operator_loc) -> void
+    def operator_loc: () -> Location?
   end
 
   class AssocSplatNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? value, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class BackReferenceReadNode < Node
@@ -47,10 +58,13 @@ module Prism
 
   class BeginNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? begin_keyword_loc, StatementsNode? statements, RescueNode? rescue_clause, ElseNode? else_clause, EnsureNode? ensure_clause, (Location | Integer)? end_keyword_loc) -> void
+    def begin_keyword_loc: () -> Location?
+    def end_keyword_loc: () -> Location?
   end
 
   class BlockArgumentNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? expression, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class BlockLocalVariableNode < Node
@@ -59,66 +73,103 @@ module Prism
 
   class BlockNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Symbol] locals, BlockParametersNode | NumberedParametersNode | ItParametersNode | nil parameters, StatementsNode | BeginNode | nil body, (Location | Integer) opening_loc, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class BlockParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol? name, (Location | Integer)? name_loc, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class BlockParametersNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ParametersNode? parameters, Array[BlockLocalVariableNode] locals, (Location | Integer)? opening_loc, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class BreakNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ArgumentsNode? arguments, (Location | Integer) keyword_loc) -> void
+    def keyword_loc: () -> Location
   end
 
   class CallAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer)? message_loc, Symbol read_name, Symbol write_name, (Location | Integer) operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def message_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class CallNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, Symbol name, (Location | Integer)? message_loc, (Location | Integer)? opening_loc, ArgumentsNode? arguments, (Location | Integer)? closing_loc, (Location | Integer)? equal_loc, BlockNode | BlockArgumentNode | nil block) -> void
+    def call_operator_loc: () -> Location?
+    def message_loc: () -> Location?
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
+    def equal_loc: () -> Location?
   end
 
   class CallOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer)? message_loc, Symbol read_name, Symbol write_name, Symbol binary_operator, (Location | Integer) binary_operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def message_loc: () -> Location?
+    def binary_operator_loc: () -> Location
   end
 
   class CallOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer)? message_loc, Symbol read_name, Symbol write_name, (Location | Integer) operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def message_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class CallTargetNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node receiver, (Location | Integer) call_operator_loc, Symbol name, (Location | Integer) message_loc) -> void
+    def call_operator_loc: () -> Location
+    def message_loc: () -> Location
   end
 
   class CapturePatternNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node value, LocalVariableTargetNode target, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class CaseMatchNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? predicate, Array[InNode] conditions, ElseNode? else_clause, (Location | Integer) case_keyword_loc, (Location | Integer) end_keyword_loc) -> void
+    def case_keyword_loc: () -> Location
+    def end_keyword_loc: () -> Location
   end
 
   class CaseNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? predicate, Array[WhenNode] conditions, ElseNode? else_clause, (Location | Integer) case_keyword_loc, (Location | Integer) end_keyword_loc) -> void
+    def case_keyword_loc: () -> Location
+    def end_keyword_loc: () -> Location
   end
 
   class ClassNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Symbol] locals, (Location | Integer) class_keyword_loc, ConstantReadNode | ConstantPathNode | CallNode constant_path, (Location | Integer)? inheritance_operator_loc, Prism::node? superclass, StatementsNode | BeginNode | nil body, (Location | Integer) end_keyword_loc, Symbol name) -> void
+    def class_keyword_loc: () -> Location
+    def inheritance_operator_loc: () -> Location?
+    def end_keyword_loc: () -> Location
   end
 
   class ClassVariableAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class ClassVariableOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) binary_operator_loc, Prism::node value, Symbol binary_operator) -> void
+    def name_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class ClassVariableOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class ClassVariableReadNode < Node
@@ -131,42 +182,58 @@ module Prism
 
   class ClassVariableWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node value, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class ConstantAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class ConstantOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) binary_operator_loc, Prism::node value, Symbol binary_operator) -> void
+    def name_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class ConstantOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class ConstantPathAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode target, (Location | Integer) operator_loc, Prism::node value) -> void
+    def operator_loc: () -> Location
   end
 
   class ConstantPathNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? parent, Symbol? name, (Location | Integer) delimiter_loc, (Location | Integer) name_loc) -> void
+    def delimiter_loc: () -> Location
+    def name_loc: () -> Location
   end
 
   class ConstantPathOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode target, (Location | Integer) binary_operator_loc, Prism::node value, Symbol binary_operator) -> void
+    def binary_operator_loc: () -> Location
   end
 
   class ConstantPathOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode target, (Location | Integer) operator_loc, Prism::node value) -> void
+    def operator_loc: () -> Location
   end
 
   class ConstantPathTargetNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? parent, Symbol? name, (Location | Integer) delimiter_loc, (Location | Integer) name_loc) -> void
+    def delimiter_loc: () -> Location
+    def name_loc: () -> Location
   end
 
   class ConstantPathWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode target, (Location | Integer) operator_loc, Prism::node value) -> void
+    def operator_loc: () -> Location
   end
 
   class ConstantReadNode < Node
@@ -179,30 +246,49 @@ module Prism
 
   class ConstantWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node value, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class DefNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node? receiver, ParametersNode? parameters, StatementsNode | BeginNode | nil body, Array[Symbol] locals, (Location | Integer) def_keyword_loc, (Location | Integer)? operator_loc, (Location | Integer)? lparen_loc, (Location | Integer)? rparen_loc, (Location | Integer)? equal_loc, (Location | Integer)? end_keyword_loc) -> void
+    def name_loc: () -> Location
+    def def_keyword_loc: () -> Location
+    def operator_loc: () -> Location?
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
+    def equal_loc: () -> Location?
+    def end_keyword_loc: () -> Location?
   end
 
   class DefinedNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? lparen_loc, Prism::node value, (Location | Integer)? rparen_loc, (Location | Integer) keyword_loc) -> void
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
+    def keyword_loc: () -> Location
   end
 
   class ElseNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) else_keyword_loc, StatementsNode? statements, (Location | Integer)? end_keyword_loc) -> void
+    def else_keyword_loc: () -> Location
+    def end_keyword_loc: () -> Location?
   end
 
   class EmbeddedStatementsNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, StatementsNode? statements, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class EmbeddedVariableNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) operator_loc, InstanceVariableReadNode | ClassVariableReadNode | GlobalVariableReadNode | BackReferenceReadNode | NumberedReferenceReadNode variable) -> void
+    def operator_loc: () -> Location
   end
 
   class EnsureNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) ensure_keyword_loc, StatementsNode? statements, (Location | Integer) end_keyword_loc) -> void
+    def ensure_keyword_loc: () -> Location
+    def end_keyword_loc: () -> Location
   end
 
   class FalseNode < Node
@@ -211,10 +297,13 @@ module Prism
 
   class FindPatternNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode | ConstantReadNode | nil constant, SplatNode left, Array[Prism::node] requireds, SplatNode | MissingNode right, (Location | Integer)? opening_loc, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class FlipFlopNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? left, Prism::node? right, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class FloatNode < Node
@@ -223,6 +312,10 @@ module Prism
 
   class ForNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | MultiTargetNode | BackReferenceReadNode | NumberedReferenceReadNode | MissingNode index, Prism::node collection, StatementsNode? statements, (Location | Integer) for_keyword_loc, (Location | Integer) in_keyword_loc, (Location | Integer)? do_keyword_loc, (Location | Integer) end_keyword_loc) -> void
+    def for_keyword_loc: () -> Location
+    def in_keyword_loc: () -> Location
+    def do_keyword_loc: () -> Location?
+    def end_keyword_loc: () -> Location
   end
 
   class ForwardingArgumentsNode < Node
@@ -239,14 +332,20 @@ module Prism
 
   class GlobalVariableAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class GlobalVariableOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) binary_operator_loc, Prism::node value, Symbol binary_operator) -> void
+    def name_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class GlobalVariableOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class GlobalVariableReadNode < Node
@@ -259,18 +358,27 @@ module Prism
 
   class GlobalVariableWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node value, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class HashNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, Array[AssocNode | AssocSplatNode] elements, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class HashPatternNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ConstantPathNode | ConstantReadNode | nil constant, Array[AssocNode] elements, AssocSplatNode | NoKeywordsParameterNode | nil rest, (Location | Integer)? opening_loc, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class IfNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? if_keyword_loc, Prism::node predicate, (Location | Integer)? then_keyword_loc, StatementsNode? statements, ElseNode | IfNode | nil subsequent, (Location | Integer)? end_keyword_loc) -> void
+    def if_keyword_loc: () -> Location?
+    def then_keyword_loc: () -> Location?
+    def end_keyword_loc: () -> Location?
   end
 
   class ImaginaryNode < Node
@@ -287,34 +395,56 @@ module Prism
 
   class InNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node pattern, StatementsNode? statements, (Location | Integer) in_loc, (Location | Integer)? then_loc) -> void
+    def in_loc: () -> Location
+    def then_loc: () -> Location?
   end
 
   class IndexAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer) opening_loc, ArgumentsNode? arguments, (Location | Integer) closing_loc, BlockArgumentNode? block, (Location | Integer) operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class IndexOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer) opening_loc, ArgumentsNode? arguments, (Location | Integer) closing_loc, BlockArgumentNode? block, Symbol binary_operator, (Location | Integer) binary_operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class IndexOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? receiver, (Location | Integer)? call_operator_loc, (Location | Integer) opening_loc, ArgumentsNode? arguments, (Location | Integer) closing_loc, BlockArgumentNode? block, (Location | Integer) operator_loc, Prism::node value) -> void
+    def call_operator_loc: () -> Location?
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class IndexTargetNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node receiver, (Location | Integer) opening_loc, ArgumentsNode? arguments, (Location | Integer) closing_loc, BlockArgumentNode? block) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class InstanceVariableAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class InstanceVariableOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) binary_operator_loc, Prism::node value, Symbol binary_operator) -> void
+    def name_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class InstanceVariableOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class InstanceVariableReadNode < Node
@@ -327,6 +457,8 @@ module Prism
 
   class InstanceVariableWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node value, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class IntegerNode < Node
@@ -335,22 +467,32 @@ module Prism
 
   class InterpolatedMatchLastLineNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, Array[StringNode | EmbeddedStatementsNode | EmbeddedVariableNode] parts, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class InterpolatedRegularExpressionNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, Array[StringNode | EmbeddedStatementsNode | EmbeddedVariableNode] parts, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class InterpolatedStringNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? opening_loc, Array[StringNode | EmbeddedStatementsNode | EmbeddedVariableNode | InterpolatedStringNode | XStringNode | InterpolatedXStringNode | SymbolNode | InterpolatedSymbolNode] parts, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class InterpolatedSymbolNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? opening_loc, Array[StringNode | EmbeddedStatementsNode | EmbeddedVariableNode] parts, (Location | Integer)? closing_loc) -> void
+    def opening_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class InterpolatedXStringNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, Array[StringNode | EmbeddedStatementsNode | EmbeddedVariableNode] parts, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class ItLocalVariableReadNode < Node
@@ -367,22 +509,33 @@ module Prism
 
   class KeywordRestParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol? name, (Location | Integer)? name_loc, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class LambdaNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Symbol] locals, (Location | Integer) operator_loc, (Location | Integer) opening_loc, (Location | Integer) closing_loc, BlockParametersNode | NumberedParametersNode | ItParametersNode | nil parameters, StatementsNode | BeginNode | nil body) -> void
+    def operator_loc: () -> Location
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class LocalVariableAndWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value, Symbol name, Integer depth) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class LocalVariableOperatorWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) name_loc, (Location | Integer) binary_operator_loc, Prism::node value, Symbol name, Symbol binary_operator, Integer depth) -> void
+    def name_loc: () -> Location
+    def binary_operator_loc: () -> Location
   end
 
   class LocalVariableOrWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value, Symbol name, Integer depth) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class LocalVariableReadNode < Node
@@ -395,18 +548,25 @@ module Prism
 
   class LocalVariableWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, Integer depth, (Location | Integer) name_loc, Prism::node value, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class MatchLastLineNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, (Location | Integer) content_loc, (Location | Integer) closing_loc, String unescaped) -> void
+    def opening_loc: () -> Location
+    def content_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class MatchPredicateNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node value, Prism::node pattern, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class MatchRequiredNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node value, Prism::node pattern, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class MatchWriteNode < Node
@@ -419,18 +579,26 @@ module Prism
 
   class ModuleNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Symbol] locals, (Location | Integer) module_keyword_loc, ConstantReadNode | ConstantPathNode | MissingNode constant_path, StatementsNode | BeginNode | nil body, (Location | Integer) end_keyword_loc, Symbol name) -> void
+    def module_keyword_loc: () -> Location
+    def end_keyword_loc: () -> Location
   end
 
   class MultiTargetNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | MultiTargetNode | RequiredParameterNode | BackReferenceReadNode | NumberedReferenceReadNode] lefts, ImplicitRestNode | SplatNode | nil rest, Array[LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | MultiTargetNode | RequiredParameterNode | BackReferenceReadNode | NumberedReferenceReadNode] rights, (Location | Integer)? lparen_loc, (Location | Integer)? rparen_loc) -> void
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
   end
 
   class MultiWriteNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | MultiTargetNode | BackReferenceReadNode | NumberedReferenceReadNode] lefts, ImplicitRestNode | SplatNode | nil rest, Array[LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | MultiTargetNode | BackReferenceReadNode | NumberedReferenceReadNode] rights, (Location | Integer)? lparen_loc, (Location | Integer)? rparen_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class NextNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, ArgumentsNode? arguments, (Location | Integer) keyword_loc) -> void
+    def keyword_loc: () -> Location
   end
 
   class NilNode < Node
@@ -439,6 +607,8 @@ module Prism
 
   class NoKeywordsParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) operator_loc, (Location | Integer) keyword_loc) -> void
+    def operator_loc: () -> Location
+    def keyword_loc: () -> Location
   end
 
   class NumberedParametersNode < Node
@@ -451,14 +621,18 @@ module Prism
 
   class OptionalKeywordParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, Prism::node value) -> void
+    def name_loc: () -> Location
   end
 
   class OptionalParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc, (Location | Integer) operator_loc, Prism::node value) -> void
+    def name_loc: () -> Location
+    def operator_loc: () -> Location
   end
 
   class OrNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node left, Prism::node right, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class ParametersNode < Node
@@ -467,22 +641,34 @@ module Prism
 
   class ParenthesesNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? body, (Location | Integer) opening_loc, (Location | Integer) closing_loc) -> void
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class PinnedExpressionNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node expression, (Location | Integer) operator_loc, (Location | Integer) lparen_loc, (Location | Integer) rparen_loc) -> void
+    def operator_loc: () -> Location
+    def lparen_loc: () -> Location
+    def rparen_loc: () -> Location
   end
 
   class PinnedVariableNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, LocalVariableReadNode | InstanceVariableReadNode | ClassVariableReadNode | GlobalVariableReadNode | BackReferenceReadNode | NumberedReferenceReadNode | ItLocalVariableReadNode | MissingNode variable, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class PostExecutionNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, StatementsNode? statements, (Location | Integer) keyword_loc, (Location | Integer) opening_loc, (Location | Integer) closing_loc) -> void
+    def keyword_loc: () -> Location
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class PreExecutionNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, StatementsNode? statements, (Location | Integer) keyword_loc, (Location | Integer) opening_loc, (Location | Integer) closing_loc) -> void
+    def keyword_loc: () -> Location
+    def opening_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class ProgramNode < Node
@@ -491,6 +677,7 @@ module Prism
 
   class RangeNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node? left, Prism::node? right, (Location | Integer) operator_loc) -> void
+    def operator_loc: () -> Location
   end
 
   class RationalNode < Node
@@ -503,10 +690,14 @@ module Prism
 
   class RegularExpressionNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, (Location | Integer) content_loc, (Location | Integer) closing_loc, String unescaped) -> void
+    def opening_loc: () -> Location
+    def content_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class RequiredKeywordParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol name, (Location | Integer) name_loc) -> void
+    def name_loc: () -> Location
   end
 
   class RequiredParameterNode < Node
@@ -515,14 +706,20 @@ module Prism
 
   class RescueModifierNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Prism::node expression, (Location | Integer) keyword_loc, Prism::node rescue_expression) -> void
+    def keyword_loc: () -> Location
   end
 
   class RescueNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, Array[Prism::node] exceptions, (Location | Integer)? operator_loc, LocalVariableTargetNode | InstanceVariableTargetNode | ClassVariableTargetNode | GlobalVariableTargetNode | ConstantTargetNode | ConstantPathTargetNode | CallTargetNode | IndexTargetNode | BackReferenceReadNode | NumberedReferenceReadNode | MissingNode | nil reference, (Location | Integer)? then_keyword_loc, StatementsNode? statements, RescueNode? subsequent) -> void
+    def keyword_loc: () -> Location
+    def operator_loc: () -> Location?
+    def then_keyword_loc: () -> Location?
   end
 
   class RestParameterNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Symbol? name, (Location | Integer)? name_loc, (Location | Integer) operator_loc) -> void
+    def name_loc: () -> Location?
+    def operator_loc: () -> Location
   end
 
   class RetryNode < Node
@@ -531,6 +728,7 @@ module Prism
 
   class ReturnNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, ArgumentsNode? arguments) -> void
+    def keyword_loc: () -> Location
   end
 
   class SelfNode < Node
@@ -543,6 +741,9 @@ module Prism
 
   class SingletonClassNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[Symbol] locals, (Location | Integer) class_keyword_loc, (Location | Integer) operator_loc, Prism::node expression, StatementsNode | BeginNode | nil body, (Location | Integer) end_keyword_loc) -> void
+    def class_keyword_loc: () -> Location
+    def operator_loc: () -> Location
+    def end_keyword_loc: () -> Location
   end
 
   class SourceEncodingNode < Node
@@ -559,6 +760,7 @@ module Prism
 
   class SplatNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) operator_loc, Prism::node? expression) -> void
+    def operator_loc: () -> Location
   end
 
   class StatementsNode < Node
@@ -567,14 +769,23 @@ module Prism
 
   class StringNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? opening_loc, (Location | Integer) content_loc, (Location | Integer)? closing_loc, String unescaped) -> void
+    def opening_loc: () -> Location?
+    def content_loc: () -> Location
+    def closing_loc: () -> Location?
   end
 
   class SuperNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, (Location | Integer)? lparen_loc, ArgumentsNode? arguments, (Location | Integer)? rparen_loc, BlockNode | BlockArgumentNode | nil block) -> void
+    def keyword_loc: () -> Location
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
   end
 
   class SymbolNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer)? opening_loc, (Location | Integer)? value_loc, (Location | Integer)? closing_loc, String unescaped) -> void
+    def opening_loc: () -> Location?
+    def value_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class TrueNode < Node
@@ -583,30 +794,48 @@ module Prism
 
   class UndefNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, Array[SymbolNode | InterpolatedSymbolNode] names, (Location | Integer) keyword_loc) -> void
+    def keyword_loc: () -> Location
   end
 
   class UnlessNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, Prism::node predicate, (Location | Integer)? then_keyword_loc, StatementsNode? statements, ElseNode? else_clause, (Location | Integer)? end_keyword_loc) -> void
+    def keyword_loc: () -> Location
+    def then_keyword_loc: () -> Location?
+    def end_keyword_loc: () -> Location?
   end
 
   class UntilNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, (Location | Integer)? do_keyword_loc, (Location | Integer)? closing_loc, Prism::node predicate, StatementsNode? statements) -> void
+    def keyword_loc: () -> Location
+    def do_keyword_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class WhenNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, Array[Prism::node] conditions, (Location | Integer)? then_keyword_loc, StatementsNode? statements) -> void
+    def keyword_loc: () -> Location
+    def then_keyword_loc: () -> Location?
   end
 
   class WhileNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, (Location | Integer)? do_keyword_loc, (Location | Integer)? closing_loc, Prism::node predicate, StatementsNode? statements) -> void
+    def keyword_loc: () -> Location
+    def do_keyword_loc: () -> Location?
+    def closing_loc: () -> Location?
   end
 
   class XStringNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) opening_loc, (Location | Integer) content_loc, (Location | Integer) closing_loc, String unescaped) -> void
+    def opening_loc: () -> Location
+    def content_loc: () -> Location
+    def closing_loc: () -> Location
   end
 
   class YieldNode < Node
     def initialize: (Source source, Integer node_id, (Location | Integer) location, Integer flags, (Location | Integer) keyword_loc, (Location | Integer)? lparen_loc, ArgumentsNode? arguments, (Location | Integer)? rparen_loc) -> void
+    def keyword_loc: () -> Location
+    def lparen_loc: () -> Location?
+    def rparen_loc: () -> Location?
   end
 
   module Serialize

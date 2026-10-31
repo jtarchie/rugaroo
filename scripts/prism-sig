@@ -3,7 +3,8 @@
 
 # Writes sig/gems/prism/prism.rbs, rugaroo's patches to the prism gem's shipped sig/ (decision 427): serialize.rb passes
 # each node's locations packed into an Integer unless `freeze:`, and the node's reader unpacks it on first use, so every
-# Location an initialize takes is `Location | Integer`. Run after moving the prism pin (PrismVersion in rugaroo.go).
+# Location an initialize takes is `Location | Integer`, and each reader the sig calls an attr_reader is a def answering
+# the Location. Run after moving the prism pin (prismVersion in internal/compiler/prism.go).
 require "prism"
 
 src = File.read(File.join(Gem.loaded_specs.fetch("prism").full_gem_path, "sig/prism/node.rbs"))
@@ -13,11 +14,14 @@ out = +<<~RBS
   module Prism
     class Node
       @location: Location | Integer
+      def location: () -> Location
     end
 RBS
-src.scan(/^  class (\w+) < Node\n(?:(?!^  class ).*\n)*?^    (def initialize: .*)$/) do |cls, init|
+src.scan(/^  class (\w+) < Node\n((?:(?!^  class ).*\n)*)/) do |cls, body|
+  init = body[/^    (def initialize: .*)$/, 1] or next
   init = init.gsub(/\bLocation\? (\w+)/, '(Location | Integer)? \1').gsub(/\bLocation (\w+)/, '(Location | Integer) \1')
-  out << "\n  class #{cls} < Node\n    #{init}\n  end\n"
+  readers = body.scan(/^    attr_reader (\w+_loc): (Location\??)$/).map { |name, type| "\n    def #{name}: () -> #{type}" }
+  out << "\n  class #{cls} < Node\n    #{init}#{readers.join}\n  end\n"
 end
 out << <<~RBS
 
