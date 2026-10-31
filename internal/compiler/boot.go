@@ -159,6 +159,8 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 				k = n.Name
 			case *parser.ConstantPathNode:
 				k = *n.Name
+			case *parser.SymbolNode: // a symbol names it too: rubocop registers each cop as `register_cop :DuplicatedGem, path` and reaches it by `const_get`
+				k = n.Unescaped.Value
 			default:
 				return false
 			}
