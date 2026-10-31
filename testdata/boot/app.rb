@@ -231,3 +231,6 @@ p DemoUrlCache.seen_nil?
 p DemoStash.new.shape&.kind
 p DemoDepList.new.deps
 p DemoFlight.go
+p Demo::BothB.new.tag
+m = Sigdemo::Meter.new.add(2)
+p m.scaled(3), m.scaled(3, 1), m.summary(a: 1)

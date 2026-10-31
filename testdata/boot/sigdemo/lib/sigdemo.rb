@@ -24,6 +24,11 @@ module Sigdemo
       "#{src["name"]}:#{src["kind"]}"
     end
 
+    # sig/sigdemo.rbs is stale for these two (prism 1.9.0's Source.for and lex_compat): the gem's def wins (decision 427)
+    def scaled(factor, offset = 0) = (total * factor) + offset
+
+    def summary(**opts) = "#{opts.size} #{total}"
+
     def each_reading(sink)
       @readings.each { |r| sink.call(r) }
     end

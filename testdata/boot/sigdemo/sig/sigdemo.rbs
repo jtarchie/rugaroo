@@ -17,6 +17,8 @@ module Sigdemo
     def total: () -> Integer
     def absorb: (Meter & _Reading `other`) -> self
     def label: ({ 'name' => String, 'kind' => 'meter', } src) -> String
+    def scaled: (Integer factor) -> Integer
+    def summary: (?verbose: bool) -> String
     def each_reading: (^(Integer reading) -> void sink) -> void
   end
 end

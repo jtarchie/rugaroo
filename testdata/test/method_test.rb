@@ -157,6 +157,10 @@ module MethodTests
       assert_equal [[:rest]], center.parameters
       assert_equal "#<Method: String#center(*)>", center.inspect
       assert_equal "#<UnboundMethod: String#length()>", String.instance_method(:length).inspect
+      # a core method MRI writes in Ruby names its parameters: prism's unpack1 polyfill looks for offset (decision 427)
+      assert_equal [[:req, :fmt], [:key, :offset]], String.instance_method(:unpack1).parameters
+      assert_equal [[:key, :freeze]], Object.instance_method(:clone).parameters
+      assert_equal(-1, Object.instance_method(:clone).arity)
       assert_equal "  x  ", center.call(5)
       assert_equal "**x**", center.call(5, "*")
     end

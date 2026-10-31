@@ -5203,6 +5203,12 @@ module ObjectTests
       def era = "middle"
     end
 
+    if RUBY_ENGINE == "truffleruby" # folds: RUBY_ENGINE is "ruby" (prism's serialize.rb, decision 427)
+      def engine = "truffle"
+    elsif RUBY_ENGINE != "jruby"
+      def engine = "mri"
+    end
+
     private
 
     unless defined?(Nope) || defined?(Process.nope)
@@ -5216,6 +5222,7 @@ module ObjectTests
     end
 
     def test_version_elsif
+      assert_equal "mri", Guarded.new.engine
       assert_equal "modern", Guarded.new.era
       refute Guarded.new.respond_to?(:old)
     end

@@ -1,12 +1,13 @@
 # gem: gem_lenient
 # load_path: gem_lenient
 # Gem code compiled leniently (decision 410): constants a constant's value assigns, a container ivar reset to nil,
-# and a nil in a multiple assignment; matrix's shapes (decision 414).
+# and a nil in a multiple assignment; matrix's shapes (decision 414); attr_accessor(*CONST) (decision 427).
 require "foo"
 require "ng"
 require "mx"
 require "ftpish"
 require "primeish"
+require "ctx"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -67,3 +68,6 @@ p ua.method(:succ) == ua.method(:next), ua.method(:succ) == ua.method(:rewind), 
 p PrimeishBound.new.each(3) { |v| v * 10 }, PrimeishBound.new.each(0) { :value }
 p PrimeishFront.new.each_any(PrimeishLast.new(3)) { |v| v * 10 }, PrimeishFront.new.each_any(PrimeishLast.new(0)) { :value }
 p MxEigen.new(2, false).scale(0.25), MxEigen.new(1, true).scale(0.5)
+c = Ctx.new
+c.in_def = true
+p c.in_def, c.in_class

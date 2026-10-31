@@ -1295,6 +1295,20 @@ continued"
       assert_equal [[1], [-1]], ["\x01\x00\x00\x00\x00\x00\x00\x00".unpack("Q"), "\xff\xff\xff\xff\xff\xff\xff\xff".b.unpack("q")]
     end
 
+    def test_unpack_offset
+      bytes = "\x01\x02\x03\x04\x05\x06\x07\x08".b
+      assert_equal [0x08070605], bytes.unpack("L<", offset: 4)
+      assert_equal 0x0605, bytes.unpack1("S<", offset: 4)
+      assert_equal [2], bytes.unpack("@1C", offset: 4) # `@` counts from the string's start, not the offset
+      assert_equal [], bytes.unpack("C*", offset: 8)
+      begin
+        bytes.unpack1("C", offset: 9)
+        flunk "no ArgumentError"
+      rescue ArgumentError => e
+        assert_equal "offset outside of string", e.message
+      end
+    end
+
     def test_unpack_strings
       assert_equal [["hello", "world"], ["hi"], ["hi", "there"], ["ab", "c"], [104, 233]],
                    ["hello world".unpack("a5 x a*"), "hi  \0".unpack("A*"), "hi\0there".unpack("Z*a*"), "abc".unpack("a2a"), "hé".unpack("U*")]

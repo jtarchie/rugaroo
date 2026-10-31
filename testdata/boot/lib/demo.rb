@@ -2,6 +2,8 @@ module Demo
   autoload :Lazy, "demo/lazy"
   autoload :Config, "demo/config"
   autoload :Unnamed, "demo/unnamed"
+  autoload :BothA, "demo/both"
+  autoload :BothB, "demo/both"
 
   class Base
     def base = :base
