@@ -572,6 +572,11 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 	res := f.callEntry(&parser.NilNode{}, &e, recv, args, nil)
 	ret := subst(s.e.M.Ret, env)
 	switch {
+	case !isVoid(ret) && c.gemFile(e.M.File) && isAny(res.typ) && !isAny(ret):
+		// a gem override's untyped value under a typed slot: what fits, else the slot's zero (its last statement is
+		// often an ivar assignment the caller ignores: rubocop's Ext::RegexpNode#assign_properties(*) sets @parsed_tree
+		// where Parser's answers the location); a typed mismatch is checkAdaptable's error instead
+		f.emit("return rbAsOrZero[%s](%s)", c.goType(ret), res.code)
 	case !isVoid(ret):
 		f.emit("return %s", f.coerce(&parser.NilNode{}, res, ret))
 	case res.code != "":

@@ -201,7 +201,9 @@ func (c *Compiler) emitBridges(cls *Class, recv string) {
 				c.errorf(m.File, m.Node, "super into a primitive class method is not supported")
 			}
 			body = fmt.Sprintf("%s%s(self%s)", freeFuncName(t.M), c.forwardTypeArgs(t, cls), comma(c.argNames(m)))
-			if b, ok := c.reshapedBridge(cls, m, t, ret); ok {
+			if b, ok := c.restBridge(cls, m, t, ret); ok {
+				body = b
+			} else if b, ok := c.reshapedBridge(cls, m, t, ret); ok {
 				body = b
 			} else if _, tret := c.sig(t.M, c.forwarderEnv(cls, t)); ret != "" && tret == "" { // a void parent under a valued override's bridge: nil
 				body += "; return " + goZero(ret)
@@ -226,6 +228,41 @@ func (c *Compiler) emitBridges(cls *Class, recv string) {
 		}
 		c.w("func (self %s) %s(%s) %s { %s }\n", recv, bridgeName(m), ps, ret, body)
 	}
+}
+
+// restBridge is a gem override `def m(*)` whose zsuper reaches a parent taking fixed positionals (rubocop's
+// Ext::RegexpNode#assign_properties(*) over Parser::AST::Node#assign_properties(properties)): the rest spreads into
+// them, its count checked as MRI's ArgumentError.
+func (c *Compiler) restBridge(cls *Class, m *Method, t entry, ret string) (string, bool) {
+	if !c.gemFile(m.File) || len(m.Params) != 1 || !m.Params[0].Rest || m.Block != nil || t.M.Block != nil || t.M.calleeDefaults || t.M.kwMask() {
+		return "", false
+	}
+	tenv := c.forwarderEnv(cls, t)
+	var args []string
+	for i, p := range t.M.Params {
+		if p.Rest || p.KwRest || p.Keyword || p.Post || p.Default != nil {
+			return "", false
+		}
+		gt := c.goType(subst(p.Type, tenv))
+		a := fmt.Sprintf("rest_[%d]", i)
+		if gt != "any" {
+			a = fmt.Sprintf("rbAs[%s](%s, %q)", gt, a, subst(p.Type, tenv).String())
+		}
+		args = append(args, a)
+	}
+	n := len(t.M.Params)
+	call := fmt.Sprintf("rbArity(len(rest_), %d, %d); %s%s(self%s)", n, n, freeFuncName(t.M), c.forwardTypeArgs(t, cls), comma(strings.Join(args, ", ")))
+	_, tret := c.sig(t.M, tenv)
+	switch ret {
+	case "":
+		return call, true
+	case tret:
+		return strings.Replace(call, "; ", "; return ", 1), true
+	}
+	if tret == "" {
+		return call + "; return " + goZero(ret), true
+	}
+	return strings.Replace(call, "; ", fmt.Sprintf("; return rbAs[%s](any(", ret), 1) + fmt.Sprintf("), %q)", m.Ret), true
 }
 
 // reshapedBridge is a gem override's super into a parent of another shape (Homebrew's

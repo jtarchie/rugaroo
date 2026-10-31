@@ -759,6 +759,19 @@ func rbTryBox(dst, v any) (ok bool) {
 	return rbMBox(dst, v)
 }
 
+// rbAsOrZero is rbAs without the TypeError: a value that fits T, else T's zero (a gem override's untyped result under
+// a typed slot whose callers ignore it).
+func rbAsOrZero[T any](a any) T {
+	if v, ok := a.(T); ok {
+		return v
+	}
+	if v, ok := rbConv[T](a); ok {
+		return v
+	}
+	var z T
+	return z
+}
+
 // rbAsSlow converts as rbConv does (nil for untyped, other Array/Hash
 // instantiations, an Array into a tuple), else raises.
 func rbAsSlow[T any](a any, want string) T {
