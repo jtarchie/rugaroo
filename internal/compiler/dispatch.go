@@ -337,6 +337,9 @@ func (c *Compiler) emitSends(reached func(string) bool) {
 			if ret == "" {
 				return code + "\n\t\treturn"
 			}
+			if _, mret := c.sig(m, map[string]Type{}); mret == "" { // a void override (`def frozen_string_literal; end`, rubocop's VimComment) under a valued slot: nil
+				return code + "\n\t\treturn " + goZero(ret)
+			}
 			return "return " + code
 		}
 		var armType func(k *Class) string
@@ -366,6 +369,9 @@ func (c *Compiler) emitSends(reached func(string) bool) {
 				code := freeFuncName(m) + c.armTypeArgs(m.Owner, s.owner) + "(" + recv + comma(args) + ")"
 				if ret == "" {
 					return code + "\n\t\treturn"
+				}
+				if _, mret := c.sig(m, tvarEnv(tps)); mret == "" {
+					return code + "\n\t\treturn " + goZero(ret)
 				}
 				return "return " + code
 			}
