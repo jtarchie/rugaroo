@@ -107,3 +107,14 @@ module RangeTests
     end
   end
 end
+
+module RangeTests
+  class RangeMinmaxTest < Minitest::Test
+    def test_minmax_from_the_ends
+      assert_equal [1, 3], (1..3).minmax
+      assert_equal [1, 2], (1...3).minmax
+      assert_equal [1, Float::INFINITY], (1..Float::INFINITY).minmax
+      assert_equal [nil, nil], (3..1).minmax
+    end
+  end
+end

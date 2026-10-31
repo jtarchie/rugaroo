@@ -261,6 +261,20 @@ class Range < Object
     return &self.b
   }
 
+  # Range's own minmax (Ruby 2.7): from the ends, never by iterating. An Integer range to Float::INFINITY (decision 140)
+  # answers Infinity as its maximum, which a Range[Integer]'s `max` cannot hold, so the maximum is untyped (rubocop-ast's
+  # NodePattern arity ranges: `(0..Float::INFINITY).minmax`). ponytail: MRI's block form is Enumerable's; the minimum is
+  # untyped too, since `[E?, untyped]` renders E? as *E in the generic body but rbOpt[E] at an Integer call.
+  #: () -> [untyped, untyped]
+  def minmax
+    return [min, Float::INFINITY] if __to_infinity?
+
+    [min, max]
+  end
+
+  #: () -> bool
+  def __to_infinity? = %x{ Boolean(self.inf) }
+
   #: () -> E?
   def max = %x{
     if self.endless {
