@@ -86,12 +86,22 @@ func (f *fctx) genKernelIntrinsic(n *parser.CallNode, expected Type) (expr, bool
 		}
 		return f.genSend(n, expr{code: f.selfCode, typ: f.selfType, classObj: f.selfClassObj}, n.Name, callArgs(n), n.Block), true // `send(:x)` is self's
 	case "binding", "method_missing":
-		if e := f.resolve(f.selfType, n.Name); e != nil && e.M.File != nil && !e.M.File.isPrelude() {
-			return expr{}, false // the class's own (rubocop-ast's Compiler `attr_reader :binding`, a Binding of its own): an ordinary call
+		if f.ownBinding(n) {
+			return expr{}, false
 		}
 		f.errorf(n, "%s is not supported", n.Name)
 	}
 	return expr{}, false
+}
+
+// ownBinding is a receiverless `binding` the class defines itself (rubocop-ast's NodePattern::Compiler keeps a Binding
+// of its own as an attr_reader): an ordinary call, where Kernel#binding is unsupported.
+func (f *fctx) ownBinding(n *parser.CallNode) bool {
+	if n.Name != "binding" {
+		return false
+	}
+	e := f.resolve(f.selfType, n.Name)
+	return e != nil && e.M.File != nil && !e.M.File.isPrelude()
 }
 
 // genKernelCall compiles a receiverless call, or `Kernel.x` for one of Kernel's module functions, as a Kernel intrinsic when it is one (decision 139).
