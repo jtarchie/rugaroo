@@ -101,7 +101,7 @@ func (f *fctx) ivarWritten(n *parser.InstanceVariableWriteNode, iv *Ivar, val ex
 		return expr{code: derefOpt(code, iv.Type), typ: stripOpt(iv.Type), done: true}
 	}
 	if isAny(iv.Type) && immediateLit(n.Value) { // `@a = @b = 0` with @b untyped: @a takes 0's Integer, not @b's untyped (decision 394)
-		return expr{code: val.code, typ: val.typ, done: true}
+		return expr{code: val.code, typ: val.typ, lit: val.lit, done: true} // still a literal: the next untyped store boxes it (liquid's `@a = @b = @c = 0`)
 	}
 	return expr{code: code, typ: iv.Type, done: true}
 }

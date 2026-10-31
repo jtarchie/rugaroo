@@ -780,8 +780,12 @@ func (c *Compiler) updateInference(inf *inference) {
 		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
 			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 		}
-		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn }) {
-			continue // only dynamic calls by its name, maybe meant for another class's method: untyped, as before (decision 331)
+		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
+			// dynamic calls by its name (maybe meant for another class's method) widen a parameter but never type it alone:
+			// untyped until a static call carries a type (decision 331). ProcessedSource's `parser.parse(@buffer)` reaches
+			// every `parse` with a Buffer; rubocop-ast's NodePattern::Parser#parse(source) takes a String from
+			// NodePattern#initialize, which is untyped this round
+			continue
 		}
 		if t, at, ok := c.gemUseType(key, uses); ok {
 			next[key], from[key] = t, at
@@ -817,6 +821,9 @@ func (c *Compiler) updateInference(inf *inference) {
 		}
 	}
 }
+
+// realType is a use's type that says something: not nil, void, Ruby nil or untyped.
+func realType(t Type) bool { return t != nil && !isVoid(t) && !isNil(t) && !isAny(stripOpt(t)) }
 
 // stopUnjustifiedDrops: rounds that converged with a parameter still untyped whose method's untyped returns a round
 // dropped never justified the drop, so the next rounds join that method's returns honestly (decision 383).

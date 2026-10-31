@@ -256,7 +256,8 @@ func constPath(path string) parser.Node {
 // expected (wrapper arguments).
 type exprNode struct {
 	parser.Node
-	e expr
+	e        expr
+	blockArg bool // a dynamic call's block value, appended to its arguments (universalBlockCall): not a parameter's use
 }
 
 func (x *exprNode) GetLocation() parser.Location {

@@ -102,7 +102,7 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 				f.c.dynBlockNames = map[string]bool{}
 			}
 			f.c.dynBlockNames[name] = true
-			return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}}))
+			return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}, blockArg: true}))
 		}
 	}
 	f.errorf(n, "blocks on untyped receivers are not supported")
@@ -703,6 +703,9 @@ func (f *fctx) dynBlockValue(n parser.Node, block parser.Node) (string, bool) {
 		if b.Expression == nil {
 			return "", false
 		}
+		if sym, ok := b.Expression.(*parser.SymbolNode); ok { // `emit :tSYMBOL, &:to_sym` on a method only subclasses define (rubocop-ast's rex lexer)
+			return "rbBlockArg{fn: " + f.symbolProcAny(sym.Unescaped.Value) + "}", true
+		}
 		e := f.genExpr(b.Expression, nil)
 		if isAny(e.typ) { // `public_send(key, *args, &block)` of a Proc or nil held untyped (Homebrew's cask artifact stanzas)
 			return "rbBlockArgAny(" + e.code + ")", true
@@ -1161,6 +1164,11 @@ func namePattern(n parser.Node) (pre, suf string, ok bool) {
 func (f *fctx) noteDynUses(name string, args []parser.Node) {
 	if f.c.uses == nil || !f.lenient() || slices.ContainsFunc(args, isSplat) {
 		return
+	}
+	if k := len(args) - 1; k >= 0 {
+		if en, ok := args[k].(*exprNode); ok && en.blockArg { // the block goes to the method's &block, not a parameter (rubocop-ast's `emit ss.matched, &:to_sym`)
+			args = args[:k]
+		}
 	}
 	for _, m := range f.c.gemMethodsNamed(name) {
 		if len(args) > len(m.Params) {

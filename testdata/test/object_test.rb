@@ -5351,7 +5351,25 @@ module ObjectTests
     NEXT = PRODUCT + 1
   end
 
+  # `@a = @b = @c = 0` through two untyped ivars (liquid's ResourceLimits#reset): each store boxes the literal (decision 394).
+  class ChainedUntypedIvars
+    attr_reader :a, :b, :c
+
+    def initialize
+      @b = "b" #: untyped
+      @c = :c #: untyped
+      @a = nil #: Integer?
+      @a = @b = @c = 0
+    end
+  end
+
   class ObjectDupTest < Minitest::Test
+    def test_chained_assignment_through_untyped_ivars
+      o = ChainedUntypedIvars.new
+      assert_equal [0, 0, 0], [o.a, o.b, o.c]
+      assert_equal Integer, o.b.class
+    end
+
     def test_class_body_block_constant
       assert_equal [6, 7], [BodyBlockConst::PRODUCT, BodyBlockConst::NEXT]
     end

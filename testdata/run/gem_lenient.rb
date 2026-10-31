@@ -16,6 +16,7 @@ require "autoish/lazy_name"
 require "outish"
 require "unitish"
 require "metaish"
+require "rexish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -86,3 +87,4 @@ p AutoishUser.show
 p Outish.new.build(%w[a bc]), Outish.new.build(%w[a bc]).bytesize
 p Unitish::NAMES.frozen?, Unitish::COUNT, Unitish::ARG.size
 p Metaish::TYPE_COUNT, Metaish::TYPE_SET.include?(:sym)
+p Rexish.new(":abc (12) word").tokens
