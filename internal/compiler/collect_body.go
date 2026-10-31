@@ -33,12 +33,7 @@ func (c *Compiler) collectBody(ctx context.Context, f *File, cls *Class, body pa
 		c.keepGoing(func() {
 			switch n := n.(type) {
 			case *parser.DefNode:
-				c.scanAnon(ctx, f, n.Body, scope)
-				// a bare `private` does not reach `def self.x`
-				c.addMethod(f, cls, n, (vis.private || vis.moduleFunction) && n.Receiver == nil, scope)
-				if n.Receiver == nil {
-					c.applyVisibility(f, cls, n, vis, scope)
-				}
+				c.collectBodyDef(ctx, f, cls, n, vis, scope, loadTime)
 			case *parser.CallNode:
 				if isClassEvalCall(n) { // its block is collected as class-body statements, not dispatched here
 					c.collectClassEval(ctx, f, cls, n, scope, loadTime)
@@ -86,6 +81,20 @@ func (c *Compiler) collectBody(ctx context.Context, f *File, cls *Class, body pa
 		})
 	}
 	c.collectIvarDecls(f, cls, body, scope)
+}
+
+// collectBodyDef is a def in a class body: its method, its visibility (a bare `private` does not reach `def self.x`),
+// and the class's `method_added(:name)` hook where the def is (rubocop-ast's Subcompiler registry).
+func (c *Compiler) collectBodyDef(ctx context.Context, f *File, cls *Class, n *parser.DefNode, vis *visibility, scope []*Class, loadTime bool) {
+	c.scanAnon(ctx, f, n.Body, scope)
+	c.addMethod(f, cls, n, (vis.private || vis.moduleFunction) && n.Receiver == nil, scope)
+	if n.Receiver != nil {
+		return
+	}
+	c.applyVisibility(f, cls, n, vis, scope)
+	if !f.isPrelude() && loadTime {
+		c.hooks = append(c.hooks, classHook{name: "method_added", cls: cls, node: n, file: f, arg: n.Name})
+	}
 }
 
 // declareBeginConsts declares the constants a class-body begin assigns, in its body, rescue or else clauses, where it

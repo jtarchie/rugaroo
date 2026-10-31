@@ -17,6 +17,8 @@ require "outish"
 require "unitish"
 require "metaish"
 require "rexish"
+require "registryish_sub"
+require "registryish_sub2"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -88,3 +90,5 @@ p Outish.new.build(%w[a bc]), Outish.new.build(%w[a bc]).bytesize
 p Unitish::NAMES.frozen?, Unitish::COUNT, Unitish::ARG.size
 p Metaish::TYPE_COUNT, Metaish::TYPE_SET.include?(:sym)
 p Rexish.new(":abc (12) word").tokens
+rc = RegistryishSub.new
+p rc.compile([:int, 1]), rc.compile([:str, "x"]), rc.compile([:sym, :y]), RegistryishSub.registry.keys.sort, Registryish.registry, RegistryishSub2.registry.keys, RegistryishSub2.new.compile([:float, 15])

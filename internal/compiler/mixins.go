@@ -111,7 +111,8 @@ type classHook struct {
 	cls  *Class
 	mod  *constRef // nil: the superclass
 	node parser.Node
-	file *File // where the hook site is, for its place in load order
+	file *File  // where the hook site is, for its place in load order
+	arg  string // method_added: the method's name, passed as a Symbol
 }
 
 // noteHooks records `include`/`extend`'s hooks: the last module first, as

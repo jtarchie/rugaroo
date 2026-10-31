@@ -215,7 +215,7 @@ func spliceIntoUnits(mine []parser.Node) []parser.Node {
 		kept := mine[:0:0]
 		for _, m := range mine {
 			at := m.GetLocation().StartOffset
-			if _, isConst := m.(*constInit); !isConst || at <= first || at >= last {
+			if _, isUnit := m.(*classStmt); isUnit || at <= first || at >= last { // a constant's init or a hook call inside the span
 				kept = append(kept, m)
 				continue
 			}
@@ -255,6 +255,12 @@ func (c *Compiler) mainBody() []parser.Node {
 // hookCall is the call MRI makes at hook site h, or nil when the receiver
 // does not define the hook (Ruby's own are no-ops).
 func (c *Compiler) hookCall(h classHook) parser.Node {
+	obj := func(k *Class) parser.Node {
+		return &exprNode{e: expr{code: classVar(k), typ: TClass{C: k.meta}, classObj: true}}
+	}
+	if h.name == "method_added" {
+		return c.methodAddedCall(h, obj)
+	}
 	recv := h.cls.Super
 	if h.mod != nil {
 		recv = c.resolveClassRef(h.mod)
@@ -262,10 +268,25 @@ func (c *Compiler) hookCall(h classHook) parser.Node {
 	if recv == nil || recv.meta == nil || recv.meta.lookup(h.name) == nil {
 		return nil
 	}
-	obj := func(k *Class) parser.Node {
-		return &exprNode{e: expr{code: classVar(k), typ: TClass{C: k.meta}, classObj: true}}
-	}
 	return &parser.CallNode{Location: h.node.GetLocation(), Receiver: obj(recv), Name: h.name, Arguments: &parser.ArgumentsNode{Arguments: []parser.Node{obj(h.cls)}}}
+}
+
+// methodAddedCall is `Cls.method_added(:name)` after a def in Cls's body, when Cls (or a superclass) defines the hook in
+// user or gem code and had it before the def: rubocop-ast's Subcompiler registers each subclass's `visit_*` so, and its
+// own `def do_compile` precedes the hook's definition, as MRI's order has it.
+func (c *Compiler) methodAddedCall(h classHook, obj func(*Class) parser.Node) parser.Node {
+	if h.cls.meta == nil {
+		return nil
+	}
+	e := h.cls.meta.lookup("method_added")
+	if e == nil || e.M.File == nil || e.M.File.isPrelude() {
+		return nil
+	}
+	if e.M.File == h.file && e.M.Node != nil && e.M.Node.GetLocation().StartOffset > h.node.GetLocation().StartOffset {
+		return nil // defined later in the same file: MRI had no hook yet
+	}
+	sym := &parser.SymbolNode{Location: h.node.GetLocation(), Unescaped: parser.RubyString{Value: h.arg}}
+	return &parser.CallNode{Location: h.node.GetLocation(), Receiver: obj(h.cls), Name: "method_added", Arguments: &parser.ArgumentsNode{Arguments: []parser.Node{sym}}}
 }
 
 // genStandIn emits what main's statement list holds in place of source: a constant's assignment, a required file,
