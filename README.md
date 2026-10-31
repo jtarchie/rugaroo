@@ -110,7 +110,7 @@ their fixes. Or try it in the browser at the [playground](https://play.rugaroo.d
 | Classes, modules, blocks, procs, exceptions, pattern matching, `Struct`/`Data`, threads and fibers, Ruby 4.0 syntax, reflection the compiler can answer (`send`, `method_missing`, `const_get`, `instance_variable_get`) | stable |
 | Core classes: `String`, `Array`, `Hash`, `Integer`, `Float`, `Range`, `Set`, `Enumerable`, `Regexp`, `Time`, `File`, `IO`, `Kernel`, ... (Array 87%, Hash 89%, String 76% of the ruby/spec examples that run; per class in docs/support.md) | stable |
 | Standard library: `json`, `csv`, `date`, `time`, `net/http`, `webrick`, `socket`, `fileutils`, `optparse`, `logger`, `erb`, `bigdecimal`, `rexml`, `minitest` and about 25 more | stable |
-| Gems compiled from source (rack, Cuba, pairing_heap; kramdown and liquid through `-trace`), a Rails app transpiled by [roundhouse](https://rubys.github.io/roundhouse/) to its Spinel shape, `fiddle`, `sqlite3`, `yaml` (loads by Psych's rules; dump text is not libyaml's), `openssl` (RSA verify, HMAC, PBKDF2), Sorbet signatures, `Ractor`, `--int-overflow=promote`, `--nil-check=runtime` | experimental |
+| Gems compiled from source (rack, Cuba, pairing_heap, prism; kramdown and liquid through `-trace`), a Rails app transpiled by [roundhouse](https://rubys.github.io/roundhouse/) to its Spinel shape, `fiddle`, `sqlite3`, `yaml` (loads by Psych's rules; dump text is not libyaml's), `openssl` (RSA verify, HMAC, PBKDF2), Sorbet signatures, `Ractor`, `--int-overflow=promote`, `--nil-check=runtime` | experimental |
 | `eval`, `define_method` in your own code, in-place String mutation, encodings beyond ten | not supported |
 
 [docs/support.md](docs/support.md) lists every feature, core class and
