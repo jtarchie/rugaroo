@@ -20,7 +20,7 @@ The binary itself needs neither Ruby nor the gems.
 |---|---|---|
 | `require`s a pure-Ruby gem by a literal name | [Installed gems](#installed-gems) | rack, rackup, Cuba, pairing_heap |
 | loads files by computed name (`require "x/#{name}"`), or builds classes at load time from data | [`-trace`](#-trace) | kramdown, liquid, Homebrew's `brew` |
-| needs a gem with a C extension | Not supported, unless rugaroo carries a pure-Ruby replacement ([vendored gems](#vendored-gems)) or a stand-in for the C part (prism: the gem's Ruby over rugaroo's own prism.wasm) | sqlite3, prism |
+| needs a gem with a C extension | Not supported, unless rugaroo carries a pure-Ruby replacement ([vendored gems](#vendored-gems)) | sqlite3, prism |
 
 ## Installed gems
 
@@ -42,12 +42,6 @@ Warnings inside gem files are hidden; `RUGAROO_GEM_WARNINGS=1` shows them.
 Proof: [examples 115](../examples/115_rack_server/main.rb) (rack),
 [116](../examples/116_cuba_web/main.rb) (Cuba),
 [120](../examples/120_pairing_heap/main.rb) (pairing_heap).
-
-`require "prism"` is an installed gem too, with its C extension replaced: the
-gem's Ruby runs over the prism.wasm rugaroo itself parses with, so the gem must
-be that release, 1.9.0 (`gem install prism -v 1.9.0`; the build says so
-otherwise). Proof: [example 136](../examples/136_prism_parse/main.rb)
-([decision 427](decisions/427.md)).
 
 ## `-trace`
 
@@ -101,6 +95,12 @@ which calls libsqlite3 through `fiddle` (no cgo). The program writes
 `require "sqlite3"` as usual and runs unchanged on MRI with the real gem. The
 machine that runs the binary needs libsqlite3. Proof:
 [example 122](../examples/122_sqlite3/main.rb).
+
+`require "prism"` is bundled too: the prism gem's own Ruby (1.9.0), compiled
+as an installed gem is, with its C extension replaced by the prism.wasm rugaroo
+itself parses with. No installed gem or `ruby` is needed. Proof:
+[example 136](../examples/136_prism_parse/main.rb)
+([decision 427](decisions/427.md)).
 
 ## Large programs: Homebrew
 

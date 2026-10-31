@@ -450,7 +450,7 @@ func (c *Compiler) rejectUnsupportedDecl(f *File, n *parser.CallNode) {
 // load-time class body takes as a statement to run when the class is defined
 // (decision 166).
 func (c *Compiler) collectClassCall(ctx context.Context, f *File, cls *Class, n *parser.CallNode, vis *visibility, scope []*Class) bool {
-	if c.anonDefineMethod(ctx, f, cls, n, scope) || c.collectIOExtend(f, n, scope) || c.collectConstExtend(ctx, f, n, scope) || c.collectRefine(ctx, f, n, scope) {
+	if c.anonDefineMethod(ctx, f, cls, n, scope) || c.collectIOExtend(f, n, scope) || c.collectConstExtend(ctx, f, n, scope) || c.collectRefineOrRequire(ctx, f, n, scope) {
 		return true
 	}
 	if a := singletonAlias(n); a != nil { // `singleton_class.send :alias_method, :[], :new` (concurrent-ruby's LockFreeStack::Node, decision 253)

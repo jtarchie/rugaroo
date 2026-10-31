@@ -17,7 +17,7 @@ import (
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
-// TestPrismWasm: one wasm (go-ruby-prism's), one version across it, prismVersion and prelude/prism.rb (decision 427).
+// TestPrismWasm: one wasm (go-ruby-prism's), one version across it, vendored/prism, prismVersion and prelude/prism.rb (decision 427).
 func TestPrismWasm(t *testing.T) {
 	src, err := os.ReadFile("../../prelude/go/prismwasm.go")
 	if err != nil {
@@ -62,30 +62,24 @@ func TestPrismWasm(t *testing.T) {
 	if string(ver) != prismVersion+"\x00" {
 		t.Errorf("prism.wasm is %q, prismVersion %q", ver, prismVersion)
 	}
+	serialize, err := os.ReadFile("../../vendored/prism/lib/prism/serialize.rb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parts []string
+	for _, k := range []string{"MAJOR", "MINOR", "PATCH"} {
+		if m := regexp.MustCompile(k + `_VERSION = (\d+)`).FindSubmatch(serialize); m != nil {
+			parts = append(parts, string(m[1]))
+		}
+	}
+	if got := strings.Join(parts, "."); got != prismVersion {
+		t.Errorf("vendored/prism is %s, prismVersion %s: run scripts/vendor-prism %s", got, prismVersion, prismVersion)
+	}
 	rb, err := os.ReadFile("../../prelude/prism.rb")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Contains(rb, []byte(`VERSION = "`+prismVersion+`"`)) {
 		t.Errorf("prelude/prism.rb's VERSION is not %s", prismVersion)
-	}
-}
-
-func TestCheckPrismGem(t *testing.T) {
-	ok := "/r/lib/ruby/gems/4.0.0/gems/prism-" + prismVersion + "/lib"
-	for _, c := range []struct {
-		names, dirs []string
-		want        string
-	}{
-		{[]string{"prism"}, []string{ok}, ""},
-		{nil, []string{"/r/gems/rack-3.2.7/lib"}, ""},
-		{[]string{"prism"}, []string{"/r/gems/prism-1.7.0/lib"}, "the prism gem found is 1.7.0"},
-		{nil, []string{"/r/gems/prism-1.10.0/lib"}, "gem install prism -v " + prismVersion},
-		{[]string{"prism"}, nil, "needs the prism " + prismVersion + " gem installed"},
-	} {
-		err := checkPrismGem(c.names, c.dirs)
-		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
-			t.Errorf("checkPrismGem(%q, %q) = %v, want %q", c.names, c.dirs, err, c.want)
-		}
 	}
 }

@@ -54,10 +54,6 @@ func CompileWithGemDirs(ctx context.Context, preludeFS, gemSigs fs.FS, sources [
 	if err != nil {
 		return nil, nil, err //nolint:wrapcheck // the caller adds "rugaroo: "
 	}
-	perr := checkPrismGem(names, append(slices.Clip(gemDirs), found...))
-	if perr != nil {
-		return nil, nil, perr
-	}
 	all := carriedGemDirs(gemDirs, found)
 	if len(all) == 0 {
 		return CompileFilesWithWarnings(ctx, preludeFS, sources, loadPath...)
@@ -129,6 +125,9 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 		if seen[realPath(a.Loaded)] {
 			continue
 		}
+		if g := gemDir.FindStringSubmatch(a.Loaded); g != nil && builtinLib(g[1]) { // an installed copy of a gem rugaroo bundles (prism, decision 427)
+			continue
+		}
 		if d, _ := under(a.Loaded, m.StdDirs); d != "" { // MRI's own library (Bundler's and Thor's autoloads under `bundler/setup`): the prelude is rugaroo's copy, never a source (decisions 173, 404)
 			continue
 		}
@@ -144,19 +143,27 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 }
 
 // neededAutoloads keeps the boot-resolved autoload files whose constant another program file names (decision 175); the rest are marked loaded, so never compiled.
-func (c *Compiler) neededAutoloads(consts map[string][]string) map[string]bool {
+func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]string) map[string]bool {
 	if len(consts) == 0 {
 		return nil
 	}
-	named := map[string]bool{}
+	// named: every kept file's constants; optNamed: those a file outside the bundled gem names, which alone load an optional
+	// autoload (prism's Translation needs the parser gem: lex_compat.rb's or ripper's mention is not enough)
+	named, optNamed := map[string]bool{}, map[string]bool{}
 	note := func(f *File) {
+		opt := !c.bundledFile(f)
 		anyNode(f.Root, func(n parser.Node) bool {
+			var k string
 			switch n := n.(type) {
 			case *parser.ConstantReadNode:
-				named[n.Name] = true
+				k = n.Name
 			case *parser.ConstantPathNode:
-				named[*n.Name] = true
+				k = *n.Name
+			default:
+				return false
 			}
+			named[k] = true
+			optNamed[k] = optNamed[k] || opt
 			return false
 		})
 	}
@@ -165,11 +172,25 @@ func (c *Compiler) neededAutoloads(consts map[string][]string) map[string]bool {
 			note(f)
 		}
 	}
+	for name := range gemBackends { // prelude/prism.rb loads later, but names serialize.rb's Serialize (decision 427)
+		src, err := fs.ReadFile(c.preludeFS, name)
+		if !c.usedBundled || err != nil {
+			continue
+		}
+		f, err := parseFile(ctx, c.parser, name, src, originPrelude)
+		if err == nil {
+			note(f)
+		}
+	}
 	needed := map[string]bool{}
 	for changed := true; changed; {
 		changed = false
 		for path, ks := range consts {
-			if !needed[path] && slices.ContainsFunc(ks, func(k string) bool { return named[k] }) && c.parsed[path] != nil {
+			by := named
+			if c.bundledOptional(path) {
+				by = optNamed
+			}
+			if !needed[path] && slices.ContainsFunc(ks, func(k string) bool { return by[k] }) && c.parsed[path] != nil {
 				needed[path], changed = true, true
 				note(c.parsed[path])
 			}

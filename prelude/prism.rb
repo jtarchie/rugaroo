@@ -11,6 +11,7 @@ end
 
 module Prism
   VERSION = "1.9.0"
+  BACKEND = :CEXT # prism.rb's own assignment sits under an ENV check that cannot fold
 
   class << self
     #: (String, **untyped) -> String

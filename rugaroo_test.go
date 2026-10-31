@@ -1764,6 +1764,9 @@ func TestVendoredMirror(t *testing.T) {
 		}
 	}
 	for _, f := range walkFiles(t, os.DirFS("."), "vendored", func(string) bool { return true }) {
+		if strings.HasPrefix(f, "vendored/prism/") { // a bundled gem: scripts/vendor-prism, held by TestPrismWasm (decision 427)
+			continue
+		}
 		if _, ok := want[f]; !ok {
 			t.Errorf("%s has no source in gems/*/lib (stale): run scripts/vendor-gems", f)
 		}

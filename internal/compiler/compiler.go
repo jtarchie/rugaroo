@@ -102,6 +102,7 @@ type Compiler struct {
 	gemSigs               fs.FS                     // vendored gem `.rbs` signatures (decision 160), or nil
 	autoloaded            map[string]bool           // boot-resolved autoload files: loaded where their autoload registers (decision 175)
 	pruneGems             bool                      // a gem program: unreached gem methods are dropped (decision 169)
+	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
 	gemNilIvars           []gemNilIvar              // gem ivars discovery saw only nil assigned to (decision 169)
 	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
 	nilIvars              map[ivarKey]bool          // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)
@@ -520,7 +521,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		dynState:     dynState{dynEvery: dynEvery, dynSeen: map[string]bool{}, respondSeen: map[string]bool{}, markers: map[string]bool{}, dynGo: map[string]string{}, dynWrapped: map[*Class][]dynWrapped{}, dynOut: map[string]bool{}, respondOut: map[string]bool{}, fwdOut: map[*Class]bool{}},
 		marshalState: marshalState{marshalSeen: map[string]Type{}, marshalGo: map[string]bool{}},
 		tableState:   tableState{tupleN: map[int]bool{}, procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}}}
-	c.loadPath, c.gemDirs = opts.loadPath, opts.gemDirs
+	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
 	c.noPrune = opts.noPrune
@@ -533,7 +534,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		return nil, perr
 	}
 	c.parsed = parsed
-	c.autoloaded = c.neededAutoloads(opts.autoloaded)
+	c.autoloaded = c.neededAutoloads(ctx, c.bundledAutoloads(ctx, opts.autoloaded))
 	var dms []boot.MethodInfo
 	if opts.boot != nil {
 		c.booted = true
@@ -580,7 +581,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		c.errorf(nil, nil, "%d collect errors:\n%s", len(c.kept), strings.Join(c.kept, "\n"))
 	}
 	tick("user")
-	if c.pruneGems = opts.pruneGems; c.pruneGems {
+	if c.pruneGems { // set by opts, or by a bundled gem's use (decision 427)
 		c.pruneGemMethods()
 	}
 	c.mainFile = c.userFiles[0]
@@ -1024,7 +1025,7 @@ func (c *Compiler) userRequire(ctx context.Context, f *File, n *parser.CallNode)
 // findRequire is the file `require "x"` names on the load path, the first
 // -I directory holding x.rb, as MRI searches $LOAD_PATH; "" when none does.
 func (c *Compiler) findRequire(f *File, n *parser.CallNode) string {
-	if f.isPrelude() || len(c.loadPath)+len(c.gemDirs) == 0 {
+	if f.isPrelude() {
 		return ""
 	}
 	args := callArgs(n)
@@ -1052,8 +1053,11 @@ func (c *Compiler) findRequireUncached(required string) string {
 		name += ".rb"
 	}
 	dirs := c.loadPath
-	if first, _, _ := strings.Cut(required, "/"); !builtinLib(required) && !builtinLib(first) { // the prelude's lib wins over a gem's copy (base64, forwardable), as does a vendored gem's (sqlite3, its own `sqlite3/x` files too)
+	first, _, _ := strings.Cut(required, "/")
+	if !builtinLib(required) && !builtinLib(first) { // the prelude's lib wins over a gem's copy (base64, forwardable), as does a vendored gem's (sqlite3, its own `sqlite3/x` files too)
 		dirs = append(slices.Clip(dirs), c.gemDirs...)
+	} else if bundledGems[first] && preludeLibs[required] == "" && c.preludeFS != nil { // prism and prism/x, not the prism/prism backend
+		dirs = append(slices.Clip(dirs), c.useBundled(first))
 	}
 	return resolveOnPath(dirs, name)
 }

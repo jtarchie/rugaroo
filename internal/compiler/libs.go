@@ -130,7 +130,7 @@ func mriLib(name string) bool {
 // builtinLib reports a require name the prelude or a vendored gem answers.
 func builtinLib(name string) bool {
 	name = strings.TrimSuffix(name, ".rb")
-	return preludeLibs[name] != "" || vendoredLibs[name] != ""
+	return preludeLibs[name] != "" || vendoredLibs[name] != "" || bundledGems[name]
 }
 
 // gemRequires lists required names (through -I files too) only an installed gem can answer (decision 173); it only parses.

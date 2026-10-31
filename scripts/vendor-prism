@@ -1,0 +1,17 @@
+#!/bin/sh
+# Copies the prism gem's lib/ and sig/ at prism.wasm's release into vendored/prism/ (decision 427): rugaroo compiles that Ruby
+# for `require "prism"`, so no installed gem or `ruby` is needed at build time. Rerun with scripts/prism-wasm after a
+# go-ruby-prism bump, with the new release as the argument; TestPrismWasm holds the versions together.
+set -eu
+cd "$(dirname "$0")/.."
+version=${1:-1.9.0}
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+(cd "$tmp" && gem fetch prism -v "$version" >/dev/null 2>&1 && gem unpack "prism-$version.gem" >/dev/null 2>&1)
+src="$tmp/prism-$version"
+rm -rf vendored/prism
+mkdir -p vendored/prism
+cp -R "$src/lib" "$src/sig" "$src/LICENSE.md" vendored/prism/
+# the C extension and its FFI twin: prelude/prism.rb stands in for both
+rm -f vendored/prism/lib/prism/prism.bundle vendored/prism/lib/prism/prism.so vendored/prism/lib/prism/ffi.rb
+scripts/prism-sig # rugaroo's patches to the shipped sig, which must follow each copy
