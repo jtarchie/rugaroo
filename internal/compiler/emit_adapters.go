@@ -412,7 +412,7 @@ func seqDropped(m *Method) int {
 			break
 		}
 		if _, isNil := p.Default.(*parser.NilNode); !isNil && !m.calleeDefaults {
-			if _, ok := goLiteralDefault(p.Default); !ok { // `each(which = :all)` (matrix's): a literal is passed as written
+			if _, ok := goLiteralDefault(p.Default); !ok && !emptyContainerDefault(p.Default) { // `each(which = :all)` (matrix's): a literal is passed as written; `each(opts = {})` (regexp_parser's MatchLength) a fresh container
 				break
 			}
 		}
@@ -440,6 +440,8 @@ func (c *Compiler) seqArgs(m *Method) string {
 				if strings.HasPrefix(t, "*") {
 					as[i] = "Ref(" + lit + ")" // `which = :all` typed Symbol?
 				}
+			} else if emptyContainerDefault(p.Default) {
+				as[i] = emptyContainerCode(p.Default, t)
 			} else if strings.HasPrefix(t, "rbOpt[") {
 				as[i] = t + "{}"
 			}
@@ -801,6 +803,32 @@ func (c *Compiler) dynAdapterBody(cls *Class, e entry, s slot) string {
 
 // goLiteralDefault is a parameter default an adapter can pass as Go: a Symbol, Integer, String or boolean literal (matrix's
 // `each(which = :all)`, decision 412); nil defaults pass nil, as before.
+// emptyContainerDefault reports an `= {}` or `= []` default: the adapter passes a fresh one, as the callee would make.
+func emptyContainerDefault(n parser.Node) bool {
+	switch d := n.(type) {
+	case *parser.HashNode:
+		return len(d.Elements) == 0
+	case *parser.ArrayNode:
+		return len(d.Elements) == 0
+	}
+	return false
+}
+
+// emptyContainerCode is the Go expression for an empty container default of a parameter whose Go type is t
+// (`*Hash[K, V]`, `*Array[E]`, or any: an untyped `opts = {}` is a Hash of untyped).
+func emptyContainerCode(n parser.Node, t string) string {
+	if _, isHash := n.(*parser.HashNode); isHash {
+		if strings.HasPrefix(t, "*Hash[") {
+			return "NewHash" + strings.TrimPrefix(t, "*Hash") + "()"
+		}
+		return "NewHash[any, any]()"
+	}
+	if strings.HasPrefix(t, "*Array[") {
+		return "NewArray" + strings.TrimPrefix(t, "*Array") + "()"
+	}
+	return "NewArray[any]()"
+}
+
 func goLiteralDefault(n parser.Node) (string, bool) {
 	switch d := n.(type) {
 	case *parser.SymbolNode:

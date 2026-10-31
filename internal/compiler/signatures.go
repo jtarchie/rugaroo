@@ -670,9 +670,16 @@ func (c *Compiler) forwardParent(m *Method) *entry {
 	return c.inheritedSig(m)
 }
 
-// inheritedSig finds the method an unannotated def overrides.
+// inheritedSig finds the method an unannotated def overrides: a superclass's own def before an included module's
+// (regexp_parser's Subexpression#to_h refines Base#to_h, not Enumerable#to_h, whose untyped Hash would widen it;
+// the module's slot gets its adapter, decision 206).
 func (c *Compiler) inheritedSig(m *Method) *entry {
 	cls := m.Owner
+	if cls.Super != nil && m.superTarget == nil && m.structDef == nil {
+		if e := cls.Super.lookup(m.Name); e != nil && !e.Owner.IsModule {
+			return e
+		}
+	}
 	for i := len(cls.Includes) - 1; i >= 0; i-- {
 		inc := cls.Includes[i]
 		if inc.Mod == nil {
