@@ -471,23 +471,10 @@ func (c *Compiler) collectClassCall(ctx context.Context, f *File, cls *Class, n 
 		return true
 	}
 	if n.Name == "prepend" && !f.isPrelude() && n.Receiver != nil && prependTarget(n) != nil { // `::Module.prepend M` in a body, as at the top level
-		recv, single := prependTarget(n), false
-		if sc, ok := recv.(*parser.CallNode); ok {
-			recv, single = sc.Receiver, true
-		}
-		for _, a := range callArgs(n) {
-			c.prepends = append(c.prepends, pendingPrepend{targetRef: constRef{node: recv, scope: scope, file: f}, singleton: single, mod: constRef{node: a, scope: scope, file: f}})
-		}
+		c.collectBodyPrepend(f, n, scope)
 		return true
 	}
-	if names := staticAutoloadLoop(n); len(names) > 0 { // `%w[A B].each { |c| autoload c, path }` (unicode-emoji's lazy constants): each name's autoload, as written out
-		al := n.Block.(*parser.BlockNode).Body.(*parser.StatementsNode).Body[0].(*parser.CallNode) //nolint:forcetypeassert // staticAutoloadLoop checked the shape
-		for _, name := range names {
-			c.noteAutoload(qualify(scope, name))
-			one := &parser.CallNode{Location: al.Location, Name: "autoload", Arguments: &parser.ArgumentsNode{Location: al.Arguments.Location,
-				Arguments: []parser.Node{&parser.SymbolNode{Location: callArgs(al)[0].GetLocation(), Unescaped: parser.RubyString{Value: name}}, callArgs(al)[1]}}}
-			c.loadAutoload(ctx, f, one, scope)
-		}
+	if c.collectAutoloadLoop(ctx, f, n, scope) {
 		return true
 	}
 	if n.Receiver != nil {
@@ -573,6 +560,34 @@ func (c *Compiler) selfExtendCall(f *File, cls *Class, n *parser.CallNode) bool 
 	}
 	for _, a := range callArgs(ext) {
 		cls.extends = append(cls.extends, Include{ref: constRef{node: a, scope: found.scope, file: found.file}, srcPos: srcPos{found.file, f.line(n.Location.StartOffset)}, scope: found.scope})
+	}
+	return true
+}
+
+// collectBodyPrepend records a class body's `::Module.prepend M` (or `X.singleton_class.prepend M`) for the targets' link.
+func (c *Compiler) collectBodyPrepend(f *File, n *parser.CallNode, scope []*Class) {
+	recv, single := prependTarget(n), false
+	if sc, ok := recv.(*parser.CallNode); ok {
+		recv, single = sc.Receiver, true
+	}
+	for _, a := range callArgs(n) {
+		c.prepends = append(c.prepends, pendingPrepend{targetRef: constRef{node: recv, scope: scope, file: f}, singleton: single, mod: constRef{node: a, scope: scope, file: f}})
+	}
+}
+
+// collectAutoloadLoop unrolls a class body's `%w[A B].each { |c| autoload c, path }` (unicode-emoji's lazy constants):
+// each name's autoload, as written out.
+func (c *Compiler) collectAutoloadLoop(ctx context.Context, f *File, n *parser.CallNode, scope []*Class) bool {
+	names := staticAutoloadLoop(n)
+	if len(names) == 0 {
+		return false
+	}
+	al := n.Block.(*parser.BlockNode).Body.(*parser.StatementsNode).Body[0].(*parser.CallNode) //nolint:forcetypeassert // staticAutoloadLoop checked the shape
+	for _, name := range names {
+		c.noteAutoload(qualify(scope, name))
+		one := &parser.CallNode{Location: al.Location, Name: "autoload", Arguments: &parser.ArgumentsNode{Location: al.Arguments.Location,
+			Arguments: []parser.Node{&parser.SymbolNode{Location: callArgs(al)[0].GetLocation(), Unescaped: parser.RubyString{Value: name}}, callArgs(al)[1]}}}
+		c.loadAutoload(ctx, f, one, scope)
 	}
 	return true
 }

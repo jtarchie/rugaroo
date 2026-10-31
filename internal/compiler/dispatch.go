@@ -329,30 +329,8 @@ func (c *Compiler) emitSends(reached func(string) bool) {
 		s := c.sends[name]
 		ps, ret := c.sig(s.m, map[string]Type{})
 		args := c.argNames(s.m)
-		call := func(recv string, m *Method) string {
-			code := freeFuncName(m) + "(" + recv + comma(args) + ")"
-			if c.isDirectMethod(m) {
-				code = recv + "." + m.GoName + "(" + args + ")" // a primitive's own Go method (String.FrozenQ)
-			}
-			if ret == "" {
-				return code + "\n\t\treturn"
-			}
-			if _, mret := c.sig(m, map[string]Type{}); mret == "" { // a void override (`def frozen_string_literal; end`, rubocop's VimComment) under a valued slot: nil
-				return code + "\n\t\treturn " + goZero(ret)
-			}
-			return "return " + code
-		}
-		var armType func(k *Class) string
-		if s.owner.IsModule && !s.owner.universal {
-			armType = func(k *Class) string { return "*" + k.Name + c.armTypeArgs(k, s.owner) }
-		} else {
-			armType = func(k *Class) string {
-				if k.isStruct() {
-					return "*" + k.Name // the concrete type: its interface would also match every subclass
-				}
-				return c.goType(TClass{C: k}) // a primitive: String, not *String
-			}
-		}
+		call := func(recv string, m *Method) string { return c.sendArm(recv, m, args, ret, "", map[string]Type{}) }
+		armType := c.sendArmType(s.owner)
 		arms := c.sendArms(s.owner, s.m)
 		c.labels[name] = s.owner.RubyName + "#" + s.m.Name
 		selfType, tpDecl, dflt := c.plainSelfType(s.owner), "", freeFuncName(s.m)+"(self"+comma(args)+")"
@@ -366,33 +344,62 @@ func (c *Compiler) emitSends(reached func(string) bool) {
 			selfType = s.owner.selfName() + "[any" + comma(strings.Join(tps, ", ")) + "]"
 			dflt = freeFuncName(s.m) + moduleSelfArgs(s.owner, tps) + "(self" + comma(args) + ")"
 			call = func(recv string, m *Method) string {
-				code := freeFuncName(m) + c.armTypeArgs(m.Owner, s.owner) + "(" + recv + comma(args) + ")"
-				if ret == "" {
-					return code + "\n\t\treturn"
-				}
-				if _, mret := c.sig(m, tvarEnv(tps)); mret == "" {
-					return code + "\n\t\treturn " + goZero(ret)
-				}
-				return "return " + code
+				return c.sendArm(recv, m, args, ret, c.armTypeArgs(m.Owner, s.owner), tvarEnv(tps))
 			}
 		}
 		c.w("func %s%s(self %s%s) %s {\n", name, tpDecl, selfType, comma(ps), ret)
-		if len(arms) == 1 { // gocritic rejects a one-case switch
-			k := arms[0]
-			c.w("\tif v_, ok := self.(%s); ok {\n\t\t%s\n\t}\n", armType(k), call("v_", k.lookup(s.m.Name).M)) // v_: a Ruby local `v_` is v__ (goLocalName), so no parameter shadows it
-		} else {
-			c.w("\tswitch v_ := self.(type) {\n")
-			for _, k := range arms {
-				c.w("\tcase %s:\n\t\t%s\n", armType(k), call("v_", k.lookup(s.m.Name).M))
-			}
-			c.w("\t}\n")
-		}
+		c.writeSendArms(arms, s.m.Name, armType, call)
 		if ret == "" {
 			c.w("\t%s\n}\n\n", dflt)
 		} else {
 			c.w("\treturn %s\n}\n\n", dflt)
 		}
 	}
+}
+
+// sendArm is one dispatcher arm's body: the arm method's call (typeArgs instantiate a module's includer), returning its
+// value; a void override under a valued slot (`def frozen_string_literal; end`, rubocop's VimComment) answers nil.
+func (c *Compiler) sendArm(recv string, m *Method, args, ret, typeArgs string, env map[string]Type) string {
+	code := freeFuncName(m) + typeArgs + "(" + recv + comma(args) + ")"
+	if typeArgs == "" && c.isDirectMethod(m) {
+		code = recv + "." + m.GoName + "(" + args + ")" // a primitive's own Go method (String.FrozenQ)
+	}
+	if ret == "" {
+		return code + "\n\t\treturn"
+	}
+	if _, mret := c.sig(m, env); mret == "" {
+		return code + "\n\t\treturn " + goZero(ret)
+	}
+	return "return " + code
+}
+
+// sendArmType is the Go type a dispatcher arm matches: an includer at the module's parameters, a struct class's concrete
+// type (its interface would also match every subclass), or a primitive's value type (String, not *String).
+func (c *Compiler) sendArmType(owner *Class) func(k *Class) string {
+	if owner.IsModule && !owner.universal {
+		return func(k *Class) string { return "*" + k.Name + c.armTypeArgs(k, owner) }
+	}
+	return func(k *Class) string {
+		if k.isStruct() {
+			return "*" + k.Name
+		}
+		return c.goType(TClass{C: k})
+	}
+}
+
+// writeSendArms writes the dispatcher's type switch over arms (an `if` for one arm: gocritic rejects a one-case switch).
+// v_: a Ruby local `v_` is v__ (goLocalName), so no parameter shadows it.
+func (c *Compiler) writeSendArms(arms []*Class, name string, armType func(*Class) string, call func(string, *Method) string) {
+	if len(arms) == 1 {
+		k := arms[0]
+		c.w("\tif v_, ok := self.(%s); ok {\n\t\t%s\n\t}\n", armType(k), call("v_", k.lookup(name).M))
+		return
+	}
+	c.w("\tswitch v_ := self.(type) {\n")
+	for _, k := range arms {
+		c.w("\tcase %s:\n\t\t%s\n", armType(k), call("v_", k.lookup(name).M))
+	}
+	c.w("\t}\n")
 }
 
 // goCalled is every capitalized method name the prelude's Go text (`%x{}` bodies, prelude/go helpers) calls by selector:

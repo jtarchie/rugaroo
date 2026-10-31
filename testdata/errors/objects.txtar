@@ -1217,7 +1217,7 @@ S = Struct.new(:a) do
 end
 p S.new(1).a
 -- const_write_in_class_body_block.rb --
-# error: main.rb:4: unsupported syntax: ConstantWriteNode
+# error: main.rb:4: constant A::Y is assigned inside its class body's statements (a local it reads, a begin or a block): give it a type (`#: T`, or `Y: T` in a .rbs file)
 class A
   x = 1
   [1].each { |i| Y = i + x }

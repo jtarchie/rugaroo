@@ -314,6 +314,12 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 	return sig + "untyped", true
 }
 
+// inheritsRet: an override answers what its slot does, unless its gem parent only answers nil, a placeholder (rubocop-ast's
+// Node#receiver under MethodDispatchNode's): then it infers its own value, and typeAbstracts widens the parent to it.
+func (c *Compiler) inheritsRet(m *Method) bool {
+	return m.inherited != nil && (!c.gemFile(m.File) || !onlyNil(m.inherited.Node))
+}
+
 // inferRet: a dry run joins the body's returns; provisional until ivar discovery finishes (discoverIvars clears it).
 func (c *Compiler) inferRet(m *Method) {
 	if !m.inferRet || m.Ret != nil {
@@ -330,9 +336,7 @@ func (c *Compiler) inferRet(m *Method) {
 	m.inferring = true
 	m.recursed = false
 	defer func() { m.inferring = false }()
-	if m.inherited != nil && !(c.gemFile(m.File) && onlyNil(m.inherited.Node)) {
-		// a gem parent that only answers nil is a placeholder (rubocop-ast's Node#receiver under MethodDispatchNode's):
-		// its overrides infer their own value, and typeAbstracts widens the parent to them
+	if c.inheritsRet(m) {
 		c.inferRet(m.inherited)
 		m.Ret = m.inherited.Ret
 		return

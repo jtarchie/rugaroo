@@ -150,45 +150,13 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 	// named: every kept file's constants; optNamed: those a file outside the bundled gem names, which alone load an optional
 	// autoload (prism's Translation needs the parser gem: lex_compat.rb's or ripper's mention is not enough)
 	named, optNamed := map[string]bool{}, map[string]bool{}
-	note := func(f *File) {
-		opt := !c.bundledFile(f)
-		mark := func(k string) {
-			named[k] = true
-			optNamed[k] = optNamed[k] || opt
-		}
-		anyNode(f.Root, func(n parser.Node) bool {
-			switch n := n.(type) {
-			case *parser.ConstantReadNode:
-				mark(n.Name)
-			case *parser.ConstantPathNode:
-				mark(*n.Name)
-			case *parser.CallNode: // a symbol argument names it too: rubocop registers each cop as `register_cop :DuplicatedGem, path` and reaches it by `const_get`; an `autoload :X, path` registration itself does not
-				if n.Name != "autoload" && n.Arguments != nil {
-					for _, a := range n.Arguments.Arguments {
-						if sym, ok := a.(*parser.SymbolNode); ok {
-							mark(sym.Unescaped.Value)
-						}
-					}
-				}
-			}
-			return false
-		})
-	}
+	note := func(f *File) { c.noteNamedConsts(f, named, optNamed) }
 	for path, f := range c.parsed {
 		if _, ok := consts[path]; !ok {
 			note(f)
 		}
 	}
-	for name := range gemBackends { // prelude/prism.rb loads later, but names serialize.rb's Serialize (decision 427)
-		src, err := fs.ReadFile(c.preludeFS, name)
-		if !c.usedBundled || err != nil {
-			continue
-		}
-		f, err := parseFile(ctx, c.parser, name, src, originPrelude)
-		if err == nil {
-			note(f)
-		}
-	}
+	c.noteBackendConsts(ctx, note)
 	needed := map[string]bool{}
 	for changed := true; changed; {
 		changed = false
@@ -209,6 +177,48 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 		}
 	}
 	return needed
+}
+
+// noteNamedConsts marks the constants f names: as constants, and as symbol arguments (rubocop registers each cop as
+// `register_cop :DuplicatedGem, path` and reaches it by `const_get`; an `autoload :X, path` registration itself does not).
+func (c *Compiler) noteNamedConsts(f *File, named, optNamed map[string]bool) {
+	opt := !c.bundledFile(f)
+	mark := func(k string) {
+		named[k] = true
+		optNamed[k] = optNamed[k] || opt
+	}
+	anyNode(f.Root, func(n parser.Node) bool {
+		switch n := n.(type) {
+		case *parser.ConstantReadNode:
+			mark(n.Name)
+		case *parser.ConstantPathNode:
+			mark(*n.Name)
+		case *parser.CallNode:
+			if n.Name != "autoload" && n.Arguments != nil {
+				for _, a := range n.Arguments.Arguments {
+					if sym, ok := a.(*parser.SymbolNode); ok {
+						mark(sym.Unescaped.Value)
+					}
+				}
+			}
+		}
+		return false
+	})
+}
+
+// noteBackendConsts notes what a gem backend's prelude file names: prelude/prism.rb loads later, but names serialize.rb's
+// Serialize (decision 427).
+func (c *Compiler) noteBackendConsts(ctx context.Context, note func(*File)) {
+	for name := range gemBackends {
+		src, err := fs.ReadFile(c.preludeFS, name)
+		if !c.usedBundled || err != nil {
+			continue
+		}
+		f, err := parseFile(ctx, c.parser, name, src, originPrelude)
+		if err == nil {
+			note(f)
+		}
+	}
 }
 
 func sourceName(s Source) string {
