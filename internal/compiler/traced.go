@@ -192,8 +192,9 @@ func CompileTrace(ctx context.Context, preludeFS, gemSigs fs.FS, main string, ru
 	}
 	tick("trace")
 	src, dirs := TracedEntry(l, main)
-	if err := checkPrismGem(nil, dirs); err != nil {
-		return nil, nil, err
+	perr := checkPrismGem(nil, dirs)
+	if perr != nil {
+		return nil, nil, perr
 	}
 	more, err := mainRequires(ctx, main, append(slices.Clone(loadPath), dirs...), src)
 	if err != nil {

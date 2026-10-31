@@ -617,6 +617,7 @@ func sigFitsDef(o *rbs.MethodType, ps *parser.ParametersNode) bool {
 			rest = true
 		case rbs.ParamKeyword:
 			kws = append(kws, p.Name)
+		case rbs.ParamKwRest: // binds whatever the def's **rest takes
 		}
 	}
 	if ps == nil {

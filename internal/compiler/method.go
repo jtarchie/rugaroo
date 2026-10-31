@@ -476,6 +476,12 @@ func (f *fctx) methodInfo(n parser.Node, e *entry) string {
 		m.Name, key, ownerCode, strings.Join(ps, ", "), arity, loc, single)
 }
 
+// cStyleParams: a prelude method stands for a C one, anonymous, unless it takes keywords: then MRI writes it in Ruby
+// (clone, unpack1, warn) and names its parameters, which prism's unpack1 polyfill reads for `offset` (decision 427).
+func cStyleParams(m *Method) bool {
+	return m.Node == nil || m.File == nil || m.File.isPrelude() && (m.Node.Parameters == nil || len(m.Node.Parameters.Keywords) == 0)
+}
+
 // methodParams is MRI's #parameters and #arity; prelude methods stand for C methods, so they get C's anonymous `(_, _)` or `(*)`.
 func methodParams(m *Method, overloaded bool) (ps [][2]string, arity int) {
 	switch {
@@ -485,9 +491,7 @@ func methodParams(m *Method, overloaded bool) (ps [][2]string, arity int) {
 		return [][2]string{{"req", ""}}, 1
 	case m.Kind == kindSynth && m.Name == "new":
 		return [][2]string{{"rest", ""}}, -1
-	case m.Node == nil || m.File == nil || m.File.isPrelude() && (m.Node.Parameters == nil || len(m.Node.Parameters.Keywords) == 0):
-		// a prelude def with keywords stands for one MRI writes in Ruby (clone, unpack1, warn), whose names it reports: prism's
-		// unpack1 polyfill looks for `offset` (decision 427)
+	case cStyleParams(m):
 		for _, p := range m.Params {
 			if overloaded || p.Rest || p.Keyword || p.Default != nil {
 				return [][2]string{{"rest", ""}}, -1

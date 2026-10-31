@@ -551,14 +551,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.loadLibs(ctx, libs, opts.allLibs || c.env.AllLibs)
 	c.loadSigs(sources)
 	tick("prelude")
-	c.evalSites = map[boot.Loc]bool{}
-	if opts.boot != nil {
-		for _, e := range opts.boot.Evals { // a gem file the entry loads collects its class_eval before main's turn collects the evals (racc's do_parse)
-			if l, ok := boot.ParseLoc(e.Caller); ok && e.Kind == "class_eval" && e.Self != "" {
-				c.evalSites[boot.Loc{File: c.real(l.File), Line: l.Line}] = true
-			}
-		}
-	}
+	c.evalSites = c.classEvalSites(opts.boot)
 	for i, src := range sources {
 		if i == len(sources)-1 && opts.mainLast && opts.boot != nil { // load-time evals run before the program's main file (decision 204)
 			c.collectBootEvals(ctx, opts.boot.Evals)
@@ -817,6 +810,21 @@ func (f *fctx) intOpCode(m *Method, recv expr, argList string) (string, bool) {
 		return "(" + recv.code + " " + op + " " + argList + ")", true
 	}
 	return "rbIntChecked" + strings.TrimPrefix(m.GoName, "Op_") + "(" + recv.code + comma(argList) + ")", true
+}
+
+// classEvalSites are boot's class_eval call sites, known before any file is collected: a gem file the traced entry loads
+// collects its class_eval before main's turn collects the evals (racc's do_parse, decision 427).
+func (c *Compiler) classEvalSites(m *boot.Manifest) map[boot.Loc]bool {
+	sites := map[boot.Loc]bool{}
+	if m == nil {
+		return sites
+	}
+	for _, e := range m.Evals {
+		if l, ok := boot.ParseLoc(e.Caller); ok && e.Kind == "class_eval" && e.Self != "" {
+			sites[boot.Loc{File: c.real(l.File), Line: l.Line}] = true
+		}
+	}
+	return sites
 }
 
 // loadPreludeGo embeds prelude/go/*.go verbatim: pure Go with no self/param binding, so it skips Ruby parsing entirely.
