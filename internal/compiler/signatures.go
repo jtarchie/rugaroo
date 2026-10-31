@@ -317,7 +317,7 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 // inheritsRet: an override answers what its slot does, unless its gem parent only answers nil, a placeholder (rubocop-ast's
 // Node#receiver under MethodDispatchNode's): then it infers its own value, and typeAbstracts widens the parent to it.
 func (c *Compiler) inheritsRet(m *Method) bool {
-	return m.inherited != nil && (!c.gemFile(m.File) || !onlyNil(m.inherited.Node))
+	return m.inherited != nil && (!c.gemFile(m.File) || !onlyLiteral(m.inherited.Node))
 }
 
 // inferRet: a dry run joins the body's returns; provisional until ivar discovery finishes (discoverIvars clears it).
@@ -820,13 +820,10 @@ func (c *Compiler) checkKeywordSig(m *Method) {
 func (c *Compiler) typeAbstracts() {
 	for _, k := range c.classList {
 		for _, m := range k.MethodList {
-			if !m.inferRet || m.Kind != kindDef || !c.gemFile(m.File) || !onlyRaises(m.Node) && !onlyNil(m.Node) {
+			if !m.inferRet || m.Kind != kindDef || !c.gemFile(m.File) || !onlyRaises(m.Node) && !onlyLiteral(m.Node) {
 				continue
 			}
-			var ret Type
-			if onlyNil(m.Node) {
-				ret = TNil{} // the parent's own nil stays an answer
-			}
+			ret := c.literalType(m.Node) // the parent's own answer (nil, or `def arity = 1`'s Integer) stays one
 			for _, cls := range c.classList {
 				if cls == k || !cls.isSubclassOf(k) && !slices.Contains(cls.ancestors(), k) {
 					continue
@@ -848,6 +845,44 @@ func (c *Compiler) typeAbstracts() {
 			}
 		}
 	}
+}
+
+// onlyLiteral reports a def whose body is empty or one literal: a placeholder its overrides fill with other kinds
+// (rubocop-ast's `def receiver; nil; end`, and NodePattern::Node's `def arity = 1` under Rest's `0..Float::INFINITY`).
+func onlyLiteral(d *parser.DefNode) bool {
+	if onlyNil(d) {
+		return true
+	}
+	st, ok := d.Body.(*parser.StatementsNode)
+	if !ok || len(st.Body) != 1 {
+		return false
+	}
+	switch st.Body[0].(type) {
+	case *parser.IntegerNode, *parser.FloatNode, *parser.TrueNode, *parser.FalseNode, *parser.SymbolNode, *parser.StringNode:
+		return true
+	}
+	return false
+}
+
+// literalType is the type of a placeholder def's one literal (onlyLiteral): TNil for nil or an empty body.
+func (c *Compiler) literalType(d *parser.DefNode) Type {
+	st, ok := d.Body.(*parser.StatementsNode)
+	if !ok || len(st.Body) != 1 {
+		return TNil{}
+	}
+	switch st.Body[0].(type) {
+	case *parser.IntegerNode:
+		return TClass{C: c.classes["Integer"]}
+	case *parser.FloatNode:
+		return TClass{C: c.classes["Float"]}
+	case *parser.TrueNode, *parser.FalseNode:
+		return TClass{C: c.classes["Boolean"]}
+	case *parser.SymbolNode:
+		return TClass{C: c.classes["Symbol"]}
+	case *parser.StringNode:
+		return TClass{C: c.classes["String"]}
+	}
+	return TNil{}
 }
 
 // onlyNil reports a def whose body is empty or one `nil`: a placeholder its overrides fill (rubocop-ast's `def receiver; nil; end`).
