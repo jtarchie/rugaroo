@@ -258,7 +258,8 @@ func (c *Compiler) collectBlockEval(ctx context.Context, f *File, ln int, e boot
 }
 
 // seedsFromLocals is a block of instance variable writes at least one of which reads an enclosing local (ruby-macho's
-// inherited hook copying its class-level state to the subclass): the values exist only where the hook runs.
+// inherited hook copying its class-level state to the subclass, rubocop-ast's `base.class_eval { @registry =
+// us.registry.dup }`): the values exist only where the hook runs.
 func seedsFromLocals(body *parser.StatementsNode) bool {
 	reads := false
 	for _, st := range body.Body {
@@ -266,7 +267,7 @@ func seedsFromLocals(body *parser.StatementsNode) bool {
 		if !ok {
 			return false
 		}
-		if _, isLocal := w.Value.(*parser.LocalVariableReadNode); isLocal {
+		if anyNode(w.Value, func(n parser.Node) bool { _, isLocal := n.(*parser.LocalVariableReadNode); return isLocal }) {
 			reads = true
 		}
 	}
