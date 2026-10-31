@@ -558,6 +558,15 @@ continued"
 
   class StringSymbolTest < Minitest::Test
     # Decision 23: Symbol is its own type, never equal to the String of the same name.
+    def test_symbol_matches_as_its_name
+      assert_equal 0, (:one_or_more_greedy =~ /\A(?:zero_or_one|one_or_more)(?:_greedy|_reluctant)?\z/x)
+      assert_nil(:sometimes =~ /\Anever/)
+      assert(:zero_or_one.match?(/or/))
+      refute(:plain.match?(/\d/))
+      assert_equal "or_", :zero_or_one.match(/or_/)[0]
+      assert(:abc !~ /x/)
+    end
+
     def test_decision_23_symbol_is_its
       a = :apple
       assert_equal -1, (a <=> :banana)

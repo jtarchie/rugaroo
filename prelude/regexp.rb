@@ -645,4 +645,19 @@ class String
   def __bin_gsub_block(pat) = %x{ String(rbReSubBin(rbPattern(pat), string(self), -1, rbReBlock(blk))) }
 end
 
+# A Symbol matches as its name does (regexp_parser's `token.token =~ /\A(?:zero_or_one|...)\z/x`).
+class Symbol
+  #: (Regexp) -> Integer?
+  def =~(re) = re =~ name
+
+  #: (Regexp) -> bool
+  def !~(re) = !(re =~ name)
+
+  #: (Regexp) -> MatchData?
+  def match(re) = re.match(name)
+
+  #: (Regexp) -> bool
+  def match?(re) = re.match?(name)
+end
+
 class RegexpError < StandardError; end
