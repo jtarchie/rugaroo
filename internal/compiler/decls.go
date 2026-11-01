@@ -134,13 +134,13 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 
 // tableInputs is what emitTables reads, as sizes and flags: the maps only grow, so equal sizes mean equal contents.
 type tableInputs struct {
-	tuples, argBoxes, boxes, procTypes, pkgVars, strLits, optConv     int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
+	argBoxes, boxes, procTypes, pkgVars, strLits, optConv             int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
 	classOf, dynEvery, respondEvery, callable, dynEach, rxAlt, reqTab bool
 }
 
 func (c *Compiler) tableInputs() tableInputs {
 	return tableInputs{
-		tuples: len(c.tupleN), argBoxes: len(c.argBoxes), boxes: len(c.boxes), procTypes: len(c.procTypes),
+		argBoxes: len(c.argBoxes), boxes: len(c.boxes), procTypes: len(c.procTypes),
 		pkgVars: len(c.pkgVars), strLits: len(c.strLits), optConv: len(c.optConv),
 		classOf: c.classOf, dynEvery: c.dynEvery, respondEvery: c.respondEvery, callable: c.callable != nil,
 		dynEach: c.dynEach, rxAlt: c.needRxAlt, reqTab: c.needRequireTable,

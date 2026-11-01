@@ -84,7 +84,6 @@ func (c *Compiler) goType(t Type) string {
 		}
 		return s
 	case TTuple:
-		c.tupleN[len(t.Elems)] = true
 		name := fmt.Sprintf("Tuple%d[%s]", len(t.Elems), c.goTypes(t.Elems))
 		c.noteMarshal(t)
 		return name

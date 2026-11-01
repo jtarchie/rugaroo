@@ -11,11 +11,9 @@ import (
 // maxTuple is the widest RBS tuple: Socket.getaddrinfo's rows have 7 elements (decision 135).
 const maxTuple = 7
 
+// emitTuples emits every arity: the pruner keeps the ones kept code names (decision 432).
 func (c *Compiler) emitTuples() {
 	for n := 2; n <= maxTuple; n++ {
-		if !c.tupleN[n] {
-			continue
-		}
 		tps := make([]string, 0, n)
 		fields := make([]string, 0, n)
 		cmp := make([]string, 0, n)

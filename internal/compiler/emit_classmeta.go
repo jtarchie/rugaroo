@@ -232,14 +232,12 @@ func (c *Compiler) emitClassMeta() {
 	}
 	c.w("\tdefault: // gocritic rejects the one-case switch\n\t\treturn id\n\t}\n}\n\n")
 	array := c.classID(c.classes["Array"])
-	for n := 2; n <= maxTuple; n++ {
-		if c.tupleN[n] {
-			tps := make([]string, n)
-			for i := range n {
-				tps[i] = fmt.Sprintf("T%d", i)
-			}
-			c.w("func (Tuple%d[%s]) _ClassID() int { return %d }\n\n", n, strings.Join(tps, ", "), array)
+	for n := 2; n <= maxTuple; n++ { // every arity, as emitTuples
+		tps := make([]string, n)
+		for i := range n {
+			tps[i] = fmt.Sprintf("T%d", i)
 		}
+		c.w("func (Tuple%d[%s]) _ClassID() int { return %d }\n\n", n, strings.Join(tps, ", "), array)
 	}
 }
 
