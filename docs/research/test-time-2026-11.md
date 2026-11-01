@@ -9,7 +9,7 @@ RUGAROO_TEST_TIMING=run.timing RUGAROO_TEST_KEEP=keep/ go test -json ./... -time
 scripts/test-time run.json run.timing -n 25
 ```
 
-`RUGAROO_TEST_TIMING` appends one tab-separated line per step: kind (compile, rbs-inline, rbs-validate, build, mri, run, vet, lint), test name, seconds, `@` end time since the binary started, then per kind; a `build` row carries -race, cache miss (the `-x` trace shows a ` -p main ` compile only on a miss), source funcs, lines, bytes and a sha256 prefix of main.go. `RUGAROO_TEST_KEEP=dir` keeps every program's main.go as `<test>.go`, so two runs can be diffed.
+`RUGAROO_TEST_TIMING` appends one tab-separated line per step: kind (compile, rbs-inline, rbs-validate, build, mri, run, vet, lint), test name, seconds, `@` end time since the binary started, then per kind; a `build` row carries -race, cache miss (the `-x` trace shows a ` -p main ` compile only on a miss), source funcs (`func` lines of main.go, not compiled functions: TestCompileCost's nm count is 3-4x that), lines, bytes and a sha256 prefix of main.go. An `rbs-cache` row (decision 435) says hit or miss; an example that writes into its own directory would miss forever (none does: P2 hit 137 of 137). `RUGAROO_TEST_KEEP=dir` keeps every program's main.go as `<test>.go`, so two runs can be diffed.
 
 ## Baseline
 
@@ -25,7 +25,8 @@ Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time
 | P0. prototype (decision 434), first run: every example's bytes change once | 2297 s | 9138 s | 245 | 144 | 1735 s | one-off |
 | P1. prototype, warm (rbs cache filling) | 353 s | 1175 s | 245 | 0 | 10 s | 0 |
 | P2. prototype, b1's comment line in prelude/string.rb | 668 s | 1369 s | 245 | 3 | 320 s | 0.1 GB |
-| P3. prototype + rbs cache warm + parallel top-level tests, nothing changed | P3_ROW |
+| P3. prototype + rbs cache warm + parallel top-level tests, nothing changed; the `-race` experiment (fresh GOCACHE, std rebuilds) ran beside it | 358 s | 976 s | 245 | 0 | 11 s | 0 |
+| P4. the same, machine otherwise idle | P4_ROW |
 
 CLAUDE.md's "~7 min warm / ~23 min after a prelude edit" is 5.6 min / 33-40 min on this day: b1 and b2 are the case that hurts.
 
