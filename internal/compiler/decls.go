@@ -82,8 +82,9 @@ func (c *Compiler) emitProgram() {
 }
 
 // emitNext is one batch of the rest of the program, given what the pruned program so far reaches: forwarders of reached classes and dispatchers of reached names, until a round adds nothing; then the tables every body has contributed to by now, once; then nil. The tables open paths to more code, so rounds go on after them; a late body that adds to a table's inputs (a tuple type, a literal) is errPruneIncomplete, and the caller recompiles with everything eager.
-func (c *Compiler) emitNext(reached, selected func(string) bool) ([]byte, error) {
+func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]byte, error) {
 	c.out.Reset()
+	c.keptFunc = keptFunc
 	for _, cls := range c.sortedClasses() {
 		if !c.fwdOut[cls] && (c.dynEvery || reached(cls.Name)) {
 			c.fwdOut[cls] = true
@@ -98,6 +99,9 @@ func (c *Compiler) emitNext(reached, selected func(string) bool) ([]byte, error)
 	marshal := reached("rbMDumpGen") || reached("rbMLoadGen")
 	// Marshal's cases were rendered with the tables: a later value type, or a class they skipped and something now reaches, needs them redone
 	stale := marshal && len(c.marshalSeen) != c.marshalAt || slices.ContainsFunc(c.marshalSkipped, reached)
+	if c.procsOut && len(c.keptProcs()) != c.procsAt { // what the proc tables reached makes another Proc type
+		return nil, errPruneIncomplete
+	}
 	if c.tablesOut && (c.tableInputs() != c.tablesAt || stale) {
 		return nil, errPruneIncomplete
 	}
@@ -117,6 +121,10 @@ func (c *Compiler) emitNext(reached, selected func(string) bool) ([]byte, error)
 		case c.marshalOut && !c.marshalLate: // last: its cases are only the classes reached by then
 			c.marshalLate = true
 			c.emitMarshalClasses(reached)
+		case !c.procsOut: // after everything else: its cases are the Proc types kept code makes (decision 431)
+			c.procsOut = true
+			c.emitProcTables()
+			c.procsAt = len(c.keptProcs())
 		default:
 			return nil, nil
 		}
@@ -126,7 +134,7 @@ func (c *Compiler) emitNext(reached, selected func(string) bool) ([]byte, error)
 
 // tableInputs is what emitTables reads, as sizes and flags: the maps only grow, so equal sizes mean equal contents.
 type tableInputs struct {
-	tuples, argBoxes, boxes, procTypes, pkgVars, strLits, optConv     int
+	tuples, argBoxes, boxes, procTypes, pkgVars, strLits, optConv     int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
 	classOf, dynEvery, respondEvery, callable, dynEach, rxAlt, reqTab bool
 }
 

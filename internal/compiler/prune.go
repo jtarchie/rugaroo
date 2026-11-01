@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"fmt"
 	"go/ast"
+	goparser "go/parser"
 	"go/token"
+	"go/types"
 	"io"
 	"slices"
 	"strconv"
@@ -33,35 +35,53 @@ type pruneMethod struct {
 
 // pruner keeps what main reaches like a linker would; names match unscoped, which only over-keeps (decision 49), and a method nothing selects survives only as a stub for an interface literal's run-time assertion, since named interfaces drop it instead (decision 89).
 type pruner struct {
-	byName      map[string][]ast.Node     // funcs, type specs and value specs by declared name
-	constBlock  map[ast.Node]*ast.GenDecl // an iota block stays whole: its specs repeat the one before
-	methods     []pruneMethod
-	roots       []ast.Node
-	kept        map[ast.Node]bool
-	names       map[string]bool            // identifiers used by kept code
-	methodNames map[string]bool            // selectors used by kept code, and methods the standard library calls
-	scoped      map[string]map[string]bool // method expressions in kept code, by type: `String.Upcase(s)` selects Upcase on String alone, `FooI.Bar(x)` on FooI and its implementers (decision 122)
-	ifaceName   map[*ast.InterfaceType]string
-	recvMethods map[string]map[string]bool // method names by receiver type, for the `_Foo` markers that say which named interfaces a type implements
-	recvIfaces  map[string][]string        // memo of ifacesOf
-	ifaceAnc    map[string][]string        // memo of ancestorsOf
-	scopedBy    map[string][]string        // the types a method name is scoped on, for scopedOn
-	declared    map[string]bool            // methods declared by kept interfaces
-	asserted    map[string]bool            // methods declared by interface literals in kept code: runtime assertions, so every type keeps them (decision 89)
-	named       map[*ast.InterfaceType]bool
-	stubs       map[*ast.FuncDecl]bool
-	pending     map[*ast.CaseClause][]string // type-switch cases waiting for their declared type names to be kept
-	parked      map[*ast.Field]parkedField   // named interfaces' unselected methods: visited (their types kept) only once selected, as sweep slims them otherwise
-	cur         ast.Node                     // the node being visited, for why
-	why         map[ast.Node]ast.Node        // the node whose visit first kept each kept node (RUGAROO_PRUNE_WHY=1 dumps the chains)
-	lazy        map[string]bool              // prelude constants: main's assignment to one waits for something else to name it
-	deferred    map[ast.Stmt]string          // those assignments, by constant
-	queue       []ast.Node
+	byName        map[string][]ast.Node     // funcs, type specs and value specs by declared name
+	constBlock    map[ast.Node]*ast.GenDecl // an iota block stays whole: its specs repeat the one before
+	methods       []pruneMethod
+	roots         []ast.Node
+	kept          map[ast.Node]bool
+	names         map[string]bool            // identifiers used by kept code
+	methodNames   map[string]bool            // selectors used by kept code, and methods the standard library calls
+	scoped        map[string]map[string]bool // method expressions in kept code, by type: `String.Upcase(s)` selects Upcase on String alone, `FooI.Bar(x)` on FooI and its implementers (decision 122)
+	ifaceName     map[*ast.InterfaceType]string
+	recvMethods   map[string]map[string]bool // method names by receiver type, for the `_Foo` markers that say which named interfaces a type implements
+	recvIfaces    map[string][]string        // memo of ifacesOf
+	ifaceAnc      map[string][]string        // memo of ancestorsOf
+	scopedBy      map[string][]string        // the types a method name is scoped on, for scopedOn
+	declared      map[string]bool            // methods declared by kept interfaces
+	asserted      map[string]bool            // methods declared by interface literals in kept code: runtime assertions, so every type keeps them (decision 89)
+	named         map[*ast.InterfaceType]bool
+	stubs         map[*ast.FuncDecl]bool
+	pending       map[*ast.CaseClause][]string // type-switch cases waiting for their declared type names to be kept
+	parked        map[*ast.Field]parkedField   // named interfaces' unselected methods: visited (their types kept) only once selected, as sweep slims them otherwise
+	cur           ast.Node                     // the node being visited, for why
+	why           map[ast.Node]ast.Node        // the node whose visit first kept each kept node (RUGAROO_PRUNE_WHY=1 dumps the chains)
+	lazy          map[string]bool              // prelude constants: main's assignment to one waits for something else to name it
+	deferred      map[ast.Stmt]string          // those assignments, by constant
+	queue         []ast.Node
+	written       shapeSet                          // every func type kept code writes: no *func value of another shape can exist (decision 431)
+	made          shapeSet                          // the *func types kept code's creation sites (Ref(f), &f, new, a *func type written) make: rbIsProc's cases
+	procValve     string                            // a creation site's expression whose func type funcTypesOf cannot tell: made falls back to written
+	funcFields    map[string][]*ast.FuncType        // struct fields of func type, by field name
+	methodsByName map[string][]*ast.FuncDecl        // methods by name, for a method value or a call's result
+	parsedShapes  map[string]*ast.FuncType          // keptFunc's queries, parsed once
+	genCalls      []genCall                         // calls of generic funcs in kept code, for settleMade
+	addrOf        map[*ast.FuncDecl]map[string]bool // a generic func's type parameters whose values it points at
+	settled       map[argKey]bool
+	tparamOwner   map[*ast.Field]*ast.FuncDecl            // a generic func's type parameter fields
+	genRanges     [][2]token.Pos                          // generic funcs' and generic types' methods' extents, for inGeneric
+	genUnknown    bool                                    // a creation site in generic code holds a value funcTypesOf cannot type: instArgs
+	inTypeArgs    []*ast.FuncType                         // func types written inside type arguments
+	typeSwitchOf  map[*ast.AssignStmt]*ast.TypeSwitchStmt // a type switch's `v := x.(type)`, for caseFuncs
+	funcElems     []*ast.FuncType                         // element types of kept arrays, slices and maps of funcs
+	wantElems     bool                                    // a creation site indexes a container funcTypesOf cannot type: made takes funcElems
+	instDone      int                                     // genCalls instArgs has read
+	typeParams    map[string]bool                         // type parameter names any declaration binds
 }
 
 // newPruner drops what main cannot reach, like the linker, so a program compiles only the prelude it uses; names match unscoped, which only over-keeps. Declarations arrive in batches (add, then run): the dynamic dispatchers are emitted only for what the first batch reaches.
 func newPruner(lazy map[string]bool) *pruner {
-	p := &pruner{lazy: lazy, deferred: map[ast.Stmt]string{}, byName: map[string][]ast.Node{}, constBlock: map[ast.Node]*ast.GenDecl{}, kept: map[ast.Node]bool{}, names: map[string]bool{}, methodNames: map[string]bool{}, declared: map[string]bool{}, asserted: map[string]bool{}, named: map[*ast.InterfaceType]bool{}, stubs: map[*ast.FuncDecl]bool{}, pending: map[*ast.CaseClause][]string{}, parked: map[*ast.Field]parkedField{}, why: map[ast.Node]ast.Node{}, scoped: map[string]map[string]bool{}, ifaceName: map[*ast.InterfaceType]string{}, recvMethods: map[string]map[string]bool{}, recvIfaces: map[string][]string{}, ifaceAnc: map[string][]string{}, scopedBy: map[string][]string{}}
+	p := &pruner{lazy: lazy, deferred: map[ast.Stmt]string{}, byName: map[string][]ast.Node{}, constBlock: map[ast.Node]*ast.GenDecl{}, kept: map[ast.Node]bool{}, names: map[string]bool{}, methodNames: map[string]bool{}, declared: map[string]bool{}, asserted: map[string]bool{}, named: map[*ast.InterfaceType]bool{}, stubs: map[*ast.FuncDecl]bool{}, pending: map[*ast.CaseClause][]string{}, written: newShapeSet(), made: newShapeSet(), funcFields: map[string][]*ast.FuncType{}, methodsByName: map[string][]*ast.FuncDecl{}, parsedShapes: map[string]*ast.FuncType{}, addrOf: map[*ast.FuncDecl]map[string]bool{}, settled: map[argKey]bool{}, tparamOwner: map[*ast.Field]*ast.FuncDecl{}, typeSwitchOf: map[*ast.AssignStmt]*ast.TypeSwitchStmt{}, typeParams: map[string]bool{}, parked: map[*ast.Field]parkedField{}, why: map[ast.Node]ast.Node{}, scoped: map[string]map[string]bool{}, ifaceName: map[*ast.InterfaceType]string{}, recvMethods: map[string]map[string]bool{}, recvIfaces: map[string][]string{}, ifaceAnc: map[string][]string{}, scopedBy: map[string][]string{}}
 	for n := range stdMethodNames {
 		p.methodNames[n] = true
 	}
@@ -82,6 +102,654 @@ func (p *pruner) add(decls []ast.Decl) {
 	for _, r := range p.roots[roots:] {
 		p.keep(r)
 	}
+}
+
+// funcShape is ft as goFuncType renders it: parameter types without names, a single result.
+func funcShape(ft *ast.FuncType) string {
+	var b strings.Builder
+	b.WriteString("func(")
+	writeFieldTypes(&b, ft.Params)
+	b.WriteString(")")
+	switch n := ft.Results.NumFields(); {
+	case n == 1:
+		b.WriteString(" ")
+		writeFieldTypes(&b, ft.Results)
+	case n > 1:
+		b.WriteString(" (")
+		writeFieldTypes(&b, ft.Results)
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
+func writeFieldTypes(b *strings.Builder, l *ast.FieldList) {
+	first := true
+	for _, fl := range l.List {
+		t := types.ExprString(fl.Type)
+		if ft, ok := fl.Type.(*ast.FuncType); ok {
+			t = funcShape(ft)
+		}
+		for range max(len(fl.Names), 1) {
+			if !first {
+				b.WriteString(", ")
+			}
+			first = false
+			b.WriteString(t)
+		}
+	}
+}
+
+// shapeSet is a set of func shapes; one naming a type parameter is also a pattern any instance matches.
+func newShapeSet() shapeSet { return shapeSet{exact: map[string]bool{}, memo: map[string]bool{}} }
+
+type shapeSet struct {
+	exact map[string]bool
+	gen   []*ast.FuncType
+	memo  map[string]bool // match's positive answers: the set only grows
+}
+
+func (p *pruner) note(set *shapeSet, ft *ast.FuncType) {
+	s := funcShape(ft)
+	if set.exact[s] {
+		return
+	}
+	set.exact[s] = true
+	if p.isGeneric(ft) {
+		set.gen = append(set.gen, ft)
+	}
+}
+
+func (p *pruner) match(set *shapeSet, s string, ft *ast.FuncType) bool {
+	if set.exact[s] || set.memo[s] {
+		return true
+	}
+	for _, g := range set.gen {
+		if p.unifyFunc(g, ft) {
+			set.memo[s] = true
+			return true
+		}
+	}
+	return false
+}
+
+func (p *pruner) isGeneric(e ast.Node) bool {
+	generic := false
+	ast.Inspect(e, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && p.isTypeParam(id.Name) {
+			generic = true
+		}
+		return !generic
+	})
+	return generic
+}
+
+func (p *pruner) isTypeParam(name string) bool { return p.typeParams[name] && len(p.byName[name]) == 0 }
+
+// keptFunc: kept code can hold a *func value of shape s: one a creation site makes, or any written once procValve opens.
+func (p *pruner) keptFunc(s string) bool {
+	ft, ok := p.parsedShapes[s]
+	if !ok {
+		e, err := goparser.ParseExpr(s)
+		if err == nil {
+			ft, _ = e.(*ast.FuncType)
+		}
+		p.parsedShapes[s] = ft
+	}
+	if ft == nil {
+		return true
+	}
+	p.settleMade()
+	if p.procValve != "" {
+		return p.match(&p.written, s, ft)
+	}
+	if p.genUnknown {
+		p.instArgs()
+	}
+	if p.wantElems {
+		for _, ft := range p.funcElems {
+			p.note(&p.made, ft)
+		}
+	}
+	return p.match(&p.made, s, ft)
+}
+
+// instArgs: a type parameter is instantiated by a written type argument or an inferred call argument, so those func types may be made.
+func (p *pruner) instArgs() {
+	for _, ft := range p.inTypeArgs {
+		p.note(&p.made, ft)
+	}
+	for ; p.instDone < len(p.genCalls); p.instDone++ {
+		for _, a := range p.genCalls[p.instDone].call.Args {
+			if fts, ok := p.funcTypesOf(a, 0); ok {
+				for _, ft := range fts {
+					p.note(&p.made, ft)
+				}
+			}
+		}
+	}
+}
+
+// inGeneric: pos is inside a generic func, or a method of a generic type.
+func (p *pruner) inGeneric(pos token.Pos) bool {
+	for _, r := range p.genRanges {
+		if r[0] <= pos && pos < r[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// noteMade records the func types a pointer made from e (Ref(e), &e) can have; an e it cannot type opens procValve.
+func (p *pruner) noteMade(e ast.Expr) {
+	if id, ok := e.(*ast.Ident); ok {
+		if fd, tp, ok := p.tparamOf(id); ok { // made where fd is called, from the argument bound to tp
+			if p.addrOf[fd] == nil {
+				p.addrOf[fd] = map[string]bool{}
+			}
+			p.addrOf[fd][tp] = true
+			return
+		}
+	}
+	fts, known := p.funcTypesOf(e, 0)
+	switch {
+	case !known && p.inGeneric(e.Pos()): // a value of a type parameter: any func type that instantiates one (instArgs)
+		p.genUnknown = true
+		return
+	case !known:
+		if p.procValve == "" {
+			p.procValve = types.ExprString(e)
+			if fd, ok := p.cur.(*ast.FuncDecl); ok {
+				p.procValve += " in " + fd.Name.Name
+			}
+		}
+		return
+	}
+	for _, ft := range fts {
+		p.note(&p.made, ft)
+	}
+}
+
+// funcTypesOf: e's possible func types, fields and methods matched by name since there are no go/types here; known false when untellable.
+func (p *pruner) funcTypesOf(e ast.Expr, depth int) (fts []*ast.FuncType, known bool) {
+	if depth > 8 {
+		return nil, false
+	}
+	switch x := e.(type) {
+	case *ast.FuncLit:
+		return []*ast.FuncType{x.Type}, true
+	case *ast.BasicLit, *ast.CompositeLit, *ast.BinaryExpr, *ast.SliceExpr: // never a func
+		return nil, true
+	case *ast.ParenExpr:
+		return p.funcTypesOf(x.X, depth+1)
+	case *ast.TypeAssertExpr:
+		return p.typeFuncs(x.Type)
+	case *ast.UnaryExpr:
+		return nil, x.Op != token.ARROW
+	case *ast.Ident:
+		return p.identFuncs(x, depth)
+	case *ast.SelectorExpr:
+		if id, ok := x.X.(*ast.Ident); ok && id.Obj == nil && stdImports[id.Name] != "" && len(p.byName[id.Name]) == 0 {
+			return nil, false
+		}
+		out := slices.Clone(p.funcFields[x.Sel.Name])
+		for _, m := range p.methodsByName[x.Sel.Name] { // a method value
+			out = append(out, m.Type)
+		}
+		return out, true
+	case *ast.CallExpr:
+		return p.callFuncs(x, 0, depth)
+	case *ast.StarExpr: // `*p` of a *F: some creation site already made that *F, so a copy's &dup adds no shape
+		return nil, true
+	case *ast.IndexExpr: // an element of an array, slice or map variable
+		if t := p.declType(x.X); t != nil {
+			switch t := t.(type) {
+			case *ast.ArrayType:
+				return p.typeFuncs(t.Elt)
+			case *ast.MapType:
+				return p.typeFuncs(t.Value)
+			}
+		}
+		p.wantElems = true // any kept array, slice or map of funcs, added once all are seen; std containers hold none Ref'd
+		return nil, true
+	}
+	return nil, false
+}
+
+// declType is the declared type of a variable e names, or nil.
+func (p *pruner) declType(e ast.Expr) ast.Expr {
+	id, ok := e.(*ast.Ident)
+	if !ok {
+		return nil
+	}
+	var decl any
+	if id.Obj != nil {
+		decl = id.Obj.Decl
+	} else if ds := p.byName[id.Name]; len(ds) > 0 {
+		decl = ds[0]
+	}
+	switch d := decl.(type) {
+	case *ast.Field:
+		return d.Type
+	case *ast.ValueSpec:
+		return d.Type
+	case *ast.AssignStmt: // `x := make(T, n)` or `x := T{...}`
+		if len(d.Lhs) != 1 || len(d.Rhs) != 1 {
+			return nil
+		}
+		switch r := d.Rhs[0].(type) {
+		case *ast.CompositeLit:
+			return r.Type
+		case *ast.CallExpr:
+			if f, ok := r.Fun.(*ast.Ident); ok && f.Name == "make" && len(r.Args) > 0 {
+				return r.Args[0]
+			}
+		}
+	}
+	return nil
+}
+
+func (p *pruner) typeFuncs(t ast.Expr) ([]*ast.FuncType, bool) {
+	switch t := t.(type) {
+	case *ast.FuncType:
+		return []*ast.FuncType{t}, true
+	case *ast.Ident:
+		if p.isTypeParam(t.Name) {
+			return nil, false
+		}
+		for _, d := range p.byName[t.Name] {
+			if ts, ok := d.(*ast.TypeSpec); ok {
+				return p.typeFuncs(ts.Type)
+			}
+		}
+	}
+	return nil, true
+}
+
+func (p *pruner) identFuncs(x *ast.Ident, depth int) ([]*ast.FuncType, bool) {
+	if x.Obj == nil { // another batch's declaration, or a predeclared name
+		for _, d := range p.byName[x.Name] {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				return []*ast.FuncType{d.Type}, true
+			case *ast.ValueSpec:
+				return p.specFuncs(d, x.Name, depth)
+			}
+		}
+		return nil, true
+	}
+	switch d := x.Obj.Decl.(type) {
+	case *ast.Field:
+		return p.typeFuncs(d.Type)
+	case *ast.ValueSpec:
+		return p.specFuncs(d, x.Name, depth)
+	case *ast.FuncDecl:
+		return []*ast.FuncType{d.Type}, true
+	case *ast.TypeSpec:
+		return nil, true
+	case *ast.AssignStmt:
+		for i, l := range d.Lhs {
+			if li, ok := l.(*ast.Ident); ok && li.Name == x.Name {
+				if ts := p.typeSwitchOf[d]; ts != nil {
+					return p.caseFuncs(ts)
+				}
+				if r, ok := d.Rhs[0].(*ast.UnaryExpr); ok && r.Op == token.RANGE {
+					return p.rangeFuncs(r.X, i)
+				}
+				if len(d.Rhs) == len(d.Lhs) {
+					return p.funcTypesOf(d.Rhs[i], depth+1)
+				}
+				if call, ok := d.Rhs[0].(*ast.CallExpr); ok && len(d.Rhs) == 1 {
+					return p.callFuncs(call, i, depth+1)
+				}
+				if i > 0 { // the ok of `v, ok := m[k]`, `x.(T)` or `<-ch`
+					return nil, true
+				}
+				return p.funcTypesOf(d.Rhs[0], depth+1)
+			}
+		}
+	}
+	return nil, false
+}
+
+func (p *pruner) specFuncs(d *ast.ValueSpec, name string, depth int) ([]*ast.FuncType, bool) {
+	if d.Type != nil {
+		return p.typeFuncs(d.Type)
+	}
+	for i, n := range d.Names {
+		if n.Name == name && len(d.Values) == len(d.Names) {
+			return p.funcTypesOf(d.Values[i], depth+1)
+		}
+	}
+	return nil, false
+}
+
+// rangeFuncs is the func types of a range's key (i 0) or value: an array, slice or map variable's, else any kept container's.
+func (p *pruner) rangeFuncs(x ast.Expr, i int) ([]*ast.FuncType, bool) {
+	switch t := p.declType(x).(type) {
+	case *ast.ArrayType:
+		if i == 0 {
+			return nil, true
+		}
+		return p.typeFuncs(t.Elt)
+	case *ast.MapType:
+		if i == 0 {
+			return nil, true // a func is not comparable
+		}
+		return p.typeFuncs(t.Value)
+	}
+	p.wantElems, p.genUnknown = true, true // a kept container's element, or an iterator's yield: a type argument (iter.Seq[F])
+	return nil, true
+}
+
+// caseFuncs is a type switch's bound variable's func types: those of every case.
+func (p *pruner) caseFuncs(ts *ast.TypeSwitchStmt) ([]*ast.FuncType, bool) {
+	var out []*ast.FuncType
+	for _, st := range ts.Body.List {
+		for _, t := range st.(*ast.CaseClause).List {
+			fts, ok := p.typeFuncs(t)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, fts...)
+		}
+	}
+	return out, true
+}
+
+// callFuncs is the func types a call's result ri may have: a conversion's type, a func's or method's (by name) result.
+func (p *pruner) callFuncs(x *ast.CallExpr, ri, depth int) ([]*ast.FuncType, bool) {
+	var decls []*ast.FuncType
+	switch fn := x.Fun.(type) {
+	case *ast.FuncLit:
+		decls = []*ast.FuncType{fn.Type}
+	case *ast.Ident, *ast.IndexExpr, *ast.IndexListExpr:
+		id, _ := fn.(*ast.Ident)
+		if id == nil {
+			id, _ = recvTypeIdent(fn)
+		}
+		if id == nil {
+			return nil, false
+		}
+		if types.Universe.Lookup(id.Name) != nil && len(p.byName[id.Name]) == 0 {
+			return nil, true // string(x), len(x), ...
+		}
+		for _, d := range p.byName[id.Name] {
+			switch d := d.(type) {
+			case *ast.TypeSpec:
+				return p.typeFuncs(d.Type)
+			case *ast.FuncDecl:
+				decls = append(decls, d.Type)
+			}
+		}
+		if len(decls) == 0 {
+			return nil, false
+		}
+	case *ast.SelectorExpr:
+		if id, ok := fn.X.(*ast.Ident); ok && id.Obj == nil && stdImports[id.Name] != "" && len(p.byName[id.Name]) == 0 {
+			return nil, true // ponytail: a std func returning a func (sync.OnceValue) is not Ref'd by generated code; type it if one is
+		}
+		for _, m := range p.methodsByName[fn.Sel.Name] {
+			decls = append(decls, m.Type)
+		}
+		decls = append(decls, p.funcFields[fn.Sel.Name]...)
+	default:
+		return nil, false
+	}
+	var out []*ast.FuncType
+	for _, d := range decls {
+		rs := fieldTypes(d.Results)
+		if ri >= len(rs) {
+			continue
+		}
+		fts, known := p.typeFuncs(rs[ri])
+		if !known {
+			fts, known = p.instResult(x, d, rs[ri], depth)
+		}
+		if !known && p.isGeneric(rs[ri]) { // a generic type's method returning its parameter: an instance's type argument (instArgs)
+			p.genUnknown, known = true, true
+		}
+		if !known {
+			return nil, false
+		}
+		out = append(out, fts...)
+	}
+	return out, true
+}
+
+// instResult types a generic call's bare type parameter result: its explicit type argument, else the arguments it was inferred from.
+func (p *pruner) instResult(x *ast.CallExpr, d *ast.FuncType, r ast.Expr, depth int) ([]*ast.FuncType, bool) {
+	t, ok := r.(*ast.Ident)
+	if !ok || d.TypeParams == nil {
+		return nil, false
+	}
+	tps := fieldTypes(d.TypeParams) // one entry per name, in order
+	names := make([]string, 0, len(tps))
+	for _, f := range d.TypeParams.List {
+		for _, n := range f.Names {
+			names = append(names, n.Name)
+		}
+	}
+	i := slices.Index(names, t.Name)
+	if i < 0 {
+		return nil, false
+	}
+	if _, args := typeArgs(x.Fun); i < len(args) {
+		return p.typeFuncs(args[i])
+	}
+	var out []*ast.FuncType
+	found := false
+	for j, pt := range fieldTypes(d.Params) {
+		if id, ok := pt.(*ast.Ident); ok && id.Name == t.Name && j < len(x.Args) {
+			fts, ok := p.funcTypesOf(x.Args[j], depth+1)
+			if !ok {
+				return nil, false
+			}
+			found = true
+			out = append(out, fts...)
+		}
+	}
+	return out, found
+}
+
+func recvTypeIdent(e ast.Expr) (*ast.Ident, bool) {
+	x, _ := typeArgs(e)
+	id, ok := x.(*ast.Ident)
+	return id, ok
+}
+
+// visitMade notes kept code's creation sites; a type parameter's value is made where the func is called (settleMade).
+func (p *pruner) visitMade(x ast.Node) {
+	switch x := x.(type) {
+	case *ast.StarExpr:
+		if ft, ok := x.X.(*ast.FuncType); ok {
+			p.note(&p.made, ft) // a *func type written: a value of it may come from anywhere
+		}
+	case *ast.ArrayType:
+		if ft, ok := x.Elt.(*ast.FuncType); ok {
+			p.funcElems = append(p.funcElems, ft)
+		}
+	case *ast.MapType:
+		if ft, ok := x.Value.(*ast.FuncType); ok {
+			p.funcElems = append(p.funcElems, ft)
+		}
+	case *ast.ChanType:
+		if ft, ok := x.Value.(*ast.FuncType); ok {
+			p.funcElems = append(p.funcElems, ft)
+		}
+	case *ast.UnaryExpr:
+		if _, lit := x.X.(*ast.CompositeLit); x.Op == token.AND && !lit {
+			p.noteMade(x.X)
+		}
+	case *ast.IndexExpr, *ast.IndexListExpr: // an explicit instantiation with a func type: generic code may point at one
+		_, args := typeArgs(x.(ast.Expr))
+		for _, a := range args {
+			if ft, ok := a.(*ast.FuncType); ok {
+				p.note(&p.made, ft)
+			}
+			ast.Inspect(a, func(n ast.Node) bool {
+				if ft, ok := n.(*ast.FuncType); ok {
+					p.inTypeArgs = append(p.inTypeArgs, ft)
+				}
+				return true
+			})
+		}
+	case *ast.CallExpr:
+		id, _ := x.Fun.(*ast.Ident)
+		if id == nil {
+			id, _ = recvTypeIdent(x.Fun)
+		}
+		if id == nil {
+			return
+		}
+		if id.Name == "new" && len(x.Args) == 1 && len(p.byName["new"]) == 0 {
+			if ft, ok := x.Args[0].(*ast.FuncType); ok {
+				p.note(&p.made, ft)
+			}
+			return
+		}
+		for _, d := range p.byName[id.Name] {
+			if fd, ok := d.(*ast.FuncDecl); ok && fd.Type.TypeParams != nil {
+				p.genCalls = append(p.genCalls, genCall{x, fd})
+			}
+		}
+	}
+}
+
+type genCall struct {
+	call *ast.CallExpr
+	fd   *ast.FuncDecl
+}
+
+// settleMade: an argument bound to a type parameter whose value the callee points at (Ref's `&v`) is a creation site.
+func (p *pruner) settleMade() {
+	for changed := true; changed; {
+		changed = false
+		for _, g := range p.genCalls {
+			for i, pt := range fieldTypes(g.fd.Type.Params) {
+				t, ok := pt.(*ast.Ident)
+				if !ok || i >= len(g.call.Args) || !p.addrOf[g.fd][t.Name] {
+					continue
+				}
+				k := argKey{g.call, i}
+				if p.settled[k] {
+					continue
+				}
+				p.settled[k] = true
+				changed = true
+				p.noteMade(g.call.Args[i])
+			}
+		}
+	}
+}
+
+type argKey struct {
+	call *ast.CallExpr
+	i    int
+}
+
+// tparamOf: id is a value of a type parameter some generic func declares, which it names.
+func (p *pruner) tparamOf(id *ast.Ident) (*ast.FuncDecl, string, bool) {
+	if id.Obj == nil {
+		return nil, "", false
+	}
+	var t ast.Expr
+	switch d := id.Obj.Decl.(type) {
+	case *ast.Field:
+		t = d.Type
+	case *ast.ValueSpec:
+		t = d.Type
+	}
+	tid, ok := t.(*ast.Ident)
+	if !ok || tid.Obj == nil || tid.Obj.Kind != ast.Typ {
+		return nil, "", false
+	}
+	f, _ := tid.Obj.Decl.(*ast.Field)
+	if fd := p.tparamOwner[f]; fd != nil {
+		return fd, tid.Name, true
+	}
+	return nil, "", false
+}
+
+// unifyFunc reports whether concrete func type x is an instance of pattern g, each type parameter standing for any one type.
+func (p *pruner) unifyFunc(g, x *ast.FuncType) bool {
+	return p.unifyFields(g.Params, x.Params) && p.unifyFields(g.Results, x.Results)
+}
+
+func (p *pruner) unifyFields(g, x *ast.FieldList) bool {
+	gs, xs := fieldTypes(g), fieldTypes(x)
+	if len(gs) != len(xs) {
+		return false
+	}
+	for i := range gs {
+		if !p.unify(gs[i], xs[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func fieldTypes(l *ast.FieldList) []ast.Expr {
+	if l == nil {
+		return nil
+	}
+	var out []ast.Expr
+	for _, f := range l.List {
+		for range max(len(f.Names), 1) {
+			out = append(out, f.Type)
+		}
+	}
+	return out
+}
+
+func (p *pruner) unify(g, x ast.Expr) bool {
+	switch g := g.(type) {
+	case *ast.Ident:
+		if p.isTypeParam(g.Name) {
+			return true
+		}
+	case *ast.StarExpr:
+		y, ok := x.(*ast.StarExpr)
+		return ok && p.unify(g.X, y.X)
+	case *ast.Ellipsis:
+		y, ok := x.(*ast.Ellipsis)
+		return ok && p.unify(g.Elt, y.Elt)
+	case *ast.ArrayType:
+		y, ok := x.(*ast.ArrayType)
+		return ok && (g.Len == nil) == (y.Len == nil) && (g.Len == nil || types.ExprString(g.Len) == types.ExprString(y.Len)) && p.unify(g.Elt, y.Elt)
+	case *ast.MapType:
+		y, ok := x.(*ast.MapType)
+		return ok && p.unify(g.Key, y.Key) && p.unify(g.Value, y.Value)
+	case *ast.ChanType:
+		y, ok := x.(*ast.ChanType)
+		return ok && g.Dir == y.Dir && p.unify(g.Value, y.Value)
+	case *ast.FuncType:
+		y, ok := x.(*ast.FuncType)
+		return ok && p.unifyFunc(g, y)
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		gx, gi := typeArgs(g)
+		yx, yi := typeArgs(x)
+		if yx == nil || len(gi) != len(yi) || !p.unify(gx, yx) {
+			return false
+		}
+		for i := range gi {
+			if !p.unify(gi[i], yi[i]) {
+				return false
+			}
+		}
+		return true
+	}
+	return types.ExprString(g) == types.ExprString(x)
+}
+
+// typeArgs splits an instantiated type into its generic type and arguments; nil for anything else.
+func typeArgs(e ast.Expr) (ast.Expr, []ast.Expr) {
+	switch e := e.(type) {
+	case *ast.IndexExpr:
+		return e.X, []ast.Expr{e.Index}
+	case *ast.IndexListExpr:
+		return e.X, e.Indices
+	}
+	return nil, nil
 }
 
 // reached reports whether kept code names ident, selected whether it selects or asserts method m.
@@ -178,6 +846,18 @@ func (p *pruner) run() {
 func (p *pruner) index(d ast.Decl) {
 	switch d := d.(type) {
 	case *ast.FuncDecl:
+		p.noteTypeParams(d.Type.TypeParams)
+		if d.Type.TypeParams != nil {
+			for _, f := range d.Type.TypeParams.List {
+				p.tparamOwner[f] = d
+			}
+		}
+		if d.Recv != nil {
+			p.noteRecvTypeParams(d.Recv.List[0].Type)
+		}
+		if d.Type.TypeParams != nil || d.Recv != nil && p.isGeneric(d.Recv) {
+			p.genRanges = append(p.genRanges, [2]token.Pos{d.Pos(), d.End()})
+		}
 		switch {
 		case d.Recv != nil:
 			recv := recvName(d.Recv.List[0].Type)
@@ -186,6 +866,7 @@ func (p *pruner) index(d ast.Decl) {
 				p.recvMethods[recv] = map[string]bool{}
 			}
 			p.recvMethods[recv][d.Name.Name] = true
+			p.methodsByName[d.Name.Name] = append(p.methodsByName[d.Name.Name], d)
 			delete(p.recvIfaces, recv)
 		case d.Name.Name == "main":
 			p.kept[d] = true
@@ -209,10 +890,50 @@ func (p *pruner) index(d ast.Decl) {
 	}
 }
 
+func (p *pruner) noteTypeParams(l *ast.FieldList) {
+	if l == nil {
+		return
+	}
+	for _, f := range l.List {
+		for _, n := range f.Names {
+			p.typeParams[n.Name] = true
+		}
+	}
+}
+
+// noteRecvTypeParams: a generic type's method names its parameters in the receiver (`*Hash[K, V]`).
+func (p *pruner) noteRecvTypeParams(e ast.Expr) {
+	if s, ok := e.(*ast.StarExpr); ok {
+		e = s.X
+	}
+	var idx []ast.Expr
+	switch x := e.(type) {
+	case *ast.IndexExpr:
+		idx = []ast.Expr{x.Index}
+	case *ast.IndexListExpr:
+		idx = x.Indices
+	}
+	for _, i := range idx {
+		if id, ok := i.(*ast.Ident); ok {
+			p.typeParams[id.Name] = true
+		}
+	}
+}
+
 func (p *pruner) indexSpec(d *ast.GenDecl, s ast.Spec) {
 	switch s := s.(type) {
 	case *ast.TypeSpec:
 		p.byName[s.Name.Name] = append(p.byName[s.Name.Name], s)
+		p.noteTypeParams(s.TypeParams)
+		if st, ok := s.Type.(*ast.StructType); ok {
+			for _, fl := range st.Fields.List {
+				if ft, ok := fl.Type.(*ast.FuncType); ok {
+					for _, n := range fl.Names {
+						p.funcFields[n.Name] = append(p.funcFields[n.Name], ft)
+					}
+				}
+			}
+		}
 		if it, ok := s.Type.(*ast.InterfaceType); ok {
 			p.named[it] = true
 			p.ifaceName[it] = s.Name.Name
@@ -261,8 +982,14 @@ func (p *pruner) keep(n ast.Node) {
 }
 
 func (p *pruner) visit(x ast.Node) bool {
+	p.visitMade(x)
 	switch x := x.(type) {
+	case *ast.FuncType: // a signature, literal or type: what a Ref(f), &f or method value can point at
+		p.note(&p.written, x)
 	case *ast.TypeSwitchStmt:
+		if as, ok := x.Assign.(*ast.AssignStmt); ok {
+			p.typeSwitchOf[as] = x
+		}
 		if x.Init != nil {
 			ast.Inspect(x.Init, p.visit)
 		}

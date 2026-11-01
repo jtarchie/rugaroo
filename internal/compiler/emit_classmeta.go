@@ -3,6 +3,8 @@ package compiler
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	goparser "go/parser"
 	"maps"
 	"slices"
 	"strconv"
@@ -239,9 +241,13 @@ func (c *Compiler) emitClassMeta() {
 			c.w("func (Tuple%d[%s]) _ClassID() int { return %d }\n\n", n, strings.Join(tps, ", "), array)
 		}
 	}
-	// func types carry no methods: a type switch over those the program renders
+}
+
+// emitProcTables emits rbIsProc and rbDynProcCall last, once kept code has stopped growing: their cases are the Proc
+// types kept code makes (decision 431). Func types carry no methods, so a type switch lists them.
+func (c *Compiler) emitProcTables() {
 	c.w("func rbIsProc(a any) bool {\n")
-	if procs := slices.Sorted(maps.Keys(c.procTypes)); len(procs) > 0 {
+	if procs := c.keptProcs(); len(procs) > 0 {
 		c.w("\tswitch a.(type) {\n")
 		for _, p := range procs { // one case each, so the pruner can drop the unused (decision 49)
 			c.w("\tcase %s:\n\t\treturn true\n", p)
@@ -252,6 +258,30 @@ func (c *Compiler) emitClassMeta() {
 	}
 	c.w("\treturn false\n}\n\n")
 	c.emitDynProcCall(nil)
+}
+
+// keptProcs is rbIsProc's cases: rendered Proc types whose shape kept code writes, since no other *func value can exist (decision 431).
+func (c *Compiler) keptProcs() []string {
+	var out []string
+	for _, p := range slices.Sorted(maps.Keys(c.procTypes)) {
+		s, ok := c.procShapes[p]
+		if !ok {
+			s = p
+			e, err := goparser.ParseExpr(p)
+			if err == nil {
+				if st, ok := e.(*ast.StarExpr); ok {
+					if ft, ok := st.X.(*ast.FuncType); ok {
+						s = funcShape(ft)
+					}
+				}
+			}
+			c.procShapes[p] = s
+		}
+		if c.keptFunc == nil || c.keptFunc(s) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // emitDynProcCall emits rbDynProcCall: `call` on a Proc held untyped, switching over the program's Proc types (amends decision 47).

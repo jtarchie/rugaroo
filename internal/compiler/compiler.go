@@ -258,13 +258,17 @@ type tableState struct {
 	strLits   map[string]bool // String literal texts: String#frozen? knows them by identity
 	tablesOut bool
 	tablesAt  tableInputs // tableInputs when the tables went out
+	procsOut  bool        // rbIsProc/rbDynProcCall emitted, after every other table (emitProcTables)
+	procsAt   int         // len(keptProcs()) then
 	// tuple arities used, so their types get emitted
 	tupleN       map[int]bool
-	optConv      map[string]bool  // class T?s bound to a method type parameter: rbOptClassFrom's cases (decision 295)
-	procTypes    map[string]bool  // Proc Go types rendered (*func(...)), for the generated rbIsProc
-	procFuncs    map[string]TFunc // the type each procTypes entry renders, for rbDynProcCall
-	procMinArity map[string]int   // per procTypes entry: the fewest arguments a gem lambda of that Go type takes (decision 416)
-	argBoxes     map[string]bool  // T? boxes of generic type arguments, which generic code may hold
+	optConv      map[string]bool     // class T?s bound to a method type parameter: rbOptClassFrom's cases (decision 295)
+	procTypes    map[string]bool     // Proc Go types rendered (*func(...)), probes and dry-runs too: rbIsProc lists those keptProcs finds in kept code (decision 431)
+	procFuncs    map[string]TFunc    // the type each procTypes entry renders, for rbDynProcCall
+	procShapes   map[string]string   // per procTypes entry: its funcShape, once (keptProcs)
+	keptFunc     func(s string) bool // the pruner's: kept code writes a func type of funcShape s (emitNext sets it)
+	procMinArity map[string]int      // per procTypes entry: the fewest arguments a gem lambda of that Go type takes (decision 416)
+	argBoxes     map[string]bool     // T? boxes of generic type arguments, which generic code may hold
 	// concrete T? Go types (*T) rendered anywhere, for rbUnbox; the value
 	// says whether T is itself optional
 	boxes     map[string]bool
@@ -528,7 +532,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		preludeFS: preludeFS, parser: p, loaded: map[string]bool{}, selfTyped: map[*Class]bool{}, labels: map[string]string{}, erbSnippets: map[*parser.CallNode]*File{}, sigs: map[string]*rbs.ClassDecl{},
 		dynState:     dynState{dynEvery: dynEvery, dynSeen: map[string]bool{}, respondSeen: map[string]bool{}, markers: map[string]bool{}, dynGo: map[string]string{}, dynWrapped: map[*Class][]dynWrapped{}, dynOut: map[string]bool{}, respondOut: map[string]bool{}, fwdOut: map[*Class]bool{}},
 		marshalState: marshalState{marshalSeen: map[string]Type{}, marshalGo: map[string]bool{}},
-		tableState:   tableState{tupleN: map[int]bool{}, procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}}}
+		tableState:   tableState{tupleN: map[int]bool{}, procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}}}
 	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone

@@ -117,7 +117,7 @@ func merge(f, t *ast.File) {
 }
 
 // formatGo prunes src to what main reaches (noPrune or RUGAROO_NO_PRUNE=1 keeps everything), adds the std imports it refers to, and gofmts it. src is the program without its forwarders, dispatchers and tables: next emits those in batches for what the pruned program so far reaches (most are never reached), until it returns nil.
-func formatGo(src []byte, lazy map[string]bool, next func(reached, selected func(string) bool) ([]byte, error), labels map[string]string, noPrune bool, env envConfig, preamble string) ([]byte, error) {
+func formatGo(src []byte, lazy map[string]bool, next func(reached, selected, keptFunc func(string) bool) ([]byte, error), labels map[string]string, noPrune bool, env envConfig, preamble string) ([]byte, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "main.go", src, parser.ParseComments)
 	if err != nil {
@@ -125,15 +125,15 @@ func formatGo(src []byte, lazy map[string]bool, next func(reached, selected func
 	}
 	all := func(string) bool { return true }
 	var p *pruner
-	reached, selected := all, all
+	reached, selected, keptFunc := all, all, all
 	if !noPrune && !env.NoPrune {
 		p = newPruner(lazy)
 		p.add(f.Decls)
 		p.run()
-		reached, selected = p.reached, p.selected
+		reached, selected, keptFunc = p.reached, p.selected, p.keptFunc
 	}
 	for i := 0; ; i++ {
-		more, err := next(reached, selected)
+		more, err := next(reached, selected, keptFunc)
 		if err != nil {
 			return nil, err
 		}
