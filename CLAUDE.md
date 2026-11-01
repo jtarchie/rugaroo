@@ -17,7 +17,8 @@ go run ./cmd/rugaroo test testdata/test --seed 1  # the whole suite as one progr
 go run ./cmd/rugaroo test testdata/test/array_test.rb --seed 1 -v   # one test file (any minitest flags); a dir runs them all as one program
 RUGAROO_RUN_SKIPPED=1 go test -run TestRun .    # also run `# skip:` known failures
 RUGAROO_INT_OVERFLOW=wrap go test ./...         # the suite in another --int-overflow lane (wrap or promote); testdata/int-overflow/<mode>-skip.txt leaves out what pins another mode (decision 372)
-RUGAROO_NO_MRI_CACHE=1 go test ./...            # rerun MRI instead of its cached output (`os.UserCacheDir()/rugaroo-test/mri`; key: Ruby description, TZ, checkout dir, sha256 of Gemfile.lock, extra args, sources; decision 272)
+RUGAROO_TEST_TIMING=run.tsv RUGAROO_TEST_KEEP=keep/ go test -json ./... > run.json; scripts/test-time run.json run.tsv   # where a run's time goes: per-step log (build cache hit/miss, -race, MRI/rbs cache, lint) and every program's main.go (docs/research/test-time-2026-11.md)
+RUGAROO_NO_MRI_CACHE=1 go test ./...            # rerun MRI and rbs instead of their cached results (`os.UserCacheDir()/rugaroo-test/{mri,rbs}`; key: Ruby description, TZ, checkout dir, sha256 of Gemfile.lock, extra args, sources; decisions 272, 435)
 RUGAROO_NO_PRUNE=1 go run ./cmd/rugaroo build -work ...  # emit the whole prelude (debugging the pruner)
 RUGAROO_NO_SPECIALIZE=1 go run ./cmd/rugaroo build ...  # keep module funcs generic over Self (A/B for decision 377)
 go -C scripts/gen-encoding-fixes run .        # regenerate MRI's corrections to x/text's encoding tables, Encoding constants and names (decision 380); rerun after a Ruby or x/text upgrade
