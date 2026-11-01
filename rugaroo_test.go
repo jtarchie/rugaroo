@@ -284,6 +284,7 @@ func TestMulti(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 			bin := goBuild(t, gen, "-l")
 			loader := append([]string{"-e", "ARGV.each { |f| require File.expand_path(f) }"}, paths...)
 			wantOut, wantErr, wantCode, rerr := runIO(t, ".", progIO{}, "ruby", loader...)
@@ -385,6 +386,7 @@ func TestBootAutoload(t *testing.T) {
 	if werr != nil {
 		t.Fatal(werr)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	if keep := os.Getenv("RUGAROO_BOOT_KEEP"); keep != "" { // the generated main.go, for a failing build
 		_ = os.WriteFile(keep, code, 0o600) //nolint:gosec // a developer-chosen path
 	}
@@ -423,6 +425,7 @@ func TestTracedEntry(t *testing.T) {
 	if werr != nil {
 		t.Fatal(werr)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
 }
 
@@ -447,6 +450,7 @@ func TestTraceEval(t *testing.T) {
 	if werr != nil {
 		t.Fatal(werr)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
 }
 
@@ -497,6 +501,7 @@ func TestTraceRun(t *testing.T) {
 	if werr != nil {
 		t.Fatal(werr)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
 }
 
@@ -773,6 +778,7 @@ func testExample(t *testing.T, dir, gen string) {
 		}
 	}
 	writeGenerated(t, gen, filepath.Join(dir, "main.rb"), src, compile) // its real path, for require_relative
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), false)         // consecutive, not pinned: lint correlates nolint comments by position
 	fmtOut, err := run(t, gen, "gofmt", "-l", "main.go")
 	if err != nil || strings.TrimSpace(fmtOut) != "" {
 		t.Fatalf("gofmt: %v %s", err, fmtOut)
@@ -823,23 +829,58 @@ func transpile(t *testing.T, name string, src []byte) string {
 	gen := t.TempDir()
 	writeModule(t, gen)
 	writeGenerated(t, gen, name, src, gemCompile(filepath.Dir(name), src)) // a test file requiring rackup compiles the gem (decision 176)
-	stablePreludeLines(t, filepath.Join(gen, "main.go"))
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	return gen
 }
 
-var preludeLine = regexp.MustCompile(`(//line prelude/[^:\s]+):\d+`)
+var preludeLine = regexp.MustCompile(`^(//line prelude/[^:\s]+):\d+$`)
 
-// stablePreludeLines sets every prelude //line to line 1, so the Go build cache keys on what the program reaches, not where in the prelude it sits (decision 88); the examples keep real lines for lint.
-func stablePreludeLines(t *testing.T, path string) {
+// stablePreludeLines rewrites every prelude //line so the Go build cache (and golangci-lint's) key on what the program
+// reaches, not where in the prelude it sits (decision 88). Pinned, every directive names line 1: for programs that are
+// only built. Unpinned (the examples, which are linted), each prelude file's directives number its blocks consecutively
+// (1, then 1 + the lines of the first block, ...), so every position stays distinct within its file and nolint
+// comments correlate as they do with real lines, while a line shift above a block changes nothing.
+func stablePreludeLines(t *testing.T, path string, pinned bool) {
 	t.Helper()
 	code, err := os.ReadFile(path) //nolint:gosec // under t.TempDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = os.WriteFile(path, preludeLine.ReplaceAll(code, []byte("${1}:1")), 0o600) //nolint:gosec // under t.TempDir()
+	err = os.WriteFile(path, stableLines(code, pinned), 0o600) //nolint:gosec // under t.TempDir()
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func stableLines(code []byte, pinned bool) []byte {
+	lines := bytes.Split(code, []byte("\n"))
+	next := map[string]int{} // prelude file -> the line its next block starts at
+	var openFile string
+	openAt := 0 // index of the line after the open block's directive
+	closeBlock := func(i int) {
+		if openFile != "" {
+			next[openFile] += i - openAt
+			openFile = ""
+		}
+	}
+	for i, l := range lines {
+		m := preludeLine.FindSubmatch(l)
+		if m == nil {
+			continue
+		}
+		closeBlock(i)
+		file := string(m[1])
+		n := 1
+		if !pinned {
+			if next[file] == 0 {
+				next[file] = 1
+			}
+			n = next[file]
+			openFile, openAt = file, i+1
+		}
+		lines[i] = []byte(file + ":" + strconv.Itoa(n))
+	}
+	return bytes.Join(lines, []byte("\n"))
 }
 
 // gemCompile is CompileWithGems, which finds gems as the CLI does (decision 173), with each `# gem: dir` (relative to dir)
@@ -1912,6 +1953,7 @@ func TestGemCorpus(t *testing.T) {
 	if werr != nil {
 		t.Fatal(werr)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	bin := goBuild(t, gen, "")
 	mri, err := exec.CommandContext(t.Context(), "ruby", main, cases).Output() //nolint:gosec // our own paths
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -34,4 +35,17 @@ func timed(kind, name string, d time.Duration, fields ...any) {
 	}
 	_, _ = f.WriteString(strings.Join(parts, "\t") + "\n")
 	_ = f.Close()
+}
+
+func TestStableLines(t *testing.T) {
+	t.Parallel()
+	in := "//line prelude/a.rb:40\nx\ny\n//line prelude/b.rb:7\nz\n//line prelude/a.rb:90\nw\n//line main.rb:3\nq\n"
+	want := "//line prelude/a.rb:1\nx\ny\n//line prelude/b.rb:1\nz\n//line prelude/a.rb:3\nw\n//line main.rb:3\nq\n"
+	if got := string(stableLines([]byte(in), false)); got != want {
+		t.Errorf("consecutive:\n%s\nwant:\n%s", got, want)
+	}
+	pinned := "//line prelude/a.rb:1\nx\ny\n//line prelude/b.rb:1\nz\n//line prelude/a.rb:1\nw\n//line main.rb:3\nq\n"
+	if got := string(stableLines([]byte(in), true)); got != pinned {
+		t.Errorf("pinned:\n%s\nwant:\n%s", got, pinned)
+	}
 }
