@@ -1,0 +1,24 @@
+diff -ru a b
+--- a/lib/regexp_parser/expression/quantifier.rb	2026-10-27 18:22:55
++++ b/lib/regexp_parser/expression/quantifier.rb	2026-10-31 20:49:47
+@@ -35,7 +35,7 @@
+         end
+       RUBY
+     end
+-    alias :lazy? :reluctant?
++    def lazy? = reluctant?
+ 
+     def min
+       derived_data[:min]
+diff -ru a b
+--- a/lib/regexp_parser/token.rb	2026-10-27 18:22:56
++++ b/lib/regexp_parser/token.rb	2026-10-31 20:49:33
+@@ -12,7 +12,7 @@
+     conditional_level
+   ].freeze
+ 
+-  Token = Struct.new(*TOKEN_KEYS) do
++  Token = Struct.new(:type, :token, :text, :ts, :te, :level, :set_level, :conditional_level) do
+     attr_accessor :previous, :next
+ 
+     def offset

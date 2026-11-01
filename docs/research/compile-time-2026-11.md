@@ -121,3 +121,19 @@ Ranked by likely cost: `refineIvars`/`dryRunIvarUsers` (gen_ivars.go:17-115, up 
 2. Next: lever 2, the on-disk `Inference` cache. It is the only lever whose gain is measured-bounded (rounds 60% of gen) and cheap to reason about; needs a decision (cache key = source and gem file hashes + compiler build ID; a miss is the current path). Goal: tokenize warm gen ≤ 25 s.
 3. Then profile the **rubocop CLI** gen (54 min) once, to see whether the code-read hot spots (levers 4-5) dominate at n = 10k classes; on tokenize they do not. Goal there: under 10 min needs lever 3 or cache hits.
 4. `go build`: backend concurrency is exhausted (-c=4 = -c=8), so only fewer/smaller functions or a package split help. First prototype lever 5b (Dyn bodies) behind a flag and A/B the benchmarks; partitioning stays unproven.
+
+## Rubocop CLI gen profile (2026-10-31, main 3a2aa775 + attrTarget memo)
+
+Repro: `docs/research/rubocop/run.sh <rugaroo>` (rubocop 1.92.1, rubocop-ast 1.50.0, regexp_parser 2.13.1; patches: `Struct.new(*TOKEN_KEYS)` and an alias of a class_eval'd method in regexp_parser, the two tokenize rubocop-ast rewrites, three `define_predicate ..., child_index: 1..-2` Range captures (decision 198), and the Psych tree API (`YAMLDuplicationChecker` stubbed, config loaded with `YAML.safe_load(permitted_classes: [Regexp, Symbol], aliases: true)`); `main.rb` is exe/rubocop's non-server path, since exe/rubocop stops at `RuboCop::Server::CLI`, an autoload named only from the main file (compiler bug, not filed). MRI on the patched copies prints the unpatched result: "1 file inspected, 1 offense detected, 1 offense autocorrectable".
+
+| measure | value |
+|---|---|
+| gen wall | 6 m 28 s unprofiled (was 54 min on 10-31 before the attrTarget memo; the pre-memo binary was not re-run on this repro) |
+| output | 86 MB, 1,792,805 lines, 168,868 funcs |
+| passes | 10 (1 pre-pass, 8 inference rounds at ~35 s each = 284 s, 73%; final infer 21 s, format 28 s, gocheck 14 s) |
+
+CPU profile: flat (top leaf 3.6%, map access). Stacks are deeper than the profiler keeps (recursive gen), so only ~35% of samples reach `main`; use the phase timer for the split. Inclusive: `inferRounds` 29%, `emitMethod` 19%, **`refineIvars` / `dryRunIvarUsers` 16-17%**, `collectUses` 8%, `link` 4%. go/format 1%.
+
+**`refineIvars` is ~190 s of 407 s (47%)** (instrumented run, uncommitted): it runs once per pass (9 passes), each time 12-15 container-ivar candidates and 26-32 dry-runs of 17-19 classes / ~1,000 methods (0.6-1.0 s each, since every try also resets every inferred return program-wide). Tries = 2n+2 in every pass: the all-typings try fails, every all-but-one try fails (there are three culprits, the same in every pass: `Racc::Parser#@racc_tstack`, `Parser::CurrentArgStack#@stack`, `RuboCop::FilePatterns#@strings`), then the one-at-a-time phase decides. The accepted set is the same from pass 2 to 8. Levers, none built yet: (a) exact: none cheap found (tries mutate shared state, so no parallelism; the culprit count is only known by running); (b) behind a flag, empirically checked: in rounds, seed the greedy phase with the previous pass's accepted set and skip the all-but-one phase when the previous pass had at least two culprits among the same candidates; the final pass keeps the full search. Bound: ~150 s of 407 s.
+
+**Determinism (fixed, ec3acb46):** two `gen -trace` runs of one program differed in `rugaroo-boot-<random>` (the boot hook's `-I` temp dir, recorded in `$LOAD_PATH`) and `rugaroo-entry-<random>` (the synthetic entry file, in the runtime require table), against decision 88, so a regen of an unchanged program always missed the Go build cache. Hooks now load by path (`-r /abs/hook.rb`), and the entry lives at a content-addressed path under the user cache dir. `TestTraceDeterministic` (fixture `testdata/traced_det`) fails without the fix and passes with it; traced examples 78/123/124 still match MRI.

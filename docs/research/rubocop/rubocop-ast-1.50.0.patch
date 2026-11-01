@@ -1,0 +1,28 @@
+diff -ru a b
+--- a/lib/rubocop/ast/node/casgn_node.rb	2026-10-27 18:22:55
++++ b/lib/rubocop/ast/node/casgn_node.rb	2026-10-31 20:49:33
+@@ -8,8 +8,8 @@
+     class CasgnNode < Node
+       include ConstantNode
+ 
+-      alias name short_name
+-      alias lhs short_name
++      def name = short_name
++      def lhs = short_name
+ 
+       # The expression being assigned to the variable.
+       #
+diff -ru a b
+--- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-10-27 18:22:55
++++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-10-31 20:49:33
+@@ -10,7 +10,9 @@
+         (Array.instance_methods - Object.instance_methods - [:to_a]).freeze
+       private_constant :ARRAY_METHODS
+ 
+-      def_delegators :to_a, *ARRAY_METHODS
++      def to_a = children
++
++      def_delegators :to_a, :last, :to_h, :&, :*, :+, :-, :at, :fetch, :union, :difference, :intersection, :intersect?, :push, :append, :pop, :shift, :unshift, :each_index, :rfind, :find, :rotate, :rotate!, :join, :sort!, :sort_by!, :collect!, :map!, :filter!, :keep_if, :select!, :sort, :delete_at, :values_at, :transpose, :delete_if, :detect, :find_index, :uniq!, :compact!, :select, :filter, :reject, :collect, :map, :fill, :flatten, :rassoc, :reject!, :combination, :count, :assoc, :permutation, :bsearch, :repeated_permutation, :repeated_combination, :flatten!, :minmax, :bsearch_index, :all?, :any?, :product, :|, :reverse_each, :deconstruct, :one?, :none?, :first, :zip, :take, :take_while, :drop, :drop_while, :<<, :fetch_values, :cycle, :sum, :uniq, :compact, :[], :[]=, :include?, :empty?, :replace, :insert, :index, :rindex, :max, :clear, :min, :length, :size, :each, :to_ary, :reverse, :concat, :shuffle!, :prepend, :sample, :reverse!, :shuffle, :pack, :delete, :slice, :slice!, :dig, :each_cons, :each_with_object, :chunk, :slice_before, :slice_after, :slice_when, :chunk_while, :lazy, :chain, :to_set, :entries, :sort_by, :grep, :grep_v, :find_all, :filter_map, :flat_map, :collect_concat, :inject, :reduce, :partition, :group_by, :tally, :min_by, :max_by, :minmax_by, :member?, :each_with_index, :each_entry, :each_slice
+     end
+   end
+ end
