@@ -751,20 +751,23 @@ var rdocNoise = regexp.MustCompile(`(?m)^.*rdoc.*warning.*\n`)
 
 func testExample(t *testing.T, dir, gen string) {
 	tmp := t.TempDir()
-	// 1. rbs-inline + rbs validate
-	sig := filepath.Join(tmp, "sig")
-	start := time.Now()
-	out, err := gemCmd(t, "rbs-inline", "--output="+sig, dir).CombinedOutput() // the whole directory: main.rb and what it require_relatives
-	timed("rbs-inline", t.Name(), time.Since(start))
-	if err != nil {
-		t.Fatalf("rbs-inline failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
-	}
-	args := append(rbsLibraries(t, filepath.Join(dir, "main.rb")), "-I", sig, "validate")
-	start = time.Now()
-	out, err = gemCmd(t, "rbs", args...).CombinedOutput()
-	timed("rbs-validate", t.Name(), time.Since(start))
-	if err != nil {
-		t.Fatalf("rbs validate failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
+	// 1. rbs-inline + rbs validate: deterministic in the example's files, the vendored sig/, Ruby and the gem versions, so a pass is cached by those (RUGAROO_NO_MRI_CACHE=1 skips it, as for MRI's output)
+	if !rbsValidated(t, dir) {
+		sig := filepath.Join(tmp, "sig")
+		start := time.Now()
+		out, err := gemCmd(t, "rbs-inline", "--output="+sig, dir).CombinedOutput() // the whole directory: main.rb and what it require_relatives
+		timed("rbs-inline", t.Name(), time.Since(start))
+		if err != nil {
+			t.Fatalf("rbs-inline failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
+		}
+		args := append(rbsLibraries(t, filepath.Join(dir, "main.rb")), "-I", sig, "validate")
+		start = time.Now()
+		out, err = gemCmd(t, "rbs", args...).CombinedOutput()
+		timed("rbs-validate", t.Name(), time.Since(start))
+		if err != nil {
+			t.Fatalf("rbs validate failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
+		}
+		rbsValidatedMark(t, dir)
 	}
 	// 2. transpile and build (vet and lint run once over all examples: lintGenerated)
 	src, err := os.ReadFile(filepath.Join(dir, "main.rb")) //nolint:gosec // example path
@@ -1180,6 +1183,50 @@ func rubyOutput(t *testing.T, dir, file string, src []byte, pio progIO, args []s
 		src = exampleSources(t, dir)
 	}
 	return mriRun(t, dir, src, pio, slices.Concat(flags, []string{file}, args))
+}
+
+// rbsCacheKey names the cache entry for an example's rbs-inline + rbs validate pass: Ruby, Gemfile.lock (rbs, rbs-inline and
+// the gems whose sig/ rbs loads), the vendored sig/*.rbs, and every file in the example's directory.
+func rbsCacheKey(t *testing.T, dir string) string {
+	t.Helper()
+	key := []byte("rbs-v1\x00" + rubyDescription() + "\x00" + gemfileLock() + "\x00")
+	sigs, err := filepath.Glob("sig/*.rbs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range sigs {
+		data, rerr := os.ReadFile(f) //nolint:gosec // repo path
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		key = append(append(append(key, f...), 0), data...)
+	}
+	sum := sha256.Sum256(append(key, exampleSources(t, dir)...))
+	cacheDir, err := os.UserCacheDir()
+	if err != nil || os.Getenv("RUGAROO_NO_MRI_CACHE") != "" {
+		return ""
+	}
+	return filepath.Join(cacheDir, "rugaroo-test", "rbs", hex.EncodeToString(sum[:]))
+}
+
+// rbsValidated reports whether this example's rbs pass is cached as passed.
+func rbsValidated(t *testing.T, dir string) bool {
+	t.Helper()
+	key := rbsCacheKey(t, dir)
+	if key == "" {
+		return false
+	}
+	_, err := os.Stat(key)
+	timed("rbs-cache", t.Name(), 0, err == nil)
+	return err == nil
+}
+
+// rbsValidatedMark records a passed rbs pass for this example's sources.
+func rbsValidatedMark(t *testing.T, dir string) {
+	t.Helper()
+	if key := rbsCacheKey(t, dir); key != "" {
+		_ = writeCacheFile(key, []byte("ok\n")) // a cache that cannot be written only costs the next run a rerun
+	}
 }
 
 // exampleSources is every file under an example's directory with its path: main.rb and what it requires, and the data it reads (a .csv, a .rbs), so editing either misses the MRI cache.
