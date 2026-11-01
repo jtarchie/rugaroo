@@ -57,3 +57,39 @@ func TestInferCache(t *testing.T) {
 		t.Errorf("after an edit %d compile passes, cold %d: the stale cache was used", n, cold)
 	}
 }
+
+// TestRefineReplay: a hit applies the cold compile's refineIvars record instead of the dry-runs, output byte for byte the cold one (decision 433).
+func TestRefineReplay(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", "")
+	dir := t.TempDir()
+	main := filepath.Join(dir, "main.rb")
+	src := "class Bag\n  def initialize\n    @items = []\n  end\n\n  def add(x)\n    @items << x\n    self\n  end\n\n  def total = @items.sum\nend\n\ndef twice(x) = x * 2\n\nputs Bag.new.add(twice(1)).add(3).total\n"
+	err := os.WriteFile(main, []byte(src), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(on bool) ([]byte, *options) {
+		t.Helper()
+		SetInferCache(on)
+		defer SetInferCache(false)
+		opts := &options{}
+		out, err := compile(context.Background(), os.DirFS("../.."), []Source{{Name: main, Src: []byte(src), Path: main}}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out, opts
+	}
+	ref, _ := run(false)
+	miss, mopts := run(true)
+	if mopts.refineOut["lazy"] == nil {
+		t.Fatal("the cold compile recorded no refineIvars outcome: the program has no candidate")
+	}
+	hit, hopts := run(true)
+	if !bytes.Equal(ref, miss) || !bytes.Equal(ref, hit) {
+		t.Fatal("a cached compile differs from a cold one")
+	}
+	if hopts.refineIn["lazy"] == nil || hopts.refineOut["lazy"] != hopts.refineIn["lazy"] {
+		t.Error("the hit did not replay the record")
+	}
+}

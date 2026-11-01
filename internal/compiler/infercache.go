@@ -24,7 +24,7 @@ var inferCacheOn atomic.Bool
 // SetInferCache turns the inference cache on for this process; the CLI does, tests do not, so the oracle stays cold.
 func SetInferCache(on bool) { inferCacheOn.Store(on) }
 
-const inferCacheVersion = 1
+const inferCacheVersion = 2
 
 // cachedType is a Type with its classes by Ruby name; decode builds placeholder classes that rehome resolves.
 type cachedType struct {
@@ -184,6 +184,7 @@ type inferCacheFile struct {
 	NoDrop    []pendingKey              `json:"no_drop,omitempty"`
 	From      map[pendingKey]string     `json:"from,omitempty"`
 	Instances []string                  `json:"instances,omitempty"`
+	Refine    map[string]*refineRecord  `json:"refine,omitempty"` // refineIvars' outcome per final-pass kind (decision 433)
 }
 
 // binaryID is the hash of the running compiler: a cache from another build (another prelude, other rules) never loads.
@@ -337,7 +338,7 @@ func saveInferCache(path string, opts *options) {
 	if inf == nil || path == "" {
 		return // nothing was inferred: a program with no pending keys has nothing to keep
 	}
-	cf := inferCacheFile{Version: inferCacheVersion, Boot: bootHash(opts), Inputs: opts.inputs, Types: map[pendingKey]cachedType{}, From: inf.from, Instances: opts.instances}
+	cf := inferCacheFile{Version: inferCacheVersion, Boot: bootHash(opts), Inputs: opts.inputs, Types: map[pendingKey]cachedType{}, From: inf.from, Instances: opts.instances, Refine: opts.refineOut}
 	for k, t := range inf.types {
 		ct, err := encodeType(t)
 		if err != nil {
@@ -392,7 +393,7 @@ func compile(ctx context.Context, preludeFS fs.FS, sources []Source, opts *optio
 		}
 	}
 	if cf != nil {
-		opts.infer, opts.instances = cf.inference(), slices.Clone(cf.Instances)
+		opts.infer, opts.instances, opts.refineIn = cf.inference(), slices.Clone(cf.Instances), cf.Refine
 		if opts.env.Timing {
 			fmt.Fprintf(os.Stderr, "rugaroo: infer cache: hit, %d keys\n", len(cf.Types))
 		}
@@ -404,7 +405,7 @@ func compile(ctx context.Context, preludeFS fs.FS, sources []Source, opts *optio
 		if opts.env.Timing {
 			fmt.Fprintf(os.Stderr, "rugaroo: infer cache: cached start failed (%v); compiling cold\n", err)
 		}
-		opts.infer, opts.instances, opts.instAt = nil, nil, nil
+		opts.infer, opts.instances, opts.instAt, opts.refineIn, opts.refineOut = nil, nil, nil, nil, nil
 		opts.warnings, opts.skipped, opts.goFuncs, opts.instRestarts = nil, nil, nil, 0
 	}
 	out, err := compileFresh(ctx, preludeFS, sources, opts)

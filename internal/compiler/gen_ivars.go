@@ -39,6 +39,16 @@ func (c *Compiler) refineIvars() {
 	for _, iv := range cands {
 		iv.Type = orig[iv]
 	}
+	kind, sig := c.refineKind(), refineCands(cands, typed, orig)
+	if r := c.refineIn[kind]; !c.round && r != nil && slices.Equal(r.Cands, sig) && len(r.Accepted) == len(cands) { // a hit: the same candidates from the same state (decision 433)
+		c.replayRefine(r, cands, typed, orig)
+		c.refineOut[kind] = r
+		return
+	}
+	var snap refineSnap
+	if !c.round {
+		snap = c.takeRefineSnap()
+	}
 	base, _ := c.dryRunIvarUsers(cands)
 	try := func(set map[*Ivar]bool) bool {
 		for _, iv := range cands {
@@ -54,6 +64,16 @@ func (c *Compiler) refineIvars() {
 		return ok
 	}
 	salvage(cands, try) // a failed last try leaves the original types
+	if c.round || c.refineOut == nil {
+		return
+	}
+	accepted := make([]bool, len(cands))
+	for i, iv := range cands {
+		accepted[i] = typeEq(iv.Type, typed[iv])
+	}
+	if rec := c.recordRefine(snap, sig, accepted); rec != nil {
+		c.refineOut[kind] = rec
+	}
 }
 
 // salvage finds a set of typings that try accepts: all of them, else all

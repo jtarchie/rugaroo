@@ -44,6 +44,7 @@ type Compiler struct {
 	instState
 	pathCache
 	tableState
+	refineState
 	windowState
 
 	genCount, genLimit    *int                        // test hook (decision 240): genExpr calls, and the count after which they fail the compile
@@ -252,6 +253,10 @@ type pathCache struct {
 }
 
 // tableState: what emitTables reads (see tableInputs) and the tables' bookkeeping.
+type refineState struct {
+	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
+}
+
 type tableState struct {
 	pkgVars      map[string]bool // package-level var declarations (regexp literals, rbDATA, once-guards), named by what they are; the pruner drops the unnamed
 	strLits      map[string]bool // String literal texts: String#frozen? knows them by identity
@@ -364,23 +369,25 @@ type options struct {
 	infer        *inference
 	round        bool
 	inferDone    bool
-	seed         *Inference          // types from an earlier compile of these sources, updated by this one
-	allLibs      bool                // load every prelude lib, required or not (the stub generator, decision 154)
-	gemSigs      fs.FS               // vendored `.rbs` signatures for gems (decision 160), or nil
-	pruneGems    bool                // drop gem methods no reachable code names (decision 169)
-	autoloaded   map[string][]string // real path -> constants of each file boot's autoloads loaded (decision 175)
-	mainLast     bool                // traced mode: the last source is the program's main file, and a require in a method resolves at run time (decisions 197, 288)
-	boot         *boot.Manifest      // what boot recorded: define_method calls (decision 198), branches taken (decision 201)
-	goFuncs      map[string]goFunc   // out: each gem method's Go func name -> its methodKey and name
-	noPrune      bool                // keep every declaration (RUGAROO_NO_PRUNE=1 also sets it): the whole-prelude program (decision 207)
-	env          envConfig           // the RUGAROO_* environment, read once by compile
-	testHook     func()              // tests only: runs at the start of compileWith, to inject a panic
-	genCount     *int                // test hook: genExpr calls, summed over every pass
-	genLimit     *int                // test hook: the count after which genExpr fails the compile
-	instances    []string            // generic instances to create before link, by instKey (decision 308)
-	instAt       map[string]srcPos   // where each was first named
-	instRestarts int                 // compiles and rounds rerun for a missing instance (RUGAROO_TIMING)
-	inputs       map[string]string   // out: the final compile's input files and their hashes (decision 430)
+	seed         *Inference               // types from an earlier compile of these sources, updated by this one
+	allLibs      bool                     // load every prelude lib, required or not (the stub generator, decision 154)
+	gemSigs      fs.FS                    // vendored `.rbs` signatures for gems (decision 160), or nil
+	pruneGems    bool                     // drop gem methods no reachable code names (decision 169)
+	autoloaded   map[string][]string      // real path -> constants of each file boot's autoloads loaded (decision 175)
+	mainLast     bool                     // traced mode: the last source is the program's main file, and a require in a method resolves at run time (decisions 197, 288)
+	boot         *boot.Manifest           // what boot recorded: define_method calls (decision 198), branches taken (decision 201)
+	goFuncs      map[string]goFunc        // out: each gem method's Go func name -> its methodKey and name
+	noPrune      bool                     // keep every declaration (RUGAROO_NO_PRUNE=1 also sets it): the whole-prelude program (decision 207)
+	env          envConfig                // the RUGAROO_* environment, read once by compile
+	testHook     func()                   // tests only: runs at the start of compileWith, to inject a panic
+	genCount     *int                     // test hook: genExpr calls, summed over every pass
+	genLimit     *int                     // test hook: the count after which genExpr fails the compile
+	instances    []string                 // generic instances to create before link, by instKey (decision 308)
+	instAt       map[string]srcPos        // where each was first named
+	instRestarts int                      // compiles and rounds rerun for a missing instance (RUGAROO_TIMING)
+	inputs       map[string]string        // out: the final compile's input files and their hashes (decision 430)
+	refineIn     map[string]*refineRecord // refineIvars' records from the cache, by refineKind (decision 433)
+	refineOut    map[string]*refineRecord // out: this compile's, for the cache
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.
@@ -531,6 +538,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		marshalState: marshalState{marshalSeen: map[string]Type{}, marshalGo: map[string]bool{}},
 		tableState:   tableState{procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}, pkgVars: map[string]bool{}}}
 	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
+	c.refineIn, c.refineOut = opts.refineMaps()
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
 	c.noPrune = opts.noPrune
