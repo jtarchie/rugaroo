@@ -34,7 +34,8 @@ import (
 // Compiler holds the whole program: the prelude and the user files, one closed world.
 type Compiler struct {
 	// grouped state; fields are promoted, so c.name still works
-	accessorAny  map[string]bool // anyClassHasAccessor's memo, valid for len(classList) == accessorAnyN
+	accessorAny  map[string]bool   // anyClassHasAccessor's memo, valid for len(classList) == accessorAnyN
+	inputs       map[string]string // every file read from disk beyond the sources, by path -> content hash ("" absent): the inference cache's manifest (decision 430)
 	accessorAnyN int
 	dynState
 	memoState
@@ -378,6 +379,7 @@ type options struct {
 	instances    []string            // generic instances to create before link, by instKey (decision 308)
 	instAt       map[string]srcPos   // where each was first named
 	instRestarts int                 // compiles and rounds rerun for a missing instance (RUGAROO_TIMING)
+	inputs       map[string]string   // out: the final compile's input files and their hashes (decision 430)
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.
@@ -407,7 +409,7 @@ type SkippedTest struct {
 	Reason string // the compile error, without its file:line
 }
 
-func compile(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) ([]byte, error) {
+func compileFresh(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) ([]byte, error) {
 	for range maxInstanceRestarts {
 		opts.round, opts.inferDone = false, false
 		out, err := compileOnce(ctx, preludeFS, sources, opts)
@@ -654,6 +656,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		// Keep the raw output around for debugging.
 		return nil, fmt.Errorf("internal error: generated Go does not parse (%w); %s", ferr, dumpBadOutput(slices.Concat(src, []byte("\n// ---- tail ----\n"), []byte(c.out.String()))))
 	}
+	opts.inputs = c.cacheInputs()
 	return formatted, nil
 }
 

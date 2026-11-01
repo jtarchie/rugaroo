@@ -69,6 +69,7 @@ For the compiler:
 | `RUGAROO_GEM_WARNINGS=1` | Also print warnings from gem files (hidden by default, since they are not yours to fix). |
 | `RUGAROO_UNTYPED_WHY=1` | Each dynamic-call warning also names where the untyped value came from. |
 | `RUGAROO_INFER_DEBUG=1` | Show what each round of parameter inference typed and what it could not compile. |
+| `RUGAROO_NO_INFER_CACHE=1` | Do not use the inference cache. By default `gen`, `build` and `run` keep the parameter types they inferred in the user cache directory (`rugaroo/infer/`), so the next compile of an unchanged program skips the inference rounds; any changed input file compiles from scratch. The output is the same either way. |
 
 The repository's [CLAUDE.md](../CLAUDE.md) lists the variables for working on
 rugaroo itself.

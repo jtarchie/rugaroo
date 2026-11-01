@@ -29,6 +29,7 @@ const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main f
 
 func main() {
 	tuneGC()
+	rugaroo.SetInferCache(os.Getenv("RUGAROO_NO_INFER_CACHE") == "") // the next compile of a program starts from this one's inferred types (decision 430)
 	if len(os.Args) < 2 || os.Args[1] != "build" && os.Args[1] != "run" && os.Args[1] != "test" && os.Args[1] != "gen" && os.Args[1] != "web" && os.Args[1] != "stubs" {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)

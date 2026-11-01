@@ -167,6 +167,9 @@ type Inference = compiler.Inference
 // NewInference is an empty Inference for CompileTestsSkipping.
 func NewInference() *Inference { return compiler.NewInference() }
 
+// SetInferCache turns on the on-disk inference cache (decision 430) for this process.
+func SetInferCache(on bool) { compiler.SetInferCache(on) }
+
 // CompileTestsSkipping is CompileFiles for running what a test suite can: each test_ method (an `it` included) that fails to compile becomes a minitest skip carrying the error instead of failing the build.
 // seed, when not nil, carries inferred parameter types to the next call for the same sources, which then starts from them.
 func CompileTestsSkipping(ctx context.Context, files []File, seed *Inference) ([]byte, []string, []SkippedTest, error) {

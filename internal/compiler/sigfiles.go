@@ -112,6 +112,7 @@ func appendNew[T any](old, add []T, key func(T) string) []T {
 // loadSigFile parses one .rbs file into the sigs; a missing one is no error.
 func (c *Compiler) loadSigFile(path string, shipped, advisory bool) error {
 	data, rerr := os.ReadFile(path) //nolint:gosec // the program's own sig file
+	c.noteInput(path, data, rerr)
 	if errors.Is(rerr, fs.ErrNotExist) {
 		return nil
 	}
