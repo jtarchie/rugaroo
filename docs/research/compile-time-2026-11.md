@@ -44,6 +44,12 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 3. After the fix the 8 rounds are still ~46 s of 79 s (60%). `RUGAROO_INFER_DEBUG=1` diff of consecutive rounds' inferred sets (keys / new / retyped): r1 328; r2 369 / 47 / 9; r3 396 / 29 / 4; r4 410 / 15 / 2; r5 416 / 11 / 3; r6 415 / 2 / 1; r7 416 / 3 / 0; r8 415 / 0 / 0. So the types are stable by round 6-7 and round 8 changes nothing, yet each of rounds 4-8 regenerates every body (4.5-6.6 s) to move 0-3 keys. One oscillation: `Parser_Lexer#e` Integer? ↔ Integer in rounds 3-5. The cap (8) is reached only because a key set still differs by one at round 8; not a convergence bug.
 4. **GC tuning is not a lever**: unprofiled gen, default 64 s / GOGC=400 70 s (1.7 GB RSS) / GOGC=800 69 s (2.4 GB). Output identical.
 
+## `go build` of the tokenize output (module kept by `build -work`)
+
+- `go build -trimpath -gcflags=-c=N` of main (std cached; includes link; 81 MB): c=1 88.7 s, c=4 52.7 s, c=8 53.4 s. The default already sits on the plateau, so backend concurrency is exhausted; the remainder is the serial frontend (typecheck/escape/SSA of one 23 MB package) plus link. The earlier full-build figure (~65 s) was with a cold main package.
+- Census (`scripts/census`), 46,546 funcs: free.plain 11,892; Dyn wrappers 10,743 (23%), but only **3,549 distinct bodies** after normalizing the receiver (7,194 redundant, 15% of all funcs); method.body 9,166; forwarders 6,740 (14%; 1,053 to `Kernel_Loop`, 868 to `BasicObject_Op_eq`, 601 to `Module_Include`); const-return 3,952; rbDyn dispatchers 2,219 (42k lines); generic 1,093; pruned stubs 741. Interface methods: 10,373.
+- By name match against `go tool nm` of the linked binary: 40,140 of 46,526 source funcs appear (free funcs 9,223 of 12,985, methods 19,423 of 21,900, Dyn wrappers 9,275 of 9,422). The ~6.4k absent are linker-dead **or inlined away everywhere**: this does not prove them dead, and I did not separate the two.
+
 ## Lever list, ranked (gain ÷ effort ÷ risk)
 
 | # | lever | evidence | expected | effort | risk |
@@ -53,9 +59,10 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 | 3 | rounds re-gen only methods whose pending-param inputs changed (dirty set per round) | measured above: rounds 4-8 move ≤3 keys but cost 4.5-6.6 s each (~26 s) | ~-20 s cold on tokenize | high (probe results feed each other) | medium: inference order determinism (decision 146) |
 | 4 | the subagent's code-read hot spots (below), after profiling each: #3 typeAbstracts, #4/5 pruneGemMethods fixpoint + computeLive, #10 realPath negative cache | read only, **not profiled**; none shows in the top flat list after fix #1 | small each; larger at rubocop scale (10k classes) | small | low |
 | 5 | emit-side: dynWrappers D×C codegen; refineIvars dry-runs (`c.out.String()` copy per try) | code read only | unknown | medium | low |
+| 5b | share Dyn-wrapper bodies across receivers (3,549 distinct of 10,743) as a free func the per-class method forwards to | census above | up to ~7k fewer function bodies (15%); build time ∝ funcs (decision 235) | medium | runtime: one extra call per dynamic dispatch unless inlined; needs A/B on benchmarks (memory: no-speed-for-compile-time) |
 | 6 | split output into packages | **not done** (see below) | go build 65 s is ~47% of the full build | high | high: closed-world dispatch crosses packages |
 
-Not done: memory profile / `-memprofile` (item 2 beyond GOGC), `go tool nm` dead-function reach and census (item 3), per-gem partition prototype (item 4), per-file IR cache (item 5 beyond #2), gem-lane pruned/stub generation share (item 8), liquid and kramdown baselines, and the rubocop CLI at 54 min. The 65 s `go build` half of the budget is unprofiled.
+Not done: memory profile / `-memprofile` (item 2 beyond GOGC), per-gem partition prototype (item 4), per-file IR cache (item 5 beyond #2), gem-lane pruned/stub generation share (item 8), liquid and kramdown baselines, and the rubocop CLI at 54 min. The 65 s `go build` half of the budget is unprofiled.
 
 Reasoning on partitioning (unmeasured): Go parallelizes across packages, and within one package only the backend (`-c`). Every class's type switches (decisions 212/213) name every other class, so a gem package would need the user/prelude types exported and the dispatchers registered at init, which is the map-based dispatch the user ruled out (memory: compiled-dispatch-no-maps). A prelude-only package (compiled once, cached across programs) conflicts with decision 49's per-program pruning. Needs a prototype before any claim.
 
@@ -78,4 +85,4 @@ Ranked by likely cost: `refineIvars`/`dryRunIvarUsers` (gen_ivars.go:17-115, up 
 1. Merge the `attrTarget` memo now (done, no decision needed: output unchanged).
 2. Next: lever 2, the on-disk `Inference` cache. It is the only lever whose gain is measured-bounded (rounds 60% of gen) and cheap to reason about; needs a decision (cache key = source and gem file hashes + compiler build ID; a miss is the current path). Goal: tokenize warm gen ≤ 25 s.
 3. Then profile the **rubocop CLI** gen (54 min) once, to see whether the code-read hot spots (levers 4-5) dominate at n = 10k classes; on tokenize they do not. Goal there: under 10 min needs lever 3 or cache hits.
-4. `go build` (65 s here, ~50 min at rubocop scale) needs its own profile (`-gcflags=-c=N`, census, `nm` reach) before choosing between pruning more and partitioning.
+4. `go build`: backend concurrency is exhausted (-c=4 = -c=8), so only fewer/smaller functions or a package split help. First prototype lever 5b (Dyn bodies) behind a flag and A/B the benchmarks; partitioning stays unproven.
