@@ -1,0 +1,84 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Summarizes one full-suite run: `go test -json` output plus the harness's RUGAROO_TEST_TIMING log
+# (timing_test.go). Prints the per-suite wall table, the slowest subtests, and the per-step costs
+# (go build hit/miss, -race, MRI cache hit/miss, lint). docs/research/test-time-2026-11.md.
+#
+#   RUGAROO_TEST_TIMING=run.timing go test -json ./... -timeout 90m > run.json
+#   scripts/test-time run.json [run.timing] [-n 20]
+
+require "json"
+require "time"
+require "optparse"
+
+top = 20
+OptionParser.new { |o| o.on("-n N", Integer) { |n| top = n } }.parse!(ARGV)
+json, timing = ARGV
+
+elapsed = {} # [pkg, test] => seconds
+starts = {}
+first = last = nil
+File.foreach(json) do |line|
+  ev = begin
+    JSON.parse(line)
+  rescue JSON::ParserError
+    next
+  end
+  t = ev["Time"] && Time.iso8601(ev["Time"]) rescue nil
+  if t
+    first = t if first.nil? || t < first
+    last = t if last.nil? || t > last
+  end
+  key = [ev["Package"], ev["Test"]]
+  case ev["Action"]
+  when "run" then starts[key] = t
+  when "pass", "fail", "skip"
+    elapsed[key] = ev["Elapsed"] if ev["Test"]
+    elapsed[[ev["Package"], nil]] = ev["Elapsed"] if ev["Test"].nil?
+  end
+end
+
+puts "wall (first to last event): #{(last - first).round(1)} s"
+puts
+puts "per package:"
+elapsed.select { |(_, t), _| t.nil? }.sort_by { |_, s| -s }.each { |(p, _), s| printf("  %8.1f s  %s\n", s, p) }
+puts
+puts "top-level tests (package .):"
+elapsed.select { |(p, t), _| p&.end_with?("rugaroo") && t && !t.include?("/") }.sort_by { |_, s| -s }.first(top).each { |(_, t), s| printf("  %8.1f s  %s\n", s, t) }
+puts
+puts "slowest subtests:"
+elapsed.select { |(_, t), _| t&.include?("/") }.sort_by { |_, s| -s }.first(top).each { |(_, t), s| printf("  %8.1f s  %s\n", s, t) }
+
+exit unless timing
+
+# rows: kind, test, seconds, [@end], fields...; the @ column (when the step ended) is dropped here so field indexes are stable
+rows = File.readlines(timing, chomp: true).map { |l| r = l.split("\t"); r.delete_at(3) if r[3]&.start_with?("@"); r }
+by_kind = rows.group_by(&:first)
+puts
+puts "harness steps (kind: count, total s):"
+by_kind.sort.each { |k, rs| printf("  %-13s %4d  %8.1f s\n", k, rs.size, rs.sum { |r| r[2].to_f }) }
+
+builds = by_kind.fetch("build", [])
+hits, misses = builds.partition { |r| r[4] == "false" }
+race = builds.count { |r| r[3] == "true" }
+puts
+puts "go build: #{builds.size} programs, #{misses.size} cache misses (#{misses.sum { |r| r[2].to_f }.round(1)} s), #{hits.size} hits (#{hits.sum { |r| r[2].to_f }.round(1)} s), #{race} with -race"
+puts "  funcs total #{builds.sum { |r| r[5].to_i }}, lines total #{builds.sum { |r| r[6].to_i }}"
+puts "slowest builds (s, race, miss, funcs, lines):"
+builds.sort_by { |r| -r[2].to_f }.first(top).each { |r| printf("  %7.1f  %-5s %-5s %7s %8s  %s\n", r[2].to_f, r[3], r[4], r[5], r[6], r[1]) }
+
+mri = by_kind.fetch("mri", [])
+mhit, mmiss = mri.partition { |r| r[3] == "hit" }
+puts
+puts "MRI: #{mri.size} runs, #{mmiss.size} misses (#{mmiss.sum { |r| r[2].to_f }.round(1)} s), #{mhit.size} cache hits"
+puts "slowest MRI runs:"
+mmiss.sort_by { |r| -r[2].to_f }.first(10).each { |r| printf("  %7.1f  %s\n", r[2].to_f, r[1]) }
+
+%w[compile run rbs-inline rbs-validate vet lint].each do |k|
+  rs = by_kind.fetch(k, [])
+  next if rs.empty?
+  puts
+  puts "slowest #{k}:"
+  rs.sort_by { |r| -r[2].to_f }.first(8).each { |r| printf("  %7.1f  %s\n", r[2].to_f, r[1]) }
+end

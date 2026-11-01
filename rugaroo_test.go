@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/tools/txtar"
 
@@ -156,7 +157,9 @@ func lintGenerated(t *testing.T, mod string) {
 	t.Helper()
 	// GOFLAGS=-trimpath: vet and golangci-lint compile the module for export data through the Go build cache, keyed by directory unless trimmed; with it, the fresh t.TempDir hits what the examples' builds and the last run's lint already cached (4s instead of ~5 min when nothing changed).
 	trim := progIO{env: []string{"GOFLAGS=-trimpath"}}
+	start := time.Now()
 	vetOut, vetErr, code, err := runIO(t, mod, trim, "go", "vet", "./...")
+	timed("vet", t.Name(), time.Since(start))
 	if err != nil || code != 0 {
 		err = errors.Join(err, errors.New(vetErr))
 		t.Fatalf("go vet: %v\n%s", err, vetOut)
@@ -171,7 +174,9 @@ func lintGenerated(t *testing.T, mod string) {
 	}
 	copyPreludeGo(t, mod)
 	// --timeout=0: under the full suite's parallel builds this pass outlasts the config's 5m; go test's -timeout still bounds it
+	start = time.Now()
 	lintOut, lintErr, code, err := runIO(t, mod, trim, "golangci-lint", "run", "--allow-parallel-runners", "--timeout=0", "./...")
+	timed("lint", t.Name(), time.Since(start))
 	if err != nil || code != 0 {
 		err = errors.Join(err, errors.New(lintErr))
 		t.Fatalf("golangci-lint on generated code: %v\n%s", err, lintOut)
@@ -743,12 +748,16 @@ func testExample(t *testing.T, dir, gen string) {
 	tmp := t.TempDir()
 	// 1. rbs-inline + rbs validate
 	sig := filepath.Join(tmp, "sig")
+	start := time.Now()
 	out, err := gemCmd(t, "rbs-inline", "--output="+sig, dir).CombinedOutput() // the whole directory: main.rb and what it require_relatives
+	timed("rbs-inline", t.Name(), time.Since(start))
 	if err != nil {
 		t.Fatalf("rbs-inline failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
 	}
 	args := append(rbsLibraries(t, filepath.Join(dir, "main.rb")), "-I", sig, "validate")
+	start = time.Now()
 	out, err = gemCmd(t, "rbs", args...).CombinedOutput()
+	timed("rbs-validate", t.Name(), time.Since(start))
 	if err != nil {
 		t.Fatalf("rbs validate failed: %v\n%s", err, rdocNoise.ReplaceAll(out, nil))
 	}
@@ -852,7 +861,9 @@ func gemCompile(dir string, src []byte) func(context.Context, string, []byte, ..
 // writeGenerated compiles src into dir/main.go.
 func writeGenerated(t *testing.T, dir, name string, src []byte, compile func(context.Context, string, []byte, ...string) ([]byte, []string, error)) {
 	t.Helper()
+	start := time.Now()
 	code, warnings, err := compileSafeWith(name, src, compile)
+	timed("compile", t.Name(), time.Since(start))
 	if err != nil {
 		t.Fatalf("rugaroo: %v", err)
 	}
@@ -910,9 +921,26 @@ func goBuild(t *testing.T, gen string, gcflags string) string {
 		// -race only where a program starts goroutines beyond the always-on signal loop: it turns off the compiler's parallel backend, doubling compile time (decision 88)
 		args = slices.Insert(args, 1, "-race")
 	}
-	out, err := run(t, gen, "go", args...)
+	if timingLog != "" {
+		args = slices.Insert(args, 1, "-x") // the compile step shows up in -x only on a build-cache miss
+	}
+	start := time.Now()
+	out, stderr, bcode, err := runIO(t, gen, progIO{}, "go", args...)
+	if err == nil && bcode != 0 {
+		err = errors.New(stderr)
+	}
 	if err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	if timingLog != "" {
+		miss := strings.Contains(stderr, " -p main ") // the main package's compile step runs only on a build-cache miss (a rebuilt std shows other -p values)
+		funcs := bytes.Count(code, []byte("\nfunc "))
+		lines := bytes.Count(code, []byte("\n"))
+		sum := sha256.Sum256(code)
+		timed("build", t.Name(), time.Since(start), slices.Contains(args, "-race"), miss, funcs, lines, len(code), hex.EncodeToString(sum[:8]))
+		if keep := os.Getenv("RUGAROO_TEST_KEEP"); keep != "" { // each program's main.go, named by its test, for diffing two runs
+			_ = os.WriteFile(filepath.Join(keep, strings.ReplaceAll(t.Name(), "/", "__")+".go"), code, 0o600) //nolint:gosec // a developer-chosen path
+		}
 	}
 	return bin
 }
@@ -985,7 +1013,9 @@ func binOutput(t *testing.T, dir string, pio progIO, bin string, args []string) 
 		tracePath = filepath.Join(t.TempDir(), "trace")
 		pio.env = append(slices.Clone(pio.env), "RUGAROO_MT_TRACE="+tracePath)
 	}
+	start := time.Now()
 	got.Stdout, got.Stderr, got.Code, _ = runIO(t, dir, pio, bin, args...)
+	timed("run", t.Name(), time.Since(start))
 	if pio.trace {
 		got.Trace = readTrace(t, tracePath)
 	}
@@ -1153,11 +1183,14 @@ func mriRun(t *testing.T, dir string, src []byte, pio progIO, rubyArgs []string)
 		data, rerr := os.ReadFile(cached) //nolint:gosec // our cache path
 		var c mriCached
 		if rerr == nil && json.Unmarshal(data, &c) == nil {
+			timed("mri", t.Name(), 0, "hit")
 			return mriResult{Stdout: string(c.Stdout), Stderr: string(c.Stderr), Trace: string(c.Trace), Code: c.Code}
 		}
 	}
 	var r mriResult
+	start := time.Now()
 	r.Stdout, r.Stderr, r.Code, _ = runIO(t, dir, pio, "ruby", rubyArgs...)
+	timed("mri", t.Name(), time.Since(start), "miss")
 	if pio.trace {
 		r.Trace = readTrace(t, tracePath)
 	}
