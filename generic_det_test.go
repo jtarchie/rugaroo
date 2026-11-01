@@ -51,6 +51,7 @@ puts a.size, b.size, c.size
 
 // The same program must compile to the same bytes every time: Go's build cache and byte comparisons depend on it.
 func TestGenericInstancesDeterministic(t *testing.T) {
+	t.Parallel()
 	var first []byte
 	for i := range 30 {
 		out, _, err := Compile(context.Background(), "main.rb", []byte(genericDetProgram))

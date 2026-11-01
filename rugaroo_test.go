@@ -303,6 +303,7 @@ func TestMulti(t *testing.T) {
 // arrives through autoload: with no boot to say which autoloads run, each loads where it registers (decision 414).
 func TestGemAutoloadWithoutBoot(t *testing.T) {
 	requireToolchain(t)
+	t.Parallel()
 	src := []byte("require \"matrix\"\np Matrix[[1, 2], [3, 4]].lup.solve(Vector[1, 2])\n")
 	code, _, _, err := CompileTestsSkippingWithGems(t.Context(), []File{{Name: "lup_test.rb", Src: src}}, nil, ".")
 	if err != nil {
@@ -317,6 +318,7 @@ func TestGemAutoloadWithoutBoot(t *testing.T) {
 // defines each method (net-ftp's BufferedSocket#send, decision 416).
 func TestGemDefineMethodWithoutBoot(t *testing.T) {
 	requireToolchain(t)
+	t.Parallel()
 	src := []byte("require \"net/ftp\"\nsock = Net::FTP::BufferedSocket.new(STDOUT)\np sock.respond_to?(:shutdown)\n")
 	code, _, _, err := CompileTestsSkippingWithGems(t.Context(), []File{{Name: "dm_test.rb", Src: src}}, nil, ".")
 	if err != nil {
@@ -331,6 +333,7 @@ func TestGemDefineMethodWithoutBoot(t *testing.T) {
 // no prime) and a generator without a block; sig/gems/prime corrects it (decision 419), so the value MRI gives comes out.
 func TestPrimeVendoredSig(t *testing.T) {
 	requireToolchain(t)
+	t.Parallel()
 	src := []byte("require \"prime\"\np Prime.each(10) { |x| x }, Prime.each(1) { :v }, Prime.instance.each(7).to_a\n")
 	code, _, _, err := CompileTestsSkippingWithGems(t.Context(), []File{{Name: "prime_sig_test.rb", Src: src}}, nil, ".")
 	if err != nil {
