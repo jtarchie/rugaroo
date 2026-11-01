@@ -50,6 +50,17 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 - Census (`scripts/census`), 46,546 funcs: free.plain 11,892; Dyn wrappers 10,743 (23%), but only **3,549 distinct bodies** after normalizing the receiver (7,194 redundant, 15% of all funcs); method.body 9,166; forwarders 6,740 (14%; 1,053 to `Kernel_Loop`, 868 to `BasicObject_Op_eq`, 601 to `Module_Include`); const-return 3,952; rbDyn dispatchers 2,219 (42k lines); generic 1,093; pruned stubs 741. Interface methods: 10,373.
 - By name match against `go tool nm` of the linked binary: 40,140 of 46,526 source funcs appear (free funcs 9,223 of 12,985, methods 19,423 of 21,900, Dyn wrappers 9,275 of 9,422). The ~6.4k absent are linker-dead **or inlined away everywhere**: this does not prove them dead, and I did not separate the two.
 
+## Where `go build` time goes, and splitting main.go
+
+`go build -gcflags=-bench=f` on the tokenize module (total 53.6 s for the compile of `main`): frontend 20.3 s, all serial (parse+typecheck 8.6, devirtualize+inline 8.6, escape 3.0); backend 33.4 s (compilefuncs 28.0 at the default `-c`, dumpobj 5.3 serial). It compiled 147,149 funcs for 46.5k source funcs (instantiations, closures and generated wrappers; not broken down).
+
+- `-c` is function-level backend concurrency **inside one package**. Splitting main.go into several *files* of the same package changes nothing: the compiler sees one package either way, and `-c=4` = `-c=8` shows the backend is already saturated. Only splitting into *packages* lets `go build` compile units in parallel (frontend included). Unproven upper bound: with ~4 balanced packages and 10 cores, wall time could approach the largest package plus link; not prototyped, no measured number.
+- What a package split needs (reasoned from decisions 206/212/213, not tried): an acyclic layering (prelude, gems, user) while today every dispatcher and `Dyn` wrapper type-switches over every class, so those closed-world switches could only live in the top package, and lower layers would reach user classes through Go interfaces or init-time hooks (function values, which sits next to the no-map-dispatch constraint and needs the user's OK); exported (capitalized) names across packages; generic free funcs `Owner_Name[Self]` instantiated across the boundary; decision 49 prunes the prelude per program, so a shared cached prelude package needs pruning by visibility instead; and `rugaroo gen > main.go` building with go.mod alone (a stated goal) becomes a directory of files.
+
+## Dead-code elimination before emit (Go's analysis)
+
+`golang.org/x/tools/cmd/deadcode` (RTA, run from the scratchpad; not a repo dependency) on the module: 1,035 of 46.5k funcs unreachable (2.2%), 19 s to run. The compiler's own reach pruning (decision 49, reach.go) already removes the rest; the ~6.4k funcs missing from the linked binary are mostly inlined away, not dead. Typechecking the output before writing it costs about the frontend time again, for ~2% fewer functions. Not worth adopting; stdlib `go/types` would do the same job without the dependency if it ever is.
+
 ## Lever list, ranked (gain ÷ effort ÷ risk)
 
 | # | lever | evidence | expected | effort | risk |
@@ -60,7 +71,8 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 | 4 | the subagent's code-read hot spots (below), after profiling each: #3 typeAbstracts, #4/5 pruneGemMethods fixpoint + computeLive, #10 realPath negative cache | read only, **not profiled**; none shows in the top flat list after fix #1 | small each; larger at rubocop scale (10k classes) | small | low |
 | 5 | emit-side: dynWrappers D×C codegen; refineIvars dry-runs (`c.out.String()` copy per try) | code read only | unknown | medium | low |
 | 5b | share Dyn-wrapper bodies across receivers (3,549 distinct of 10,743) as a free func the per-class method forwards to | census above | up to ~7k fewer function bodies (15%); build time ∝ funcs (decision 235) | medium | runtime: one extra call per dynamic dispatch unless inlined; needs A/B on benchmarks (memory: no-speed-for-compile-time) |
-| 6 | split output into packages | **not done** (see below) | go build 65 s is ~47% of the full build | high | high: closed-world dispatch crosses packages |
+| 6 | split output into packages | frontend 20 s + backend 33 s now serial per package (above); not prototyped | unproven; bound needs a prototype | high | high: closed-world dispatch crosses packages; single-file goal |
+| 7 | pre-emit dead-code elimination via RTA | 2.2% unreachable (above) | ~2% of funcs | medium | rejected |
 
 Not done: memory profile / `-memprofile` (item 2 beyond GOGC), per-gem partition prototype (item 4), per-file IR cache (item 5 beyond #2), gem-lane pruned/stub generation share (item 8), liquid and kramdown baselines, and the rubocop CLI at 54 min. The 65 s `go build` half of the budget is unprofiled.
 
