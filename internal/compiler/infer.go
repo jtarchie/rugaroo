@@ -780,7 +780,7 @@ func (c *Compiler) updateInference(inf *inference) {
 		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
 			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 		}
-		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
+		if slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
 			// dynamic calls by its name (maybe meant for another class's method) widen a parameter but never type it alone:
 			// untyped until a static call carries a type (decision 331). ProcessedSource's `parser.parse(@buffer)` reaches
 			// every `parse` with a Buffer; rubocop-ast's NodePattern::Parser#parse(source) takes a String from
