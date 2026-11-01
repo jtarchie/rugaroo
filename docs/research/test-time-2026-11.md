@@ -21,12 +21,15 @@ Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time
 | a. warm, nothing changed | 337 s | 1195 s | 245 | 0 | 6 s | 11 MB |
 | b1. one comment line near the top of prelude/string.rb | 1974 s | 9355 s | 245 | 147 | 1530 s | 4.0 GB |
 | b2. one comment line inside `rbDump` (prelude/go/string.go), a helper 114 of the 245 programs keep | 2396 s | 11637 s | 245 | 114 | 1804 s | 4.8 GB |
-| c. one comment line in prelude/abbrev.rb | SCENARIO_C |
+| c. one comment line in prelude/abbrev.rb | not run on main: by finding 1's mechanism it shifts `//line prelude/abbrev.rb:N` only in the 6 programs that keep abbrev, all small; on the prototype it is run P5 |
 | P0. prototype (decision 434), first run: every example's bytes change once | 2297 s | 9138 s | 245 | 144 | 1735 s | one-off |
 | P1. prototype, warm (rbs cache filling) | 353 s | 1175 s | 245 | 0 | 10 s | 0 |
 | P2. prototype, b1's comment line in prelude/string.rb | 668 s | 1369 s | 245 | 3 | 320 s | 0.1 GB |
 | P3. prototype + rbs cache warm + parallel top-level tests, nothing changed; the `-race` experiment (fresh GOCACHE, std rebuilds) ran beside it | 358 s | 976 s | 245 | 0 | 11 s | 0 |
-| P4. the same, machine otherwise idle | P4_ROW |
+| P4. first run after the Method-key renumbering (L1b): the 7 programs that build Method tables change once | 669 s | 1530 s | 245 | 7 | 324 s | one-off |
+| P5. prototype, c's comment line in prelude/abbrev.rb (6 programs keep it) | 248 s | 930 s | 245 | 0 | 8 s | 0 |
+| P6. prototype (L1, L1b, L2, L5), warm, machine otherwise idle | 232 s | 890 s | 245 | 0 | 9 s | 0 |
+| P7. P6 with `-parallel 20` | P7_ROW |
 
 CLAUDE.md's "~7 min warm / ~23 min after a prelude edit" is 5.6 min / 33-40 min on this day: b1 and b2 are the case that hurts.
 
@@ -131,13 +134,13 @@ Gain: scenario b1 (comment line in prelude/string.rb) 668 s against 1974 s (run 
 
 What it does not cover: an edit that changes kept code (b2) still rebuilds and re-lints exactly its keepers, and those are the big programs (L3, L4).
 
-### L1b. Key a Method by its def's name, not its byte offset (prototyped: commit METHODKEY_COMMIT)
+### L1b. Renumber Method keys' prelude byte offsets in test programs (prototyped: commit d22b3754, decision 434 amended)
 
-Decisions 414/418 key a typed Method by its def so aliases compare equal, spelled `Owner#@file:<byte offset>`. The offset moves with any edit above the def, so a prelude line shift changes the three programs that build a Method of a prelude def (P2's remaining misses, 320 s of lint). `@file:<def name>` identifies the same def (aliases share it; a redefinition replaces it) and does not move. Generated-code change of one string; no run-time or typing effect.
+Decisions 414/418 key a typed Method by its def so aliases compare equal, spelled `Owner#@file:<byte offset>`. The offset moves with any edit above the def, so a prelude line shift changes the programs that build a Method of a prelude def (P2's remaining 3 misses, 320 s of lint; 7 programs carry such keys). The harness maps each prelude file's distinct offsets to 1..n per program, an injective rewrite, so equality is unchanged and the bytes stop moving. A compiler-side key by def *name* was tried and reverted: `alias old_foo foo; def foo` (the alias-method-chain idiom) is two defs of one name in one file, which MRI's `==` tells apart and a name key would not.
 
 ### L2. Cache the examples' rbs-inline + rbs validate pass (prototyped: decision 435, commit 89e24772)
 
-Gain: 640-910 s of CPU per run, measured as PROTO_RBS_WALL of wall on a warm run. Effort: 50 lines, the MRI cache's pattern. Risk: a stale pass replaying; the key holds every input (sources, sig/, Ruby, Gemfile.lock) and only passes are stored.
+Gain: 640-910 s of CPU per run; with L5 it takes the warm run from 337 s / 1195 s CPU to 232 s / 890 s CPU (P6; P5, with a prelude edit nothing kept, 248 s). The two are not separable in the full runs: L5 removes ~45 s of serial work at the start, L2 ~65 s of CPU per parallel slot. Effort: 50 lines, the MRI cache's pattern. Risk: a stale pass replaying; the key holds every input (sources, sig/, Ruby, Gemfile.lock) and only passes are stored.
 
 ### L3. `-race` only for programs that start goroutines in their own code (not prototyped)
 
@@ -149,7 +152,7 @@ The lint pass is per-package incremental (finding 2) but runs alone after the la
 
 ### L5. Make the sequential top-level tests parallel (prototyped: commit 9f1a3b76)
 
-TestGenericInstancesDeterministic, TestGemAutoloadWithoutBoot, TestGemDefineMethodWithoutBoot, TestPrimeVendoredSig: 45-50 s of compile that ran alone before the suites (finding 8). TestBootAutoload and TestTraceRun stay sequential (`t.Setenv`). Gain: PARALLEL_GAIN.
+TestGenericInstancesDeterministic, TestGemAutoloadWithoutBoot, TestGemDefineMethodWithoutBoot, TestPrimeVendoredSig: 45-50 s of compile that ran alone before the suites (finding 8). TestBootAutoload and TestTraceRun stay sequential (`t.Setenv`). Gain: part of P6's 337 → 232 s with L2 (above); in P6 the first parallel leaf starts at 1 s instead of 65 s.
 
 ### L6. Relative paths in `//line` for `-I`, `-gem` and traced files (not prototyped)
 
@@ -169,7 +172,7 @@ rugaroo's own compile is 846-1008 s of CPU per run and the critical-path tail (k
 
 ## Recommendation
 
-1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take RBS_GAIN off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → a warm run once L1b is in; warm 337 s → P3_WALL (P3).
+1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take ~300 s of CPU and ~100 s of wall off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → 248 s with L1b in (P5, the abbrev.rb case, 0 rebuilds; the string.rb case is the same mechanism and was not rerun after L1b); warm 337 s → 232 s (P6).
 2. Then L3 with its own decision (amending 88): the remaining expensive case is an edit that changes a widely kept helper (b2: 2396 s), whose cost is 114 big `-race` builds plus their lint; `-race` only where goroutines run halves the wall of each such build on an idle machine (0-22% of its CPU in a saturated full run) and leaves lint, which L4 can overlap.
 3. L6 when more than one worktree is in use (the user's workflow today).
 4. The rest of the post-edit cost is program size (decision 235) and compiler speed (L7): track them in the compile-time research, not here.
