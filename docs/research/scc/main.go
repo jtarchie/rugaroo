@@ -55,6 +55,13 @@ func main() {
 	}
 	var edges = map[int]map[int]bool{}
 	span := map[int]int{}
+	origin := map[int]string{}
+	classify := func(fn string) string {
+		if strings.HasPrefix(fn, "prelude") {
+			return "prelude"
+		}
+		return "other"
+	}
 	add := func(a, b int) {
 		if os.Getenv("CUT") != "" && strings.HasPrefix(objs[b].Name(), os.Getenv("CUT")) && !strings.HasPrefix(objs[a].Name(), os.Getenv("CUT")) {
 			return
@@ -90,6 +97,7 @@ func main() {
 				continue
 			}
 			// method also depends on its receiver type, and a type on its methods? (type -> methods is not a dep; method -> type is)
+			origin[a] = classify(fset.Position(d.Pos()).Filename)
 			span[a] += fset.Position(d.End()).Line - fset.Position(d.Pos()).Line + 1
 			if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv != nil {
 				if fn, ok := o.(*types.Func); ok {
@@ -118,6 +126,79 @@ func main() {
 				return true
 			})
 		}
+	}
+	if os.Getenv("ORIGIN") != "" {
+		cnt := map[string]int{}
+		lines := map[string]int{}
+		for i := range objs {
+			cnt[origin[i]]++
+			lines[origin[i]] += span[i]
+		}
+		fmt.Println("nodes by origin", cnt, "lines", lines)
+		up := map[string]int{}
+		for a, m := range edges {
+			if origin[a] != "prelude" {
+				continue
+			}
+			for b := range m {
+				if origin[b] == "other" {
+					k := fmt.Sprintf("%T", objs[b])
+					if strings.HasPrefix(objs[b].Name(), "rbDyn") {
+						k = "rbDyn"
+					} else if strings.HasPrefix(objs[b].Name(), "Dyn") {
+						k = "Dyn"
+					}
+					up[k]++
+				}
+			}
+		}
+		fmt.Println("edges prelude -> non-prelude by target kind:", up)
+		srcs := map[string]int{}
+		for a, m := range edges {
+			if origin[a] != "prelude" {
+				continue
+			}
+			for b := range m {
+				if origin[b] == "other" {
+					srcs[objs[a].Name()]++
+				}
+			}
+		}
+		tg := map[string]int{}
+		for a, m := range edges {
+			if origin[a] == "prelude" {
+				for b := range m {
+					if origin[b] == "other" {
+						tg[objs[b].Name()]++
+					}
+				}
+			}
+		}
+		type kv struct {
+			k string
+			v int
+		}
+		var l []kv
+		for k, v := range tg {
+			l = append(l, kv{k, v})
+		}
+		sort.Slice(l, func(i, j int) bool { return l[i].v > l[j].v })
+		fmt.Println("distinct upward targets:", len(tg))
+		for _, e := range l[:min(25, len(l))] {
+			fmt.Println("  ", e.v, e.k)
+		}
+		fmt.Println("distinct prelude sources with an upward edge:", len(srcs))
+		var pf int
+		for i, o := range objs {
+			if fn, ok := o.(*types.Func); ok && origin[i] != "prelude" {
+				if rn := recvNamed(fn); rn != nil {
+					if j, ok := id[rn.Obj()]; ok && origin[j] == "prelude" {
+						pf++
+					}
+				}
+			}
+		}
+		fmt.Println("non-prelude methods on prelude-origin types:", pf)
 	}
 	// make sure every top-level obj has a node
 	n := len(objs)
