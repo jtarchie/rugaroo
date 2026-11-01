@@ -57,6 +57,18 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 - `-c` is function-level backend concurrency **inside one package**. Splitting main.go into several *files* of the same package changes nothing: the compiler sees one package either way, and `-c=4` = `-c=8` shows the backend is already saturated. Only splitting into *packages* lets `go build` compile units in parallel (frontend included). Unproven upper bound: with ~4 balanced packages and 10 cores, wall time could approach the largest package plus link; not prototyped, no measured number.
 - What a package split needs (reasoned from decisions 206/212/213, not tried): an acyclic layering (prelude, gems, user) while today every dispatcher and `Dyn` wrapper type-switches over every class, so those closed-world switches could only live in the top package, and lower layers would reach user classes through Go interfaces or init-time hooks (function values, which sits next to the no-map-dispatch constraint and needs the user's OK); exported (capitalized) names across packages; generic free funcs `Owner_Name[Self]` instantiated across the boundary; decision 49 prunes the prelude per program, so a shared cached prelude package needs pruning by visibility instead; and `rugaroo gen > main.go` building with go.mod alone (a stated goal) becomes a directory of files.
 
+## Package split: the dependency graph says no (measured)
+
+`docs/research/scc` (own module; `cd <generated module> && CONTRACT=1 [CUT=rbDyn] scc main.go`) typechecks the generated main.go with go/types (0 errors) and builds the graph of top-level funcs, methods, types and vars (an edge = a reference), with each type and its methods contracted into one node (Go requires them in one package), then runs Tarjan. Tokenize output:
+
+| graph | nodes | largest cycle (SCC) | lines in it |
+|---|---|---|---|
+| funcs only, methods separate | 64,199 | 219 | n/a |
+| types+methods contracted | 31,768 | 15,584 (49% of nodes; includes all 2,219 `rbDyn*`) | 386,595 of 425,782 (**91%**) |
+| same, edges into `rbDyn*` cut (dispatchers hoisted to a top package) | 31,768 | 13,126 | 341,837 (**80%**) |
+
+So the classes, their methods and the dispatchers form one strongly connected core holding 80-91% of the code; a package must hold a whole SCC. Hoisting the dispatchers moves at most ~11% of the lines out; the rest of the cycle is the object model itself (core classes calling each other directly). At most ~20% of the code could go to other packages, so the achievable parallel gain is small (a few seconds of the 20 s serial frontend), far below what the added dispatch indirection and the lost single-file output would cost. Breaking the core cycle means replacing direct method calls between classes with interface/hook calls across layers, which is the redesign decisions 206/212/213 avoided. **Recommendation: drop the package-split lever.**
+
 ## Dead-code elimination before emit (Go's analysis)
 
 `golang.org/x/tools/cmd/deadcode` (RTA, run from the scratchpad; not a repo dependency) on the module: 1,035 of 46.5k funcs unreachable (2.2%), 19 s to run. The compiler's own reach pruning (decision 49, reach.go) already removes the rest; the ~6.4k funcs missing from the linked binary are mostly inlined away, not dead. Typechecking the output before writing it costs about the frontend time again, for ~2% fewer functions. Not worth adopting; stdlib `go/types` would do the same job without the dependency if it ever is.
@@ -71,7 +83,7 @@ TestCompileCost (05 / 64 / 116): 2065 / 7950 / 30491 compiled before and after.
 | 4 | the subagent's code-read hot spots (below), after profiling each: #3 typeAbstracts, #4/5 pruneGemMethods fixpoint + computeLive, #10 realPath negative cache | read only, **not profiled**; none shows in the top flat list after fix #1 | small each; larger at rubocop scale (10k classes) | small | low |
 | 5 | emit-side: dynWrappers D×C codegen; refineIvars dry-runs (`c.out.String()` copy per try) | code read only | unknown | medium | low |
 | 5b | share Dyn-wrapper bodies across receivers (3,549 distinct of 10,743) as a free func the per-class method forwards to | census above | up to ~7k fewer function bodies (15%); build time ∝ funcs (decision 235) | medium | runtime: one extra call per dynamic dispatch unless inlined; needs A/B on benchmarks (memory: no-speed-for-compile-time) |
-| 6 | split output into packages | frontend 20 s + backend 33 s now serial per package (above); not prototyped | unproven; bound needs a prototype | high | high: closed-world dispatch crosses packages; single-file goal |
+| 6 | split output into packages | 80-91% of lines in one dependency cycle (SCC table above) | <= ~20% movable: rejected | high | rejected by measurement |
 | 7 | pre-emit dead-code elimination via RTA | 2.2% unreachable (above) | ~2% of funcs | medium | rejected |
 
 Not done: memory profile / `-memprofile` (item 2 beyond GOGC), per-gem partition prototype (item 4), per-file IR cache (item 5 beyond #2), gem-lane pruned/stub generation share (item 8), liquid and kramdown baselines, and the rubocop CLI at 54 min. The 65 s `go build` half of the budget is unprofiled.
