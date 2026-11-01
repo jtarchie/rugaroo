@@ -79,7 +79,18 @@ A comment inside `rbDump` changed 114 programs: the 114 that keep `func rbDump` 
 
 ### 4. `-race`: 54 of 245 programs, 51 of them only because Thread is reachable
 
-`goBuild` adds `-race` when the generated Go has more than one `go` statement. Attributing the `go` statements in the 54 programs to their functions: `rbTrapSignals` (the always-on one) in all 54; `rbThreadStart` in 51; `rbStartChild` (spawn) in 6; `Timeout_Meta___Race` in 1. Only 61_timeout, 23_threads, 42_queues, 79_monitor, 77_ractor and the thread/fiber/ractor/process minitest files start goroutines in their own code; the other ~40 (every minitest file, kramdown, liquid, cuba, rack, resty, prism...) keep `Thread.new`'s helper because minitest or a gem names Thread, and never run it in the test. The cost of `-race` per program: RACE_PAIRED
+`goBuild` adds `-race` when the generated Go has more than one `go` statement. Attributing the `go` statements in the 54 programs to their functions: `rbTrapSignals` (the always-on one) in all 54; `rbThreadStart` in 51; `rbStartChild` (spawn) in 6; `Timeout_Meta___Race` in 1. Only 61_timeout, 23_threads, 42_queues, 79_monitor, 77_ractor and the thread/fiber/ractor/process minitest files start goroutines in their own code; the other ~40 (every minitest file, kramdown, liquid, cuba, rack, resty, prism...) keep `Thread.new`'s helper because minitest or a gem names Thread, and never run it in the test. The cost of `-race`, paired cold builds of run a's kept programs (fresh GOCACHE with the race and plain std prebuilt, machine otherwise idle, `-trimpath -gcflags=-dwarf=false`, `-l` for the minitest ones as the harness does):
+
+| program | -race wall | -race CPU | plain wall | plain CPU |
+|---|---|---|---|---|
+| TestMinitest/object | 39.7 s | 51.7 s | 19.1 s | 47.9 s |
+| TestMinitest/array | 21.5 s | 28.4 s | 9.9 s | 25.8 s |
+| TestMinitest/hash | 27.6 s | 36.4 s | 15.6 s | 37.7 s |
+| 116_cuba_web | 29.8 s | 52.4 s | 18.8 s | 50.3 s |
+| 123_kramdown | 39.9 s | 53.1 s | 15.9 s | 43.5 s |
+| 66_minitest_spec | 11.7 s | 16.4 s | 7.0 s | 16.4 s |
+
+`-race` doubles the wall of a build (it turns off the compiler's concurrent backend, decision 88) but adds only 0-22% CPU. In a full run the builds overlap ten-wide and the machine is CPU-bound, so dropping `-race` from the 40 programs that never start a goroutine would save CPU in that range, not the 2x; the 2x shows on an idle machine building one program, as `go test -run TestMinitest/object` does after an edit.
 
 ### 5. rbs-inline + rbs validate: 640-910 s of CPU per run, deterministic
 
@@ -159,6 +170,6 @@ rugaroo's own compile is 846-1008 s of CPU per run and the critical-path tail (k
 ## Recommendation
 
 1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take RBS_GAIN off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → a warm run once L1b is in; warm 337 s → P3_WALL (P3).
-2. Then L3 with its own decision (amending 88): the remaining expensive case is an edit that changes a widely kept helper (b2: 2396 s), whose cost is 114 big `-race` builds plus their lint; `-race` only where goroutines run cuts the builds by RACE_FACTOR and leaves lint, which L4 can overlap.
+2. Then L3 with its own decision (amending 88): the remaining expensive case is an edit that changes a widely kept helper (b2: 2396 s), whose cost is 114 big `-race` builds plus their lint; `-race` only where goroutines run halves the wall of each such build on an idle machine (0-22% of its CPU in a saturated full run) and leaves lint, which L4 can overlap.
 3. L6 when more than one worktree is in use (the user's workflow today).
 4. The rest of the post-edit cost is program size (decision 235) and compiler speed (L7): track them in the compile-time research, not here.
