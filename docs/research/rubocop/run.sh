@@ -5,9 +5,9 @@
 # copies, whose last line must be "1 file inspected, 1 offense detected, 1 offense autocorrectable".
 set -e
 here=$(cd "$(dirname "$0")" && pwd); G=/opt/homebrew/lib/ruby/gems/4.0.0/gems
-w=$(mktemp -d); I=""
+w=${RUBOCOP_WORK:-$(mktemp -d)}; I="" # RUBOCOP_WORK: reuse one copy, so the paths (and the inference cache, decision 430) stay the same
 for g in regexp_parser-2.13.1 rubocop-ast-1.50.0 rubocop-1.92.1; do
-  cp -R $G/$g $w/ && patch -s -p1 -d $w/$g < $here/$g.patch
+  [ -d $w/$g ] || { cp -R $G/$g $w/ && patch -s -p1 -d $w/$g < $here/$g.patch; }
   I="$I -I $w/$g/lib"
 done
 cd $w && printf 'x = 1\nputs x\n' > a.rb && cp $here/main.rb .

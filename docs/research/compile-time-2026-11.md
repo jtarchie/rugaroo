@@ -137,3 +137,17 @@ CPU profile: flat (top leaf 3.6%, map access). Stacks are deeper than the profil
 **`refineIvars` is ~190 s of 407 s (47%)** (instrumented run, uncommitted): it runs once per pass (9 passes), each time 12-15 container-ivar candidates and 26-32 dry-runs of 17-19 classes / ~1,000 methods (0.6-1.0 s each, since every try also resets every inferred return program-wide). Tries = 2n+2 in every pass: the all-typings try fails, every all-but-one try fails (there are three culprits, the same in every pass: `Racc::Parser#@racc_tstack`, `Parser::CurrentArgStack#@stack`, `RuboCop::FilePatterns#@strings`), then the one-at-a-time phase decides. The accepted set is the same from pass 2 to 8. Levers, none built yet: (a) exact: none cheap found (tries mutate shared state, so no parallelism; the culprit count is only known by running); (b) behind a flag, empirically checked: in rounds, seed the greedy phase with the previous pass's accepted set and skip the all-but-one phase when the previous pass had at least two culprits among the same candidates; the final pass keeps the full search. Bound: ~150 s of 407 s.
 
 **Determinism (fixed, ec3acb46):** two `gen -trace` runs of one program differed in `rugaroo-boot-<random>` (the boot hook's `-I` temp dir, recorded in `$LOAD_PATH`) and `rugaroo-entry-<random>` (the synthetic entry file, in the runtime require table), against decision 88, so a regen of an unchanged program always missed the Go build cache. Hooks now load by path (`-r /abs/hook.rb`), and the entry lives at a content-addressed path under the user cache dir. `TestTraceDeterministic` (fixture `testdata/traced_det`) fails without the fix and passes with it; traced examples 78/123/124 still match MRI.
+
+## Inference cache, measured (decision 430, d5025fea)
+
+`gen -trace`, wall, output compared byte for byte:
+
+| program | cold (cache saved) | hit | rounds on hit | output |
+|---|---|---|---|---|
+| 124 liquid | 8 s | 4 s | 0 | identical |
+| 123 kramdown | 27 s | 10 s | 0 | identical |
+| rubocop (`RUBOCOP_WORK=dir docs/research/rubocop/run.sh`) | 3 m 37 s | **41 s** | 0 | identical |
+
+The rubocop hit: infer 15 s (nearly all `refineIvars`), format 10.6 s, gocheck 8.7 s, emit 2.6 s, trace+boot 2 s. This repro compiles a smaller program than the scratchpad run above (44.7 MB and 993 cached keys against 86 MB and 1,612; it runs from a different directory, so rubocop resolves its config and cop set differently, not investigated), so its cold time is not comparable to the 6 m 28 s there; the cold/hit ratio is.
+
+Partial reuse (drop a changed file's keys, run the rounds from the rest) was built and rejected: liquid with one line added to main.rb converged in 3 rounds instead of 8 (5 s) but typed `Liquid::ResourceLimits#render_length` untyped where cold types it `Integer?`. The rounds are not confluent, so any changed input compiles cold. TestCompileCost: 2065 / 7950 / 30491, unchanged (tests never enable the cache).
