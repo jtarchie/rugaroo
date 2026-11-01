@@ -54,6 +54,16 @@ func TestStringLitsKept(t *testing.T) {
 	}
 }
 
+// Dispatchers go out in name order, not in the order bodies noted them (decision 432).
+func TestDispatchersInNameOrder(t *testing.T) {
+	src := "# rbs_inline: enabled\n\nclass Pt\n  def zz_m = 1\n  def aa_m = 2\nend\n\n#: (untyped) -> untyped\ndef dispatch_both(v) = [v.zz_m, v.aa_m]\n\np dispatch_both(Pt.new)\n"
+	out := compileOne(t, src)
+	a, z := strings.Index(out, "func rbDynAaM("), strings.Index(out, "func rbDynZzM(")
+	if a < 0 || z < 0 || a > z {
+		t.Errorf("dispatchers not in name order: aa_m at %d, zz_m at %d", a, z)
+	}
+}
+
 // The regexp2 engine is kept when kept code names it; pattern vars are named by pattern (decision 432).
 func TestRxAltByPruner(t *testing.T) {
 	plain := compileOne(t, "p(\"ab\" =~ /b/)\n")

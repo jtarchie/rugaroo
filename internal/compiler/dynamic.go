@@ -51,21 +51,30 @@ func (c *Compiler) emitDynamic(reached, selected func(string) bool) bool {
 		c.callable = c.callableNames()
 	}
 	var emitted []string
-	for progress := true; progress; {
+	for progress := true; progress; { // each pass in name order, not noting order, which discarded emissions shift (decision 432)
 		progress = false
-		for i := 0; i < len(c.dynNames); i++ { //nolint:intrange // emitDynName appends what a wrapper body notes, so len is re-read
-			if n := c.dynNames[i]; !c.dynOut[n] && c.dynNeeded(n, reached, selected) {
-				c.dynOut[n] = true
-				c.emitDynName(n)
-				emitted, progress = append(emitted, n), true
+		var dyn, resp []string
+		for _, n := range c.dynNames {
+			if !c.dynOut[n] && c.dynNeeded(n, reached, selected) {
+				dyn = append(dyn, n)
 			}
 		}
-		for i := 0; i < len(c.respondNames); i++ { //nolint:intrange // same
-			if n := c.respondNames[i]; !c.respondOut[n] && (c.respondEvery || c.dynNeeded(n, reached, selected)) {
-				c.respondOut[n] = true
-				c.emitRespond(n)
-				emitted, progress = append(emitted, n), true
+		for _, n := range c.respondNames {
+			if !c.respondOut[n] && (c.respondEvery || c.dynNeeded(n, reached, selected)) {
+				resp = append(resp, n)
 			}
+		}
+		slices.Sort(dyn)
+		slices.Sort(resp)
+		for _, n := range dyn { // a wrapper body may note more names: the next pass takes them
+			c.dynOut[n] = true
+			c.emitDynName(n)
+			emitted, progress = append(emitted, n), true
+		}
+		for _, n := range resp {
+			c.respondOut[n] = true
+			c.emitRespond(n)
+			emitted, progress = append(emitted, n), true
 		}
 	}
 	for _, name := range emitted {
