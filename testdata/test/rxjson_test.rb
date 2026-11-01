@@ -124,6 +124,20 @@ module RxjsonTests
     def pattern = /@/
   end
 
+  # A /o literal in a module method two classes include: MRI keeps one Regexp per literal, whichever class reaches it first.
+  module OnceSource
+    #: (String) -> String
+    def once_source(x) = /#{x}/o.source
+  end
+
+  class OnceA
+    include OnceSource
+  end
+
+  class OnceB
+    include OnceSource
+  end
+
   # `when` with a Regexp held in a constant or a local is still Regexp#===.
   DIG = /\d/ #: Regexp
 
@@ -1176,6 +1190,11 @@ b/
         "#{re.source} #{re.match?("b")}"
       end
       assert_equal ["a false", "a false"], got
+    end
+
+    # /o is one Regexp per literal, shared by every class that includes its method
+    def test_o_once_per_literal_across_includers
+      assert_equal ["a", "a"], [OnceA.new.once_source("a"), OnceB.new.once_source("b")]
     end
 
     # {,n} is an open-min quantifier

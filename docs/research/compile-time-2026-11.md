@@ -151,3 +151,15 @@ CPU profile: flat (top leaf 3.6%, map access). Stacks are deeper than the profil
 The rubocop hit: infer 15 s (nearly all `refineIvars`), format 10.6 s, gocheck 8.7 s, emit 2.6 s, trace+boot 2 s. This repro compiles a smaller program than the scratchpad run above (44.7 MB and 993 cached keys against 86 MB and 1,612; it runs from a different directory, so rubocop resolves its config and cop set differently, not investigated), so its cold time is not comparable to the 6 m 28 s there; the cold/hit ratio is.
 
 Partial reuse (drop a changed file's keys, run the rounds from the rest) was built and rejected: liquid with one line added to main.rb converged in 3 rounds instead of 8 (5 s) but typed `Liquid::ResourceLimits#render_length` untyped where cold types it `Integer?`. The rounds are not confluent, so any changed input compiles cold. TestCompileCost: 2065 / 7950 / 30491, unchanged (tests never enable the cache).
+
+## Replaying `refineIvars` on a hit: tried, not adopted (2026-11-01)
+
+Goal: skip decision 15's ~30 dry-run emissions on a cache hit (rubocop hit 41 s, of which infer 15 s; prototype got it to 28 s, infer 2.6 s). The answer itself replays fine (a hit's final pass is a cold final pass's state). What does not: the dry-runs are not side-effect free. Their discarded emission registers entries in about 15 tables the output is built from (`tableState`, `marshalState`, `dynState`, `regexpVars`, `/o` guards), and a cold compile's output carries them:
+
+- regexp constants are numbered by `len(pkgVars)` and dynamic dispatchers are emitted in first-noted order, so the dry-runs shift names and order (kramdown: same lines in another order);
+- a `/o` literal allocated a fresh guard var per generation, so the number of times a body was generated reached the output (kramdown: off by 12); naming the guard by file and offset fixed that (one per literal, MRI's rule; `test_o_once_per_literal_across_includers` added, passes before and after);
+- rubocop: a Marshal case for `Tuple2[RuboCop::Config, Boolean]`, a type only a rejected typing created.
+
+Two fixes tried. (1) Record what the dry-runs appended and replay it on a hit: liquid and kramdown byte-identical, rubocop still 5 lines off (the Marshal table), and every table added later would silently break hit == cold. (2) Snapshot and restore the tables around each dry-run (user's choice): wrong in the other direction. A dry-run is the first to analyze a method, the real emission reuses that analysis (memoized) without rendering its types again, so the restored-away registration is never made: kramdown's cold output lost a `*func(any, any, any) any` case from `rbIsProc`/`rbDynProcCall` that its code needs. The dry-runs' table effects are entangled with memoized analysis.
+
+What would make it work: build these tables from the final emitted code (what the kept functions actually name) instead of registering them while rendering. That is a refactor of how the tables are made, not a cache feature, and it would also remove the entries only rejected typings created from every cold compile. Reverted; the cache keeps rerunning `refineIvars` on a hit.
