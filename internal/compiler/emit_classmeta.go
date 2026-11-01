@@ -275,7 +275,7 @@ func (c *Compiler) keptProcs() []string {
 			}
 			c.procShapes[p] = s
 		}
-		if c.keptFunc == nil || c.keptFunc(s) {
+		if c.keptView == nil || c.keptView.keptFunc(s) {
 			out = append(out, p)
 		}
 	}

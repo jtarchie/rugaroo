@@ -34,6 +34,18 @@ var stdImports = map[string]string{
 	"utf16": "unicode/utf16", "utf8": "unicode/utf8", "regexp2": "github.com/dlclark/regexp2",
 }
 
+// keptCode is what the tables built from the kept program ask of it (decisions 431, 432).
+type keptCode interface {
+	keptFunc(shape string) bool // a *func value of this funcShape can exist
+	keptString(s string) bool   // a string literal with this text is in kept code
+}
+
+// allKept answers for an unpruned program: everything is kept.
+type allKept struct{}
+
+func (allKept) keptFunc(string) bool   { return true }
+func (allKept) keptString(string) bool { return true }
+
 // errPruneIncomplete: a dispatcher became reachable after the tables went out (a type-switch case unlocked late); the caller recompiles emitting every one first.
 var errPruneIncomplete = errors.New("pruning reached dispatchers emitted lazily")
 
@@ -117,7 +129,7 @@ func merge(f, t *ast.File) {
 }
 
 // formatGo prunes src to what main reaches (noPrune or RUGAROO_NO_PRUNE=1 keeps everything), adds the std imports it refers to, and gofmts it. src is the program without its forwarders, dispatchers and tables: next emits those in batches for what the pruned program so far reaches (most are never reached), until it returns nil.
-func formatGo(src []byte, lazy map[string]bool, next func(reached, selected, keptFunc func(string) bool) ([]byte, error), labels map[string]string, noPrune bool, env envConfig, preamble string) ([]byte, error) {
+func formatGo(src []byte, lazy map[string]bool, next func(reached, selected func(string) bool, kept keptCode) ([]byte, error), labels map[string]string, noPrune bool, env envConfig, preamble string) ([]byte, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "main.go", src, parser.ParseComments)
 	if err != nil {
@@ -125,15 +137,16 @@ func formatGo(src []byte, lazy map[string]bool, next func(reached, selected, kep
 	}
 	all := func(string) bool { return true }
 	var p *pruner
-	reached, selected, keptFunc := all, all, all
+	reached, selected := all, all
+	var kept keptCode = allKept{}
 	if !noPrune && !env.NoPrune {
 		p = newPruner(lazy)
 		p.add(f.Decls)
 		p.run()
-		reached, selected, keptFunc = p.reached, p.selected, p.keptFunc
+		reached, selected, kept = p.reached, p.selected, p
 	}
 	for i := 0; ; i++ {
-		more, err := next(reached, selected, keptFunc)
+		more, err := next(reached, selected, kept)
 		if err != nil {
 			return nil, err
 		}

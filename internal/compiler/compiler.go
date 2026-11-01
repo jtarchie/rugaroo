@@ -256,16 +256,16 @@ type tableState struct {
 	pkgVars      map[string]bool // package-level var declarations (regexp literals, rbDATA, once-guards), named by what they are; the pruner drops the unnamed
 	strLits      map[string]bool // String literal texts: String#frozen? knows them by identity
 	tablesOut    bool
-	tablesAt     tableInputs         // tableInputs when the tables went out
-	procsOut     bool                // rbIsProc/rbDynProcCall emitted, after every other table (emitProcTables)
-	procsAt      int                 // len(keptProcs()) then
-	optConv      map[string]bool     // class T?s bound to a method type parameter: rbOptClassFrom's cases (decision 295)
-	procTypes    map[string]bool     // Proc Go types rendered (*func(...)), probes and dry-runs too: rbIsProc lists those keptProcs finds in kept code (decision 431)
-	procFuncs    map[string]TFunc    // the type each procTypes entry renders, for rbDynProcCall
-	procShapes   map[string]string   // per procTypes entry: its funcShape, once (keptProcs)
-	keptFunc     func(s string) bool // the pruner's: kept code writes a func type of funcShape s (emitNext sets it)
-	procMinArity map[string]int      // per procTypes entry: the fewest arguments a gem lambda of that Go type takes (decision 416)
-	argBoxes     map[string]bool     // T? boxes of generic type arguments, which generic code may hold
+	tablesAt     tableInputs       // tableInputs when the tables went out
+	procsOut     bool              // rbIsProc/rbDynProcCall emitted, after every other table (emitProcTables)
+	procsAt      int               // len(keptProcs()) then
+	optConv      map[string]bool   // class T?s bound to a method type parameter: rbOptClassFrom's cases (decision 295)
+	procTypes    map[string]bool   // Proc Go types rendered (*func(...)), probes and dry-runs too: rbIsProc lists those keptProcs finds in kept code (decision 431)
+	procFuncs    map[string]TFunc  // the type each procTypes entry renders, for rbDynProcCall
+	procShapes   map[string]string // per procTypes entry: its funcShape, once (keptProcs)
+	keptView     keptCode          // the pruner's view of the kept program (emitNext sets it)
+	procMinArity map[string]int    // per procTypes entry: the fewest arguments a gem lambda of that Go type takes (decision 416)
+	argBoxes     map[string]bool   // T? boxes of generic type arguments, which generic code may hold
 	// concrete T? Go types (*T) rendered anywhere, for rbUnbox; the value
 	// says whether T is itself optional
 	boxes     map[string]bool

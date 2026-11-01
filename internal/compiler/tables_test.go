@@ -38,6 +38,22 @@ func TestUnionsByReach(t *testing.T) {
 	}
 }
 
+// rbStringLits lists the literals kept code spells, not those only a pruned body rendered (decision 432).
+func TestStringLitsKept(t *testing.T) {
+	out := compileOne(t, "def never = \"zq_dead_lit\"\ns = \"zq_live_lit\"\np s.frozen?\n")
+	i := strings.Index(out, "var rbStringLits = [...]string{")
+	if i < 0 {
+		t.Fatal("no rbStringLits")
+	}
+	table := out[i : i+strings.Index(out[i:], "\n}")]
+	if !strings.Contains(table, `"zq_live_lit"`) {
+		t.Error("a kept literal is missing from rbStringLits")
+	}
+	if strings.Contains(table, `"zq_dead_lit"`) {
+		t.Error("a literal only pruned code spells is in rbStringLits")
+	}
+}
+
 // The regexp2 engine is kept when kept code names it; pattern vars are named by pattern (decision 432).
 func TestRxAltByPruner(t *testing.T) {
 	plain := compileOne(t, "p(\"ab\" =~ /b/)\n")

@@ -82,9 +82,9 @@ func (c *Compiler) emitProgram() {
 }
 
 // emitNext is one batch of the rest of the program, given what the pruned program so far reaches: forwarders of reached classes and dispatchers of reached names, until a round adds nothing; then the tables every body has contributed to by now, once; then nil. The tables open paths to more code, so rounds go on after them; a late body that adds to a table's inputs (a tuple type, a literal) is errPruneIncomplete, and the caller recompiles with everything eager.
-func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]byte, error) {
+func (c *Compiler) emitNext(reached, selected func(string) bool, kept keptCode) ([]byte, error) {
 	c.out.Reset()
-	c.keptFunc = keptFunc
+	c.keptView = kept
 	for _, cls := range c.sortedClasses() {
 		if !c.fwdOut[cls] && (c.dynEvery || reached(cls.Name)) {
 			c.fwdOut[cls] = true
@@ -97,7 +97,7 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 	marshal := reached("rbMDumpGen") || reached("rbMLoadGen")
 	// Marshal's cases were rendered with the tables: a later value type, or a class they skipped and something now reaches, needs them redone
 	stale := marshal && len(c.marshalSeen) != c.marshalAt || slices.ContainsFunc(c.marshalSkipped, reached)
-	if c.procsOut && len(c.keptProcs()) != c.procsAt { // what the proc tables reached makes another Proc type
+	if c.procsOut && len(c.keptProcs())+len(c.keptStrLits()) != c.procsAt { // what the late tables reached adds to them
 		return nil, errPruneIncomplete
 	}
 	if c.tablesOut && (c.tableInputs() != c.tablesAt || stale) {
@@ -122,7 +122,8 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 		case !c.procsOut: // after everything else: its cases are the Proc types kept code makes (decision 431)
 			c.procsOut = true
 			c.emitProcTables()
-			c.procsAt = len(c.keptProcs())
+			c.emitStringLits()
+			c.procsAt = len(c.keptProcs()) + len(c.keptStrLits())
 		default:
 			return nil, nil
 		}
@@ -132,7 +133,7 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 
 // tableInputs is what emitTables reads, as sizes and flags: the maps only grow, so equal sizes mean equal contents.
 type tableInputs struct {
-	argBoxes, boxes, procTypes, pkgVars, strLits, optConv             int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
+	argBoxes, boxes, procTypes, pkgVars, strLits, optConv      int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
 	classOf, dynEvery, respondEvery, callable, dynEach, reqTab bool
 }
 
@@ -186,17 +187,10 @@ func (c *Compiler) emitTables() {
 	if c.needRequireTable {
 		c.emitRequireTable()
 	}
-	c.w("%s\n\n", strings.TrimSpace(rxAltGo())) // kept when a pattern or a body names rxAltReady (decisions 242, 432)
+	c.w("%s\n\n", strings.TrimSpace(rxAltGo()))             // kept when a pattern or a body names rxAltReady (decisions 242, 432)
 	for _, r := range slices.Sorted(maps.Keys(c.pkgVars)) { // named by what they are, so sorted they do not depend on render order
 		c.w("%s\n\n", r)
 	}
-	// The linker shares one copy of each literal's bytes, so this table's
-	// entries alias every literal in the program (rbStrFrozen).
-	c.w("var rbStringLits = [...]string{\n")
-	for _, s := range slices.Sorted(maps.Keys(c.strLits)) {
-		c.w("\t%s,\n", strconv.Quote(s))
-	}
-	c.w("}\n")
 }
 
 // noteUserToJson: the json generator calls to_json(state) on what it
@@ -213,4 +207,24 @@ func (c *Compiler) noteUserToJson() {
 			return
 		}
 	}
+}
+
+// keptStrLits is rbStringLits' entries: the Ruby literal texts a kept Go literal spells, the only bytes the linker can share with a String (decision 432).
+func (c *Compiler) keptStrLits() []string {
+	var out []string
+	for _, s := range slices.Sorted(maps.Keys(c.strLits)) {
+		if c.keptView == nil || c.keptView.keptString(s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// emitStringLits: each entry aliases every literal of its text in the program (rbStrFrozen); emitted with the proc tables, once kept code stopped growing.
+func (c *Compiler) emitStringLits() {
+	c.w("var rbStringLits = [...]string{\n")
+	for _, s := range c.keptStrLits() {
+		c.w("\t%s,\n", strconv.Quote(s))
+	}
+	c.w("}\n\n")
 }

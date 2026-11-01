@@ -72,6 +72,7 @@ type pruner struct {
 	genRanges     [][2]token.Pos                          // generic funcs' and generic types' methods' extents, for inGeneric
 	genUnknown    bool                                    // a creation site in generic code holds a value funcTypesOf cannot type: instArgs
 	inTypeArgs    []*ast.FuncType                         // func types written inside type arguments
+	strLits       map[string]bool                         // string literal texts in kept code
 	typeSwitchOf  map[*ast.AssignStmt]*ast.TypeSwitchStmt // a type switch's `v := x.(type)`, for caseFuncs
 	funcElems     []*ast.FuncType                         // element types of kept arrays, slices and maps of funcs
 	wantElems     bool                                    // a creation site indexes a container funcTypesOf cannot type: made takes funcElems
@@ -81,7 +82,7 @@ type pruner struct {
 
 // newPruner drops what main cannot reach, like the linker, so a program compiles only the prelude it uses; names match unscoped, which only over-keeps. Declarations arrive in batches (add, then run): the dynamic dispatchers are emitted only for what the first batch reaches.
 func newPruner(lazy map[string]bool) *pruner {
-	p := &pruner{lazy: lazy, deferred: map[ast.Stmt]string{}, byName: map[string][]ast.Node{}, constBlock: map[ast.Node]*ast.GenDecl{}, kept: map[ast.Node]bool{}, names: map[string]bool{}, methodNames: map[string]bool{}, declared: map[string]bool{}, asserted: map[string]bool{}, named: map[*ast.InterfaceType]bool{}, stubs: map[*ast.FuncDecl]bool{}, pending: map[*ast.CaseClause][]string{}, written: newShapeSet(), made: newShapeSet(), funcFields: map[string][]*ast.FuncType{}, methodsByName: map[string][]*ast.FuncDecl{}, parsedShapes: map[string]*ast.FuncType{}, addrOf: map[*ast.FuncDecl]map[string]bool{}, settled: map[argKey]bool{}, tparamOwner: map[*ast.Field]*ast.FuncDecl{}, typeSwitchOf: map[*ast.AssignStmt]*ast.TypeSwitchStmt{}, typeParams: map[string]bool{}, parked: map[*ast.Field]parkedField{}, why: map[ast.Node]ast.Node{}, scoped: map[string]map[string]bool{}, ifaceName: map[*ast.InterfaceType]string{}, recvMethods: map[string]map[string]bool{}, recvIfaces: map[string][]string{}, ifaceAnc: map[string][]string{}, scopedBy: map[string][]string{}}
+	p := &pruner{lazy: lazy, deferred: map[ast.Stmt]string{}, byName: map[string][]ast.Node{}, constBlock: map[ast.Node]*ast.GenDecl{}, kept: map[ast.Node]bool{}, names: map[string]bool{}, methodNames: map[string]bool{}, declared: map[string]bool{}, asserted: map[string]bool{}, named: map[*ast.InterfaceType]bool{}, stubs: map[*ast.FuncDecl]bool{}, pending: map[*ast.CaseClause][]string{}, written: newShapeSet(), made: newShapeSet(), funcFields: map[string][]*ast.FuncType{}, methodsByName: map[string][]*ast.FuncDecl{}, parsedShapes: map[string]*ast.FuncType{}, addrOf: map[*ast.FuncDecl]map[string]bool{}, settled: map[argKey]bool{}, tparamOwner: map[*ast.Field]*ast.FuncDecl{}, typeSwitchOf: map[*ast.AssignStmt]*ast.TypeSwitchStmt{}, strLits: map[string]bool{}, typeParams: map[string]bool{}, parked: map[*ast.Field]parkedField{}, why: map[ast.Node]ast.Node{}, scoped: map[string]map[string]bool{}, ifaceName: map[*ast.InterfaceType]string{}, recvMethods: map[string]map[string]bool{}, recvIfaces: map[string][]string{}, ifaceAnc: map[string][]string{}, scopedBy: map[string][]string{}}
 	for n := range stdMethodNames {
 		p.methodNames[n] = true
 	}
@@ -182,6 +183,9 @@ func (p *pruner) isGeneric(e ast.Node) bool {
 	})
 	return generic
 }
+
+// keptString: kept code has a string literal of text s, whose bytes a String may share (rbStringLits, decision 432).
+func (p *pruner) keptString(s string) bool { return p.strLits[s] }
 
 func (p *pruner) isTypeParam(name string) bool { return p.typeParams[name] && len(p.byName[name]) == 0 }
 
@@ -986,6 +990,12 @@ func (p *pruner) visit(x ast.Node) bool {
 	switch x := x.(type) {
 	case *ast.FuncType: // a signature, literal or type: what a Ref(f), &f or method value can point at
 		p.note(&p.written, x)
+	case *ast.BasicLit:
+		if x.Kind == token.STRING {
+			if s, err := strconv.Unquote(x.Value); err == nil {
+				p.strLits[s] = true
+			}
+		}
 	case *ast.TypeSwitchStmt:
 		if as, ok := x.Assign.(*ast.AssignStmt); ok {
 			p.typeSwitchOf[as] = x
