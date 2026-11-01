@@ -317,7 +317,7 @@ def sides(s)
 end
 sides(Sq.new)
 -- go_name_collision_dynamic.rb --
-# error: `foo_bar` and `fooBar` both become Go FooBar, so dynamic calls cannot tell them apart
+# error: `fooBar` and `foo_bar` both become Go FooBar, so dynamic calls cannot tell them apart
 # rbs_inline: enabled
 class A
   #: () -> Integer
