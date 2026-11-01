@@ -16,6 +16,7 @@ import (
 	"go/types"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -858,7 +859,30 @@ func stablePreludeLines(t *testing.T, path string, pinned bool) {
 	}
 }
 
+var preludeDefKey = regexp.MustCompile(`([#.]@prelude/[^:"\s]+):(\d+)"`)
+
 func stableLines(code []byte, pinned bool) []byte {
+	// Method keys spell a prelude def's byte offset (`"String#@prelude/string.rb:2874"`, decisions 414/418), which moves with
+	// any edit above the def: each prelude file's distinct offsets become 1..n in this program, which keeps them distinct.
+	offsets := map[string]map[string]int{}
+	for _, m := range preludeDefKey.FindAllSubmatch(code, -1) {
+		file, off := string(m[1]), string(m[2])
+		if offsets[file] == nil {
+			offsets[file] = map[string]int{}
+		}
+		offsets[file][off] = 0
+	}
+	for _, offs := range offsets {
+		keys := slices.Sorted(maps.Keys(offs))
+		slices.SortFunc(keys, func(a, b string) int { return cmp.Or(cmp.Compare(len(a), len(b)), cmp.Compare(a, b)) }) // numeric order
+		for i, k := range keys {
+			offs[k] = i + 1
+		}
+	}
+	code = preludeDefKey.ReplaceAllFunc(code, func(m []byte) []byte {
+		sm := preludeDefKey.FindSubmatch(m)
+		return []byte(string(sm[1]) + ":" + strconv.Itoa(offsets[string(sm[1])][string(sm[2])]) + `"`)
+	})
 	lines := bytes.Split(code, []byte("\n"))
 	next := map[string]int{} // prelude file -> the line its next block starts at
 	var openFile string

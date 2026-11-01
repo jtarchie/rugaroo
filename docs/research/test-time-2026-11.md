@@ -22,6 +22,10 @@ Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time
 | b1. one comment line near the top of prelude/string.rb | 1974 s | 9355 s | 245 | 147 | 1530 s | 4.0 GB |
 | b2. one comment line inside `rbDump` (prelude/go/string.go), a helper 114 of the 245 programs keep | 2396 s | 11637 s | 245 | 114 | 1804 s | 4.8 GB |
 | c. one comment line in prelude/abbrev.rb | SCENARIO_C |
+| P0. prototype (decision 434), first run: every example's bytes change once | 2297 s | 9138 s | 245 | 144 | 1735 s | one-off |
+| P1. prototype, warm (rbs cache filling) | 353 s | 1175 s | 245 | 0 | 10 s | 0 |
+| P2. prototype, b1's comment line in prelude/string.rb | 668 s | 1369 s | 245 | 3 | 320 s | 0.1 GB |
+| P3. prototype + rbs cache warm + parallel top-level tests, nothing changed | P3_ROW |
 
 CLAUDE.md's "~7 min warm / ~23 min after a prelude edit" is 5.6 min / 33-40 min on this day: b1 and b2 are the case that hurts.
 
@@ -107,12 +111,53 @@ PARALLEL_MEASURED
 
 ## Levers
 
-LEVERS
+Ranked by measured gain per effort and risk. "Prototyped" levers are commits on this branch with full-run numbers below.
+
+### L1. Stable `//line` numbers for every test program (prototyped: decision 434, commit 3e200ddd)
+
+Gain: scenario b1 (comment line in prelude/string.rb) 668 s against 1974 s (run P2); the 147 rebuilds become 3 (TestBootAutoload, 98_method_objects, 136_prism_parse: the `rbMethodInfo` key offsets, L1b) and the lint pass 320 s, all of it 136_prism_parse (105k lines) re-linting. With L1b the run should be a warm run. Effort: 40 lines in the harness. Risk: lint positions on a failing example name a consecutive line instead of the prelude's (`rugaroo build -work` on the example gives the real one); the parity checks above found no difference in what lint reports. One-off cost: every example's bytes change once, a cold run (2297 s measured, run P0).
+
+What it does not cover: an edit that changes kept code (b2) still rebuilds and re-lints exactly its keepers, and those are the big programs (L3, L4).
+
+### L1b. Key a Method by its def's name, not its byte offset (prototyped: commit METHODKEY_COMMIT)
+
+Decisions 414/418 key a typed Method by its def so aliases compare equal, spelled `Owner#@file:<byte offset>`. The offset moves with any edit above the def, so a prelude line shift changes the three programs that build a Method of a prelude def (P2's remaining misses, 320 s of lint). `@file:<def name>` identifies the same def (aliases share it; a redefinition replaces it) and does not move. Generated-code change of one string; no run-time or typing effect.
+
+### L2. Cache the examples' rbs-inline + rbs validate pass (prototyped: decision 435, commit 89e24772)
+
+Gain: 640-910 s of CPU per run, measured as PROTO_RBS_WALL of wall on a warm run. Effort: 50 lines, the MRI cache's pattern. Risk: a stale pass replaying; the key holds every input (sources, sig/, Ruby, Gemfile.lock) and only passes are stored.
+
+### L3. `-race` only for programs that start goroutines in their own code (not prototyped)
+
+51 programs carry `-race` because `rbThreadStart` is kept, not called. RACE_PAIRED_TEXT. Rule candidate: `-race` when the user file or a gem file (not the prelude) contains a `go` statement after pruning, or when a prelude `go` statement sits in a function the user code reaches by name (Thread.new, Ractor.new, Timeout.timeout, spawn, Process.*). Needs a decision amending 88 and a check that the thread, ractor, fiber, process, timeout, queue, monitor, socket, net and WEBrick programs keep it. A missed race is a test weakened, so the rule must be reach-based, not name-based.
+
+### L4. Lint only what changed, earlier (not prototyped)
+
+The lint pass is per-package incremental (finding 2) but runs alone after the last example. After an edit reaching the big programs it is 1530-1804 s of a 10-core machine idle otherwise except for one golangci-lint process. Two shapes: (a) start the lint pass over the examples that are done while the slow tail (kramdown, liquid, roundhouse: 25-50 s compiles, late in the glob order) is still compiling; (b) order the examples so the biggest compile first. (a) needs the module split in two lint invocations, which doubles the fixed `go list` cost (6 s warm). Expected gain is the overlap, ≤ the tail (~60-100 s), small against L1; worth it only once L1 is in and the remaining case (b2) is what hurts.
+
+### L5. Make the sequential top-level tests parallel (prototyped: commit 9f1a3b76)
+
+TestGenericInstancesDeterministic, TestGemAutoloadWithoutBoot, TestGemDefineMethodWithoutBoot, TestPrimeVendoredSig: 45-50 s of compile that ran alone before the suites (finding 8). TestBootAutoload and TestTraceRun stay sequential (`t.Setenv`). Gain: PARALLEL_GAIN.
+
+### L6. Relative paths in `//line` for `-I`, `-gem` and traced files (not prototyped)
+
+17 programs embed the checkout's absolute path and so miss the build cache and re-lint in every worktree (419 s of builds and the 490 s lint of run 0). A test-only rewrite to paths relative to the checkout in `stableLines` would make worktrees share those entries. Only worktree users pay this; the main checkout never does. Low effort, no risk to the oracle (run-time backtraces of test programs already read pinned lines).
+
+### L7. Compiler speed (out of scope here)
+
+rugaroo's own compile is 846-1008 s of CPU per run and the critical-path tail (kramdown 50 s, object 70 s). Decision 430's cache is off in tests by design. This is docs/research/compile-time-2026-11.md's subject; every second there is a second here, times one.
 
 ## Ruled out
 
-RULED_OUT
+- **Merging testdata programs** (item 7): a program's fixed costs on a warm run are 0.66 s link + 0.5 s run; the variable costs (compile 2-50 s, build and lint on a miss) are what a merge would add up, not remove (decision 49's pruning makes a merged program the union). CLAUDE.md's "file count, not size, drives suite time" described the pre-decision-88 world; it no longer holds for the warm or the post-edit run.
+- **Pinning the examples to `:1` like testdata**: positions collide across blocks (every block starts at line 1), so an inline `//nolint` could cover an unrelated issue at the same offset in another block, the coincidence the memory note on generated-code nolint already recorded for gosec. Consecutive numbering keeps uniqueness at the same cache behaviour.
+- **Skipping lint or vet on unchanged examples by hand**: golangci-lint already does this per package (finding 2); the pass is 6 s when nothing changed.
+- **A smaller lint set for generated code**: every linter in `.golangci.generated.yml` is there by decision (371 for nilness); the cost is the big programs' size, which is decision 81/235's classes × names problem, not the linter list.
+- **GOMAXPROCS/-parallel tuning**: PARALLEL_RULED
 
 ## Recommendation
 
-RECOMMENDATION
+1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take RBS_GAIN off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → a warm run once L1b is in; warm 337 s → P3_WALL (P3).
+2. Then L3 with its own decision (amending 88): the remaining expensive case is an edit that changes a widely kept helper (b2: 2396 s), whose cost is 114 big `-race` builds plus their lint; `-race` only where goroutines run cuts the builds by RACE_FACTOR and leaves lint, which L4 can overlap.
+3. L6 when more than one worktree is in use (the user's workflow today).
+4. The rest of the post-edit cost is program size (decision 235) and compiler speed (L7): track them in the compile-time research, not here.

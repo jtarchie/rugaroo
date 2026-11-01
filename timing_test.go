@@ -44,6 +44,11 @@ func TestStableLines(t *testing.T) {
 	if got := string(stableLines([]byte(in), false)); got != want {
 		t.Errorf("consecutive:\n%s\nwant:\n%s", got, want)
 	}
+	keys := "k1 := \"String#@prelude/string.rb:2874\"\nk2 := \"String#@prelude/string.rb:19182\"\nk3 := \"Foo.@prelude/string.rb:2874\"\nk4 := \"X#@prelude/array.rb:500\"\n"
+	wantKeys := "k1 := \"String#@prelude/string.rb:1\"\nk2 := \"String#@prelude/string.rb:2\"\nk3 := \"Foo.@prelude/string.rb:1\"\nk4 := \"X#@prelude/array.rb:1\"\n"
+	if got := string(stableLines([]byte(keys), true)); got != wantKeys {
+		t.Errorf("method keys:\n%s\nwant:\n%s", got, wantKeys)
+	}
 	pinned := "//line prelude/a.rb:1\nx\ny\n//line prelude/b.rb:1\nz\n//line prelude/a.rb:1\nw\n//line main.rb:3\nq\n"
 	if got := string(stableLines([]byte(in), true)); got != pinned {
 		t.Errorf("pinned:\n%s\nwant:\n%s", got, pinned)
