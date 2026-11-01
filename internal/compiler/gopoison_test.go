@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -38,7 +39,7 @@ func Bad2() int { var s string = 1; return len(s + fmt.Sprint()) }
 func main() { fmt.Println(Good(), (&X[int]{}).Bad()) }
 `)
 	stubbed := map[string]bool{}
-	code = stubRejected(code, func(fn, _ string) (string, bool) {
+	code = stubRejected(context.Background(), code, func(fn, _ string) (string, bool) {
 		stubbed[fn] = true
 		return "rugaroo: " + fn + " does not compile", fn != ""
 	})

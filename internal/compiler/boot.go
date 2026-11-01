@@ -269,7 +269,7 @@ func compileTraced(ctx context.Context, preludeFS, gemSigs fs.FS, sources []Sour
 	if dump := opts.env.GopoisonDump; dump != "" { // debugging: the Go before its rejected gem methods become stubs
 		_ = os.WriteFile(dump+".0", out, 0o600)
 	}
-	out = stubRejected(out, func(fn, msg string) (string, bool) {
+	out = stubRejected(ctx, out, func(fn, msg string) (string, bool) {
 		g, ok := opts.goFuncs[fn]
 		if ok {
 			warnings = append(warnings, fmt.Sprintf("%s does not type-check in Go, so calling it raises NotImplementedError: %s (decision 205)", g.key, msg))

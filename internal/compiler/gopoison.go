@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -9,9 +10,14 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io"
+	"os"
+	"os/exec"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
+	"time"
 )
 
 // A gem method whose generated Go does not type-check is poisoned as one rugaroo cannot compile is (decision 205): the
@@ -30,7 +36,7 @@ type goFunc struct{ key, name string }
 // NotImplementedError message, true) by that raise. An import only stubbed bodies used is deleted: the signatures stay,
 // so nothing else can fail, and no second check is needed (decision 303). Code that does not parse is returned as is:
 // go build reports that, with the generated file kept.
-func stubRejected(code []byte, stub func(fn, msg string) (string, bool)) []byte {
+func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (string, bool)) []byte {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "main.go", code, parser.SkipObjectResolution)
 	if err != nil {
@@ -50,7 +56,7 @@ func stubRejected(code []byte, stub func(fn, msg string) (string, bool)) []byte 
 		return nil
 	}
 	bad := map[*ast.FuncDecl]string{} // the first error in each
-	conf := types.Config{Importer: importer.Default(), Error: func(err error) {
+	conf := types.Config{Importer: stdImporter(ctx, fset, f), Error: func(err error) {
 		var te types.Error
 		if errors.As(err, &te) {
 			if fd := at(te.Pos); fd != nil && bad[fd] == "" {
@@ -122,3 +128,38 @@ func funcDeclName(fd *ast.FuncDecl) string {
 	}
 	return fd.Name.Name
 }
+
+// stdImporter reads the file's standard-library imports' export data from one `go list -export -deps`: importer.Default runs one
+// per package (3.5 s of a rubocop gen for 58). Same export files, so the same types; a module import gets no data, as from Default.
+func stdImporter(ctx context.Context, fset *token.FileSet, f *ast.File) types.Importer {
+	var pkgs []string
+	for _, spec := range f.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err == nil && !strings.Contains(strings.SplitN(path, "/", 2)[0], ".") {
+			pkgs = append(pkgs, path)
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", append([]string{"list", "-export", "-deps", "-f", "{{.ImportPath}}={{.Export}}"}, pkgs...)...) //nolint:gosec // the go command over the program's own import paths
+	cmd.Dir = os.TempDir()                                                                                                               // the standard library resolves outside any module; a user's go.mod has no say
+	out, err := cmd.Output()
+	if err != nil {
+		return importer.Default()
+	}
+	exports := map[string]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if path, file, ok := strings.Cut(line, "="); ok && file != "" {
+			exports[path] = file
+		}
+	}
+	return importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		file, ok := exports[path]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s", errNoExport, path)
+		}
+		return os.Open(file) //nolint:gosec // the go command's export file
+	})
+}
+
+var errNoExport = errors.New("no export data")
