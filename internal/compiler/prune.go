@@ -564,6 +564,14 @@ func recvTypeIdent(e ast.Expr) (*ast.Ident, bool) {
 // visitMade notes kept code's creation sites; a type parameter's value is made where the func is called (settleMade).
 func (p *pruner) visitMade(x ast.Node) {
 	switch x := x.(type) {
+	case *ast.BasicLit: // a string literal's text, for rbStringLits (decision 432)
+		if x.Kind != token.STRING {
+			return
+		}
+		s, err := strconv.Unquote(x.Value)
+		if err == nil {
+			p.strLits[s] = true
+		}
 	case *ast.StarExpr:
 		if ft, ok := x.X.(*ast.FuncType); ok {
 			p.note(&p.made, ft) // a *func type written: a value of it may come from anywhere
@@ -598,23 +606,28 @@ func (p *pruner) visitMade(x ast.Node) {
 			})
 		}
 	case *ast.CallExpr:
-		id, _ := x.Fun.(*ast.Ident)
-		if id == nil {
-			id, _ = recvTypeIdent(x.Fun)
+		p.visitMadeCall(x)
+	}
+}
+
+// visitMadeCall: new(F) makes a *F; a generic call may point at an argument (settleMade).
+func (p *pruner) visitMadeCall(x *ast.CallExpr) {
+	id, _ := x.Fun.(*ast.Ident)
+	if id == nil {
+		id, _ = recvTypeIdent(x.Fun)
+	}
+	if id == nil {
+		return
+	}
+	if id.Name == "new" && len(x.Args) == 1 && len(p.byName["new"]) == 0 {
+		if ft, ok := x.Args[0].(*ast.FuncType); ok {
+			p.note(&p.made, ft)
 		}
-		if id == nil {
-			return
-		}
-		if id.Name == "new" && len(x.Args) == 1 && len(p.byName["new"]) == 0 {
-			if ft, ok := x.Args[0].(*ast.FuncType); ok {
-				p.note(&p.made, ft)
-			}
-			return
-		}
-		for _, d := range p.byName[id.Name] {
-			if fd, ok := d.(*ast.FuncDecl); ok && fd.Type.TypeParams != nil {
-				p.genCalls = append(p.genCalls, genCall{x, fd})
-			}
+		return
+	}
+	for _, d := range p.byName[id.Name] {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Type.TypeParams != nil {
+			p.genCalls = append(p.genCalls, genCall{x, fd})
 		}
 	}
 }
@@ -990,12 +1003,6 @@ func (p *pruner) visit(x ast.Node) bool {
 	switch x := x.(type) {
 	case *ast.FuncType: // a signature, literal or type: what a Ref(f), &f or method value can point at
 		p.note(&p.written, x)
-	case *ast.BasicLit:
-		if x.Kind == token.STRING {
-			if s, err := strconv.Unquote(x.Value); err == nil {
-				p.strLits[s] = true
-			}
-		}
 	case *ast.TypeSwitchStmt:
 		if as, ok := x.Assign.(*ast.AssignStmt); ok {
 			p.typeSwitchOf[as] = x

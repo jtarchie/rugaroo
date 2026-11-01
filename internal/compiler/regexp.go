@@ -212,7 +212,7 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 	name, ok := f.c.regexpVars[args]
 	if !ok {
 		h := fnv.New64a()
-		_, _ = h.Write([]byte(args)) // a hash.Hash never fails
+		_, _ = h.Write([]byte(args))                // a hash.Hash never fails
 		name = fmt.Sprintf("rbRe_%016x", h.Sum64()) // by pattern, not by when it was first rendered (decision 432)
 		f.c.regexpVars[args] = name
 		init := "rbRegexpNew(" + args + ")"
