@@ -108,9 +108,7 @@ type fctx struct {
 // first time the statement runs only, as MRI's.
 func (f *fctx) genEnd(n *parser.PostExecutionNode) {
 	guard := fmt.Sprintf("rbEnd%d_%d", slices.Index(f.c.files, f.f), n.Location.StartOffset) // offsets repeat across files
-	if !slices.Contains(f.c.pkgVars, "var "+guard+" bool") {
-		f.c.pkgVars = append(f.c.pkgVars, "var "+guard+" bool")
-	}
+	f.c.addPkgVar("var " + guard + " bool")
 	call := f.c.rewrite(n, func() parser.Node {
 		blk := &parser.BlockNode{Location: n.Location, Body: n.Statements}
 		return &parser.CallNode{Location: n.Location, Name: "at_exit", Block: blk}

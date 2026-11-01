@@ -73,7 +73,6 @@ type Compiler struct {
 	ffiStubs              []string                     // C stubs for by-value struct signatures under --cgo (decision 426)
 	ffiStubTypes          []string                     // their struct typedefs
 	fiddleSlots           map[*Class]int               // extern/bind methods synthesized so far, per module: each one's __fiddle_func_at slot (decision 329)
-	needRxAlt             bool                         // the program may build a pattern RE2 rejects: it gets the regexp2 engine (decision 242)
 	aliasNews             []aliasNewReq                // `alias_method :[], :new` on a synthesized new, made in link (decision 253)
 	needRequireTable      bool                         // a require of a computed name: rbRequireComputed checks it against the compiled files (decision 246)
 	programFile           *File                        // the file $0 names: the main file, or a traced compile's -main (decisions 241, 288)
@@ -254,7 +253,7 @@ type pathCache struct {
 
 // tableState: what emitTables reads (see tableInputs) and the tables' bookkeeping.
 type tableState struct {
-	pkgVars      []string        // package-level var declarations: compiled regexp literals, rbDATA, once-guards
+	pkgVars      map[string]bool // package-level var declarations (regexp literals, rbDATA, once-guards), named by what they are; the pruner drops the unnamed
 	strLits      map[string]bool // String literal texts: String#frozen? knows them by identity
 	tablesOut    bool
 	tablesAt     tableInputs         // tableInputs when the tables went out
@@ -530,7 +529,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		preludeFS: preludeFS, parser: p, loaded: map[string]bool{}, selfTyped: map[*Class]bool{}, labels: map[string]string{}, erbSnippets: map[*parser.CallNode]*File{}, sigs: map[string]*rbs.ClassDecl{},
 		dynState:     dynState{dynEvery: dynEvery, dynSeen: map[string]bool{}, respondSeen: map[string]bool{}, markers: map[string]bool{}, dynGo: map[string]string{}, dynWrapped: map[*Class][]dynWrapped{}, dynOut: map[string]bool{}, respondOut: map[string]bool{}, fwdOut: map[*Class]bool{}},
 		marshalState: marshalState{marshalSeen: map[string]Type{}, marshalGo: map[string]bool{}},
-		tableState:   tableState{procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}}}
+		tableState:   tableState{procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}, pkgVars: map[string]bool{}}}
 	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
@@ -1281,3 +1280,6 @@ func parseDelegators(m map[string][]string) map[boot.Loc][]string {
 	}
 	return out
 }
+
+// addPkgVar declares a package-level var once.
+func (c *Compiler) addPkgVar(decl string) { c.pkgVars[decl] = true }

@@ -66,10 +66,8 @@ func rbRegexpNew(pattern, src, opts string) *Regexp {
 	return r
 }
 
-// rbRegexpNewAfter is rbRegexpNew for a pattern variable that must initialize after the regexp2 engine registers (decision 242).
-func rbRegexpNewAfter(_ bool, pattern, src, opts string) *Regexp {
-	return rbRegexpNew(pattern, src, opts)
-}
+// rbRxAlt is r, built where the regexp2 engine must be in the program: naming rxAltReady keeps it (decisions 242, 432).
+func rbRxAlt(_ bool, r *Regexp) *Regexp { return r }
 
 // rbRegexpLenient is a gem's regexp (decision 176): MRI builds it, so rugaroo does too, and one RE2 cannot match raises
 // RegexpError when it is used rather than when the gem loads (Rack::Lint's URI patterns).

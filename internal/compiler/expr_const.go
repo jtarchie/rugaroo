@@ -209,7 +209,7 @@ func (f *fctx) genData() expr {
 		f.c.dataVar = true
 		text := &exprNode{e: expr{code: strconv.Quote(*f.f.data), typ: f.cls("String"), lit: true}}
 		io := f.genMethodCall(&parser.NilNode{}, f.genConstRead(&parser.ConstantReadNode{Name: "StringIO"}), "new", []parser.Node{text}, nil)
-		f.c.pkgVars = append(f.c.pkgVars, "var rbDATA = "+io.code)
+		f.c.addPkgVar("var rbDATA = " + io.code)
 	}
 	return expr{code: "rbDATA", typ: t}
 }

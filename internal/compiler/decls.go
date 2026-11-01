@@ -135,7 +135,7 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 // tableInputs is what emitTables reads, as sizes and flags: the maps only grow, so equal sizes mean equal contents.
 type tableInputs struct {
 	argBoxes, boxes, procTypes, pkgVars, strLits, optConv             int // procTypes only triggers the eager recompile now: the proc tables go out last (decision 431)
-	classOf, dynEvery, respondEvery, callable, dynEach, rxAlt, reqTab bool
+	classOf, dynEvery, respondEvery, callable, dynEach, reqTab bool
 }
 
 func (c *Compiler) tableInputs() tableInputs {
@@ -143,7 +143,7 @@ func (c *Compiler) tableInputs() tableInputs {
 		argBoxes: len(c.argBoxes), boxes: len(c.boxes), procTypes: len(c.procTypes),
 		pkgVars: len(c.pkgVars), strLits: len(c.strLits), optConv: len(c.optConv),
 		classOf: c.classOf, dynEvery: c.dynEvery, respondEvery: c.respondEvery, callable: c.callable != nil,
-		dynEach: c.dynEach, rxAlt: c.needRxAlt, reqTab: c.needRequireTable,
+		dynEach: c.dynEach, reqTab: c.needRequireTable,
 	}
 }
 
@@ -189,13 +189,8 @@ func (c *Compiler) emitTables() {
 	if c.needRequireTable {
 		c.emitRequireTable()
 	}
-	if c.needRxAlt { // a pattern RE2 rejects, or one built at run time from what may hold one (decision 242)
-		c.w("%s\n\nvar _ = rxAltReady\n\n", strings.TrimSpace(rxAltGo()))
-	}
-	for _, r := range c.pkgVars {
-		if c.needRxAlt { // a pattern variable initializes after the engine registers, not before (Go's dependency order)
-			r = strings.Replace(r, " = rbRegexpNew(", " = rbRegexpNewAfter(rxAltReady, ", 1)
-		}
+	c.w("%s\n\n", strings.TrimSpace(rxAltGo())) // kept when a pattern or a body names rxAltReady (decisions 242, 432)
+	for _, r := range slices.Sorted(maps.Keys(c.pkgVars)) { // named by what they are, so sorted they do not depend on render order
 		c.w("%s\n\n", r)
 	}
 	// The linker shares one copy of each literal's bytes, so this table's

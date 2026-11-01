@@ -88,13 +88,13 @@ func (f *fctx) runtimeExtend(n *parser.CallNode) (expr, bool) {
 // noteRuntimeRegexp: Regexp.new/compile/union of anything but string literals RE2 compiles builds a pattern only run
 // time knows, so the program gets the regexp2 engine (decision 242).
 func (f *fctx) noteRuntimeRegexp(n *parser.CallNode) {
-	if !isRegexpConst(n.Receiver) || n.Name != "new" && n.Name != "compile" && n.Name != "union" || f.c.needRxAlt || f.f.isPrelude() {
+	if !isRegexpConst(n.Receiver) || n.Name != "new" && n.Name != "compile" && n.Name != "union" || f.f.isPrelude() {
 		return
 	}
 	for _, a := range callArgs(n) {
 		s, ok := a.(*parser.StringNode)
 		if !ok {
-			f.c.needRxAlt = true
+			f.emit("_ = rxAltReady") // this body may build what RE2 rejects: naming the engine keeps it
 			return
 		}
 		p, err := rxPrepare(s.Unescaped.Value, false) // only decides whether the alternate engine is needed
@@ -102,7 +102,7 @@ func (f *fctx) noteRuntimeRegexp(n *parser.CallNode) {
 			_, err = regexp.Compile(p)
 		}
 		if err != nil {
-			f.c.needRxAlt = true
+			f.emit("_ = rxAltReady")
 			return
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"regexp"
 	"regexp/syntax"
 	"slices"
@@ -195,10 +196,11 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 		}
 	}
 	goPat, err := rxPrepare(pat, flags.extended) // source and inspect keep the spacing; only the matcher drops it
+	alt := false
 	if err == nil {
 		var rx *rxRegexp
 		rx, err = rxCompile(flags.goPrefix() + goPat)
-		f.c.needRxAlt = f.c.needRxAlt || rx != nil && rx.alt != nil
+		alt = rx != nil && rx.alt != nil
 	}
 	if err != nil && f.lenient() {
 		return expr{code: fmt.Sprintf("rbRegexpLenient(%s, %s, %q)", strconv.Quote(flags.goPrefix()), strconv.Quote(src), flags.opts()), typ: f.cls("Regexp")}
@@ -209,9 +211,15 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 	args := fmt.Sprintf("%s, %s, %q", strconv.Quote(flags.goPrefix()+goPat), strconv.Quote(src), flags.opts())
 	name, ok := f.c.regexpVars[args]
 	if !ok {
-		name = fmt.Sprintf("rbRe%d", len(f.c.pkgVars))
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(args)) // a hash.Hash never fails
+		name = fmt.Sprintf("rbRe_%016x", h.Sum64()) // by pattern, not by when it was first rendered (decision 432)
 		f.c.regexpVars[args] = name
-		f.c.pkgVars = append(f.c.pkgVars, "var "+name+" = rbRegexpNew("+args+")")
+		init := "rbRegexpNew(" + args + ")"
+		if alt { // after the regexp2 engine registers, which naming it keeps (decision 242)
+			init = "rbRxAlt(rxAltReady, " + init + ")"
+		}
+		f.c.addPkgVar("var " + name + " = " + init)
 	}
 	return expr{code: name, typ: f.cls("Regexp")}
 }
@@ -278,6 +286,7 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 	// atom, a flag, a group name).
 	var srcParts []string
 	var probe strings.Builder
+	alt := false
 	for _, p := range parts {
 		switch p := p.(type) {
 		case *parser.StringNode:
@@ -290,7 +299,7 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 			}
 			e := f.genExpr(p.Statements.Body[0], nil)
 			if c, ok := p.Statements.Body[0].(*parser.CallNode); !f.f.isPrelude() && (ok && c.Name == "source" || isAny(e.typ) || isClass(e.typ, "Regexp")) {
-				f.c.needRxAlt = true // another pattern's text may hold what RE2 rejects (decision 242)
+				alt = true // another pattern's text may hold what RE2 rejects (decision 242)
 			}
 			probe.WriteString("i") // under /x too: stripping a letter leaves it
 			srcParts = append(srcParts, "string("+f.toS(p.Statements.Body[0], e)+")")
@@ -302,7 +311,7 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 	if err == nil {
 		var rx *rxRegexp
 		rx, err = rxCompile(flags.goPrefix() + goPat)
-		f.c.needRxAlt = f.c.needRxAlt || rx != nil && rx.alt != nil || f.lenient() && !f.f.isPrelude()
+		alt = alt || rx != nil && rx.alt != nil || f.lenient() && !f.f.isPrelude()
 		var se *syntax.Error
 		if errors.As(err, &se) && !slices.Contains(rxUnsupported, se.Code) {
 			err = nil
@@ -319,12 +328,15 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 		ctor = "rbRegexpLenient"
 	}
 	code := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(flags.goPrefix()), strings.Join(srcParts, " + "), flags.opts())
+	if alt { // names the regexp2 engine, so the pruner keeps it (decision 242)
+		code = "rbRxAlt(rxAltReady, " + code + ")"
+	}
 	if once {
 		// /o interpolates on first evaluation and keeps that Regexp. Not
 		// sync.Once: a raise (RegexpError) must leave it unset to retry, as
 		// MRI does; the lock is because threads are goroutines.
-		name := fmt.Sprintf("rbRe%d", len(f.c.pkgVars))
-		f.c.pkgVars = append(f.c.pkgVars, "var "+name+" struct {\n\tsync.Mutex\n\tre *Regexp\n}")
+		name := fmt.Sprintf("rbReO%d_%d", slices.Index(f.c.files, f.f), n.GetLocation().StartOffset) // one per literal, MRI's rule
+		f.c.addPkgVar("var " + name + " struct {\n\tsync.Mutex\n\tre *Regexp\n}")
 		code = fmt.Sprintf("func() *Regexp {\n%[1]s.Lock()\ndefer %[1]s.Unlock()\nif %[1]s.re == nil {\n%[1]s.re = %[2]s\n}\nreturn %[1]s.re\n}()", name, code)
 	}
 	return expr{code: code, typ: f.cls("Regexp")}

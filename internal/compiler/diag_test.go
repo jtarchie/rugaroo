@@ -102,7 +102,7 @@ func TestRegexpNewNotesAlternateEngine(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(out), "var _ = rxAltReady") {
+			if !strings.Contains(string(out), "var rxAltReady") {
 				t.Error("a lookbehind pattern built by Regexp.new did not get the regexp2 engine")
 			}
 		})
@@ -111,7 +111,7 @@ func TestRegexpNewNotesAlternateEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(out), "var _ = rxAltReady") {
+	if strings.Contains(string(out), "var rxAltReady") {
 		t.Error("an RE2 pattern must not pull in regexp2")
 	}
 }
