@@ -119,14 +119,14 @@ func (c *Compiler) symbolLiterals() map[string]bool {
 // emitNameSwitches backs send and respond_to? with computed names.
 func (c *Compiler) emitNameSwitches() {
 	c.w("func rbSendByName(recv any, name string, how int, args ...any) any {\n\tswitch name {\n")
-	for _, name := range c.dynNames {
+	for _, name := range slices.Sorted(slices.Values(c.dynNames)) { // name order: noting order follows what discarded emissions noted (decision 432)
 		c.w("\tcase %q:\n\t\treturn rbDyn%s(how, recv, args...)\n", name, goMethodName(name))
 	}
 	c.w("\t}\n\tif r, ok := recv.(interface{ DynMethodMissing(...any) any }); ok {\n")
 	c.w("\t\treturn r.DynMethodMissing(append([]any{Symbol(name)}, args...)...)\n\t}\n")
 	c.w("\tpanic(rbNoMethod(name, recv, false))\n}\n\n")
 	c.w("func rbRespondsByName(recv any, name string, priv bool) Boolean {\n\tswitch name {\n")
-	for _, name := range c.respondNames {
+	for _, name := range slices.Sorted(slices.Values(c.respondNames)) {
 		c.w("\tcase %q:\n\t\treturn rbResponds%s(recv, priv)\n", name, goMethodName(name))
 	}
 	c.w("\t}\n\tif r, ok := recv.(interface{ DynRespondToMissingQ(...any) any }); ok {\n")
