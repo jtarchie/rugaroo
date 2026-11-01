@@ -445,6 +445,33 @@ func TestTraceEval(t *testing.T) {
 	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
 }
 
+// TestTraceDeterministic: a temp dir named in the output makes every regen miss the Go build cache (decision 88).
+func TestTraceDeterministic(t *testing.T) {
+	requireToolchain(t)
+	t.Parallel()
+	dir := filepath.Join("testdata", "traced_det")
+	main := filepath.Join(dir, "main.rb")
+	src, err := os.ReadFile(main) //nolint:gosec // testdata path
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outs [2][]byte
+	for i := range outs {
+		outs[i], _, err = CompileTrace(t.Context(), main, [][]string{nil}, []string{"--disable=gems"}, loadPath(dir, src)...)
+		if err != nil {
+			t.Fatalf("rugaroo: %v", err)
+		}
+	}
+	if !bytes.Equal(outs[0], outs[1]) {
+		t.Error("two traced compiles of one program differ")
+	}
+	for _, tmp := range []string{"rugaroo-boot-", "rugaroo-trace-", "rugaroo-entry-"} {
+		if bytes.Contains(outs[0], []byte(tmp)) {
+			t.Errorf("output names a %s temp dir", tmp)
+		}
+	}
+}
+
 // TestTraceRun compiles testdata/traced from runs of main.rb, with no entry file: the second (-trace-also) loads traced_argv (decision 296).
 func TestTraceRun(t *testing.T) {
 	requireToolchain(t)

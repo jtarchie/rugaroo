@@ -3,6 +3,8 @@ package compiler
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -197,13 +199,7 @@ func CompileTrace(ctx context.Context, preludeFS, gemSigs fs.FS, main string, ru
 		return nil, nil, err
 	}
 	src = append(src, more...)
-	dir, err := os.MkdirTemp("", "rugaroo-entry-")
-	if err != nil {
-		return nil, nil, fmt.Errorf("trace: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	entry := filepath.Join(dir, "entry.rb")
-	err = os.WriteFile(entry, src, 0o600)
+	entry, err := writeEntry(src)
 	if err != nil {
 		return nil, nil, fmt.Errorf("trace: %w", err)
 	}
@@ -282,4 +278,40 @@ func m1(m []string) string {
 		return ""
 	}
 	return m[1]
+}
+
+// writeEntry names the entry by content because its path reaches the output (decision 88); kept since a concurrent compile may read it. ponytail: never collected; add an age sweep if the dir grows.
+func writeEntry(src []byte) (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err //nolint:wrapcheck // the caller wraps
+	}
+	sum := sha256.Sum256(src)
+	dir := filepath.Join(base, "rugaroo", "entry", hex.EncodeToString(sum[:8]))
+	entry := filepath.Join(dir, "entry.rb")
+	data, rerr := os.ReadFile(entry) //nolint:gosec // under the user cache dir
+	if rerr == nil && bytes.Equal(data, src) {
+		return entry, nil
+	}
+	err = os.MkdirAll(dir, 0o700)
+	if err != nil {
+		return "", err //nolint:wrapcheck // the caller wraps
+	}
+	tmp, err := os.CreateTemp(dir, "entry-*.rb")
+	if err != nil {
+		return "", err //nolint:wrapcheck // the caller wraps
+	}
+	_, err = tmp.Write(src)
+	cerr := tmp.Close()
+	if err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), entry) // atomic: a concurrent compile sees the old or the new file, both the same bytes
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return "", err //nolint:wrapcheck // the caller wraps
+	}
+	return entry, nil
 }

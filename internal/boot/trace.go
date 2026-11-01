@@ -33,12 +33,13 @@ func Trace(ctx context.Context, program string, args, rubyOpts []string) (*Loade
 	if err != nil {
 		return nil, fmt.Errorf("trace: %w", err)
 	}
-	err = os.WriteFile(filepath.Join(dir, "trace_hook.rb"), hook, 0o600)
+	hookPath := filepath.Join(dir, "trace_hook.rb")
+	err = os.WriteFile(hookPath, hook, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("trace: %w", err)
 	}
 	out := filepath.Join(dir, "loaded.txt")
-	rargs := append(append([]string{}, rubyOpts...), "-I", dir, "-r", "trace_hook", "--", program)
+	rargs := append(append([]string{}, rubyOpts...), "-r", hookPath, "--", program) // by path: a temp dir on $LOAD_PATH would reach the output (decision 88)
 	stderr, err := runRuby(ctx, append(rargs, args...), append(os.Environ(), "RUGAROO_TRACE_OUT="+out), func(context.CancelFunc) io.Writer { return io.Discard })
 	if errors.Is(err, exec.ErrNotFound) {
 		return nil, fmt.Errorf("trace %s: needs ruby on PATH (or RUGAROO_RUBY)", program)

@@ -254,7 +254,7 @@ func Capture(ctx context.Context, entry string, loadPaths ...string) (*Manifest,
 		return nil, fmt.Errorf("boot: %w", err)
 	}
 	out := filepath.Join(dir, "manifest.json")
-	args := []string{"-I", dir, "-r", "boot_hook"}
+	args := []string{"-r", hookPath} // by path, not `-I dir`: the temp dir would enter $LOAD_PATH and the output (decision 88)
 	for _, lp := range loadPaths {
 		args = append(args, "-I", lp)
 	}
