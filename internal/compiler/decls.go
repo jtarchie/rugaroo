@@ -93,9 +93,7 @@ func (c *Compiler) emitNext(reached, selected, keptFunc func(string) bool) ([]by
 	}
 	c.emitDynamic(reached, selected)
 	c.emitSends(reached)
-	if c.tablesOut {
-		c.emitUnions() // a late body's new union helper is a function like any other, not a table input
-	}
+	c.emitUnions(reached) // a helper is a function like any other: emitted once kept code names it (decision 432)
 	marshal := reached("rbMDumpGen") || reached("rbMLoadGen")
 	// Marshal's cases were rendered with the tables: a later value type, or a class they skipped and something now reaches, needs them redone
 	stale := marshal && len(c.marshalSeen) != c.marshalAt || slices.ContainsFunc(c.marshalSkipped, reached)
@@ -183,7 +181,6 @@ func (c *Compiler) emitTables() {
 	c.emitOptClassFrom()
 	c.emitTuples()
 	c.emitBoxes()
-	c.emitUnions()
 	c.emitClassMeta()
 	// last: every body, main included, has registered its literals by now
 	if c.needRequireTable {

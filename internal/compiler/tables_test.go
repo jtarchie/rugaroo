@@ -26,8 +26,19 @@ func TestTuplesByPruner(t *testing.T) {
 	}
 }
 
-// The regexp2 engine is in a program when kept code names it: an alt pattern's var, or a body building one at run
-// time; pattern vars are named by pattern (decision 432).
+// A union helper is emitted once kept code names it, in whatever round that is (decision 432).
+func TestUnionsByReach(t *testing.T) {
+	live := compileOne(t, "# rbs_inline: enabled\n\n#: (untyped) -> (Integer | String)\ndef pick(v) = v\n\np pick(gets ? 1 : \"a\")\n")
+	if !strings.Contains(live, "func rbUnion_") {
+		t.Error("a kept conversion into a union has no helper")
+	}
+	dead := compileOne(t, "# rbs_inline: enabled\n\n#: (untyped) -> (Integer | String)\ndef pick(v) = v\n\np 1\n")
+	if strings.Contains(dead, "func rbUnion_") {
+		t.Error("a union helper only dead code names was emitted")
+	}
+}
+
+// The regexp2 engine is kept when kept code names it; pattern vars are named by pattern (decision 432).
 func TestRxAltByPruner(t *testing.T) {
 	plain := compileOne(t, "p(\"ab\" =~ /b/)\n")
 	if strings.Contains(plain, "rxAltReady") {

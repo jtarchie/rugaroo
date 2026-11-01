@@ -70,9 +70,9 @@ func (c *Compiler) unionFn(u TUnion) string {
 // TypeError otherwise), converting an Array or Hash of another
 // instantiation as rbAs does; rbUnion_<hash>Out(a) shows a tuple member to
 // untyped code as the Array it is (decision 22).
-func (c *Compiler) emitUnions() {
+func (c *Compiler) emitUnions(reached func(string) bool) {
 	for _, name := range slices.Sorted(maps.Keys(c.unions)) {
-		if c.unionsOut[name] {
+		if c.unionsOut[name] || !reached(name) && !reached(name+"Out") {
 			continue
 		}
 		c.unionsOut[name] = true
