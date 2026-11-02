@@ -42,7 +42,7 @@ Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time
 | P6. prototype (L1, L1b, L2, L5), warm, machine otherwise idle | 232 s | 890 s | 245 | 0 | 9 s | 0 |
 | P8. prototype (all levers), b1's comment line in prelude/string.rb, machine under a load average of 240-290 from other sessions (video call, sqlite jobs): every step 5x slower, TestPairingHeapGemTyped hit its 10 min boot timeout; 0 build misses, which is the result that matters | 1502 s | 1538 s | 245 | 0 | 35 s | 0 |
 | P9. the same, started once the load average fell below 8, but other sessions' load came back (43-94 during the run; compile sum 3191 s against 783 s in P6): 1 miss, TestPrimeVendoredSig's first build after its pinning | 778 s | 1319 s | 245 | 1 | 18 s | 0 |
-| P10. the same, machine quiet | P10_ROW |
+| P10. the same, started at load 4.9 (it rose to ~18 by the end; compile sum 1021 s against 783 s in P6) | 254 s | 933 s | 245 | 0 | 8 s | 0 |
 | P7. P6 with `-parallel 20` | 338 s | 1023 s (+426 s sys) | 245 | 0 | 9 s | 0 |
 
 CLAUDE.md's "~7 min warm / ~23 min after a prelude edit" is 5.6 min / 33-40 min on this day: b1 and b2 are the case that hurts.
@@ -186,7 +186,7 @@ rugaroo's own compile is 846-1008 s of CPU per run and the critical-path tail (k
 
 ## Recommendation
 
-1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take ~300 s of CPU and ~100 s of wall off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → 0-1 rebuilds and an 18 s lint pass with L1b in (P8/P9, both under other sessions' load, so their walls 1502 s and 778 s measure the machine, not the suite; P5, the abbrev.rb case on a quiet machine, 248 s); warm 337 s → 232 s (P6).
+1. Merge L1 (decision 434) and L2 (decision 435) and L5 as they stand: together they make the first run after a prelude .rb line shift the same as a warm run, and take ~300 s of CPU and ~100 s of wall off every run. Goal, measured on this branch: comment line in a core prelude file 1974 s → 668 s measured (P2), → 254 s with L1b in (P10: 0 rebuilds, 8 s lint; P8/P9 ran the same scenario under other sessions' load, 1502 s and 778 s, 0 and 1 rebuilds); warm 337 s → 232 s (P6).
 2. Then L3 with its own decision (amending 88): the remaining expensive case is an edit that changes a widely kept helper (b2: 2396 s), whose cost is 114 big `-race` builds plus their lint; `-race` only where goroutines run halves the wall of each such build on an idle machine (0-22% of its CPU in a saturated full run) and leaves lint, which L4 can overlap.
 3. L6 when more than one worktree is in use (the user's workflow today).
 4. The rest of the post-edit cost is program size (decision 235) and compiler speed (L7): track them in the compile-time research, not here.
