@@ -29,7 +29,7 @@ Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time
 | P4. first run after the Method-key renumbering (L1b): the 7 programs that build Method tables change once | 669 s | 1530 s | 245 | 7 | 324 s | one-off |
 | P5. prototype, c's comment line in prelude/abbrev.rb (6 programs keep it) | 248 s | 930 s | 245 | 0 | 8 s | 0 |
 | P6. prototype (L1, L1b, L2, L5), warm, machine otherwise idle | 232 s | 890 s | 245 | 0 | 9 s | 0 |
-| P7. P6 with `-parallel 20` | P7_ROW |
+| P7. P6 with `-parallel 20` | 338 s | 1023 s (+426 s sys) | 245 | 0 | 9 s | 0 |
 
 CLAUDE.md's "~7 min warm / ~23 min after a prelude edit" is 5.6 min / 33-40 min on this day: b1 and b2 are the case that hurts.
 
@@ -114,7 +114,7 @@ A full run compiles 237 programs through the shared path (137 examples, 53 testd
 - before the parallel suites start (0-65 s in run a): the sequential top-level tests run alone: TestBootAutoload (61 s in run 0, 11 s warm; `t.Setenv` forbids `t.Parallel`), TestGenericInstancesDeterministic (26 s, 30 compiles), TestGemAutoloadWithoutBoot (18 s), TestGemDefineMethodWithoutBoot, TestTraceRun (`t.Setenv`). A `t.Parallel()` test only resumes after every sequential test in the package has finished.
 - after the last example: vet + lint, 6 s warm, 490-1804 s after an edit.
 
-PARALLEL_MEASURED
+Measured: P6 (`-parallel` 10, the default) 232 s / 890 s user; P7 (`-parallel 20`, same state) 338 s / 1023 s user + 426 s sys, peak RSS 3.4 GB against 2.0 GB. The compile step's summed time went from 783 s to 2848 s: twenty rugaroo compiles in one process contend for the GC and for memory bandwidth, and the builds and program runs they overlap with slow down too (build 128 → 198 s, run 109 → 141 s). The default is the right setting; the remaining wall after the levers (232 s) is the compile tail (kramdown 50 s, roundhouse 28 s, liquid 25 s, object 70 s) plus ~10 s of lint, not idle slots. Ordering the examples by expected compile time (biggest first) could trim the tail by tens of seconds; not measured.
 
 ### 9. rugaroo compile is the largest CPU item of a warm run
 
@@ -168,7 +168,7 @@ rugaroo's own compile is 846-1008 s of CPU per run and the critical-path tail (k
 - **Pinning the examples to `:1` like testdata**: positions collide across blocks (every block starts at line 1), so an inline `//nolint` could cover an unrelated issue at the same offset in another block, the coincidence the memory note on generated-code nolint already recorded for gosec. Consecutive numbering keeps uniqueness at the same cache behaviour.
 - **Skipping lint or vet on unchanged examples by hand**: golangci-lint already does this per package (finding 2); the pass is 6 s when nothing changed.
 - **A smaller lint set for generated code**: every linter in `.golangci.generated.yml` is there by decision (371 for nilness); the cost is the big programs' size, which is decision 81/235's classes × names problem, not the linter list.
-- **GOMAXPROCS/-parallel tuning**: PARALLEL_RULED
+- **More test parallelism**: `-parallel 20` is 46% slower than the default 10 (P7 against P6) and uses 1.7x the memory; the suite is CPU-bound in rugaroo's own compile, so more slots only add GC and cache contention.
 
 ## Recommendation
 
