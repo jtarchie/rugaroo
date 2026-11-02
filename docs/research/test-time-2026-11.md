@@ -2,6 +2,31 @@
 
 Branch `test-time` (worktree beside the main checkout, from main b05a97d4). Machine: 10 cores, 32 GB, Go 1.27.3, golangci-lint 2.15.0, ruby 4.0.9, Go build cache 400 GB at the start. Every number below was measured in this session with the harness's `RUGAROO_TEST_TIMING` log (timing_test.go) and `go test -json`, summarized by `scripts/test-time`. Full runs went through the machine-wide lock (`lockf -k /tmp/claude-501/rugaroo-fullsuite.lock go test -json ./... -timeout 90m`), one at a time, with the lint and experiment jobs below sometimes running beside them (noted where it matters).
 
+## Checklist
+
+Done (merged to main 2026-11-01, 69928ae0):
+
+- [x] Instrumentation: `RUGAROO_TEST_TIMING` per-step log, `RUGAROO_TEST_KEEP`, `scripts/test-time` (bdd5b0e2)
+- [x] Baseline measured: fresh worktree 950 s, warm 337 s, string.rb comment 1974 s, prelude/go helper comment 2396 s
+- [x] L1 stable `//line` numbers in every test program, examples consecutive per prelude file; lint parity checked (decision 434, 3e200ddd)
+- [x] L1b Method-key prelude offsets renumbered per file (decision 434 amended, d22b3754); TestPrimeVendoredSig pinned (37f287fc)
+- [x] L2 rbs-inline + rbs validate pass cached (decision 435, 89e24772)
+- [x] L5 compile-only top-level tests parallel (9f1a3b76)
+- [x] `-race` cost measured on 6 paired builds (2x wall, 0-22% CPU)
+- [x] `-parallel 20` measured and ruled out (46% slower)
+- [x] Lint pass shown per-package incremental; cost is the every-name programs
+- [x] CLAUDE.md timing line and testdata guidance corrected; memory notes updated
+- [x] After: warm 232 s; string.rb comment 254 s (0 rebuilds, 8 s lint); abbrev.rb comment 248 s
+
+To do (not started; each needs its own measurement before and after):
+
+- [ ] L3 reach-based `-race` rule: `-race` only when goroutines start outside the prelude's always-kept helpers (51 of 54 race programs only keep `rbThreadStart`); decision amending 88; check the thread, ractor, fiber, process, timeout, queue, monitor, socket, net and WEBrick programs keep it
+- [ ] L6 relative `//line` paths for `-I`, `-gem` and traced files in test programs, so worktrees share the 17 programs that now embed the checkout path (419 s builds + 490 s lint per worktree)
+- [ ] L4 overlap the examples' lint pass with the compile tail (kramdown, liquid, roundhouse), or order the examples biggest-compile first; expected ≤ 60-100 s
+- [ ] The b2 case (an edit to a helper the big programs keep, ~40 min): bounded by program size (decision 235) and compiler speed (docs/research/compile-time-2026-11.md); nothing harness-side left to try beyond L3/L4
+- [ ] `TestStringLitsKept` flakes under full-suite load (6 of 10 runs here, 30/30 alone): pre-existing, find the shared state in internal/compiler's parallel tests
+- [ ] First full run after the merge is cold once (every example's bytes changed, ~38 min measured); nothing to do, just expected
+
 ## How to reproduce
 
 ```sh
