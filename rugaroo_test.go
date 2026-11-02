@@ -346,6 +346,7 @@ func TestPrimeVendoredSig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 	out, _, exit, _ := runIO(t, ".", progIO{}, goBuild(t, gen, "-l"))
 	if want := "7\nnil\n[2, 3, 5, 7]\n"; out != want || exit != 0 {
 		t.Errorf("got (exit %d):\n%s\nwant:\n%s", exit, out, want)

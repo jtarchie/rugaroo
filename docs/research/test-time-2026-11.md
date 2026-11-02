@@ -11,6 +11,17 @@ scripts/test-time run.json run.timing -n 25
 
 `RUGAROO_TEST_TIMING` appends one tab-separated line per step: kind (compile, rbs-inline, rbs-validate, build, mri, run, vet, lint), test name, seconds, `@` end time since the binary started, then per kind; a `build` row carries -race, cache miss (the `-x` trace shows a ` -p main ` compile only on a miss), source funcs (`func` lines of main.go, not compiled functions: TestCompileCost's nm count is 3-4x that), lines, bytes and a sha256 prefix of main.go. An `rbs-cache` row (decision 435) says hit or miss; an example that writes into its own directory would miss forever (none does: P2 hit 137 of 137). `RUGAROO_TEST_KEEP=dir` keeps every program's main.go as `<test>.go`, so two runs can be diffed.
 
+Lint parity (decision 434), on a module of N kept examples (`writeModule`'s go.mod/go.sum, `.golangci.generated.yml` as `.golangci.yml`, `prelude/go/*.go` copied in, one directory per example with its kept main.go), real lines against renumbered (the Ruby twin of `stableLines` in consecutive mode is ten lines: for each `^(//line prelude/[^:\s]+):\d+$` set the number to that file's running block total + 1):
+
+```sh
+export GOFLAGS=-trimpath
+golangci-lint cache clean; golangci-lint run --allow-parallel-runners --timeout=0 ./...   # cold, then again: warm
+sed -i '' -E 's|[[:space:]]*//nolint:[a-z,]+.*$||' */main.go                              # every suppression off, both variants
+golangci-lint run --allow-parallel-runners --timeout=0 ./... | sed -E 's/^[^ ]+:[0-9]+(:[0-9]+)?: //' | sort   # compare the two sorted lists
+```
+
+`-race` pairs: a fresh `GOCACHE`, the race and plain std built once from a hello program, then per kept program `go build -race -trimpath -gcflags='-l -dwarf=false' .` and the same without `-race`, each under `/usr/bin/time -p`, wiping and re-warming the cache between.
+
 ## Baseline
 
 Full `go test ./...`, main b05a97d4 plus the timing log. "CPU" is `/usr/bin/time -l` user time of the whole run; "misses" are `go build` runs whose main package compiled (the rest only linked); "lint" is the examples' golangci-lint pass, which runs alone after the last example.
