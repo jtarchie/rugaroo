@@ -459,6 +459,30 @@ func TestTraceEval(t *testing.T) {
 	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
 }
 
+// TestTraceRacc: MRI loads racc/cparse, the program has none, so boot must record racc's Ruby `do_parse` (decision 427).
+func TestTraceRacc(t *testing.T) {
+	requireToolchain(t)
+	t.Parallel()
+	dir := filepath.Join("testdata", "traced_racc")
+	main := filepath.Join(dir, "main.rb")
+	src, err := os.ReadFile(main) //nolint:gosec // testdata path
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, err := CompileTrace(t.Context(), main, [][]string{nil}, nil, loadPath(dir, src)...)
+	if err != nil {
+		t.Fatalf("rugaroo: %v", err)
+	}
+	gen := t.TempDir()
+	writeModule(t, gen)
+	werr := os.WriteFile(filepath.Join(gen, "main.go"), code, 0o600)
+	if werr != nil {
+		t.Fatal(werr)
+	}
+	stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
+	sameAsRuby(t, dir, "main.rb", goBuild(t, gen, ""))
+}
+
 // TestTraceDeterministic: a temp dir named in the output makes every regen miss the Go build cache (decision 88).
 func TestTraceDeterministic(t *testing.T) {
 	requireToolchain(t)

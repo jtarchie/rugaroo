@@ -457,5 +457,8 @@ module RugarooBoot
   end
 end
 
+# racc's C extension is not compiled (pureFallback, decision 427): its own switch makes boot take the Ruby routines the
+# program will, so the class_eval'd `do_parse` names `_racc_do_parse_rb`, not `_racc_do_parse_c`.
+Racc_No_Extensions = true
 RugarooBoot.install
 at_exit { RugarooBoot.dump(ENV["RUGAROO_BOOT_OUT"]) if ENV["RUGAROO_BOOT_OUT"] && $$ == RugarooBoot.pid } # a forked child exits through here too
