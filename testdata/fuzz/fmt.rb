@@ -5,7 +5,7 @@
 
 #: (String h) -> String
 def unhex(h)
-  [h].pack("H*")
+  [h].pack("H*").force_encoding("UTF-8") # pack gives binary; rugaroo strings are UTF-8, so compare as UTF-8
 end
 
 #: (String h) -> Float

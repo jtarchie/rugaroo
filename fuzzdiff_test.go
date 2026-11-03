@@ -2,6 +2,7 @@ package rugaroo
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -63,6 +64,11 @@ func diffCases(t *testing.T, cases, want, got []string, stderr string) {
 		}
 		if w == g {
 			continue
+		}
+		if dump := os.Getenv("RUGAROO_FUZZ_DUMP"); dump != "" { // every mismatch as case<TAB>mri<TAB>got, for bucketing by root cause
+			f, _ := os.OpenFile(dump, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // developer-chosen path
+			fmt.Fprintf(f, "%s\t|\t%s\t|\t%s\n", c, w, g)
+			f.Close()
 		}
 		byOp[strings.SplitN(c, "\t", 2)[0]]++
 		if bad++; bad <= 20 {
