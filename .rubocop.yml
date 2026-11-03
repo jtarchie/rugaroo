@@ -8,6 +8,7 @@ AllCops:
     - .wrangler/**/*
     - node_modules/**/*
     - overrides/brew/work/**/*
+    - testdata/traced_racc/lib/calc.rb # racc output, kept as generated
 
 # rugaroo reads `#:` and `#[T]` comments in the prelude.
 Layout/LeadingCommentSpace:
