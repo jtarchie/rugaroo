@@ -117,7 +117,7 @@ var goKeywords = map[string]bool{
 // name ending in `_` gets another and can never meet one.
 func goLocalName(name string) string {
 	if strings.HasPrefix(name, "@") { // main's ivar as a local (decision 362)
-		return "iv_" + name[1:] + "_m"
+		return "iv_" + name[1:] + "_m_" // ends in one `_`, the compiler-local shape no Ruby name can reach
 	}
 	if goKeywords[name] || name != "_" && strings.HasSuffix(name, "_") {
 		return name + "_"

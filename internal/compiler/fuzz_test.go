@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -102,6 +103,48 @@ func FuzzBacktrack(f *testing.F) {
 		}
 		if got := r.backtrack(s); !slices.Equal(got, want) {
 			t.Fatalf("/%s/ on %q: backtrack %v, RE2 %v", p, s, got, want)
+		}
+	})
+}
+
+var rubyLocal = regexp.MustCompile(`\A[\p{L}_][\p{L}0-9_]*\z`)
+
+// FuzzGoLocalName: distinct Ruby locals (and main's `@ivar` locals) never share a Go name, and the name is a Go identifier that is not a keyword.
+func FuzzGoLocalName(f *testing.F) {
+	for _, p := range [][2]string{{"len", "len_"}, {"x_", "x__"}, {"_", "__"}, {"@a", "iv_a_m"}, {"blk", "blk_"}, {"rbU0_", "_"}} {
+		f.Add(p[0], p[1])
+	}
+	valid := func(s string) bool {
+		return rubyLocal.MatchString(strings.TrimPrefix(s, "@")) && !strings.HasPrefix(strings.TrimPrefix(s, "@"), "@")
+	}
+	f.Fuzz(func(t *testing.T, a, b string) {
+		if !valid(a) || !valid(b) {
+			return
+		}
+		ga, gb := goLocalName(a), goLocalName(b)
+		if !token.IsIdentifier(ga) || !token.IsIdentifier(gb) || goKeywords[ga] {
+			t.Fatalf("goLocalName(%q) = %q, (%q) = %q: not a plain Go identifier", a, ga, b, gb)
+		}
+		if a != b && ga == gb {
+			t.Fatalf("goLocalName collision: %q and %q both map to %q", a, b, ga)
+		}
+	})
+}
+
+// FuzzParseLiteralFormat: never panics, and a directive it accepts has width and prec within the bound it checks (a digit run must not wrap past it).
+func FuzzParseLiteralFormat(f *testing.F) {
+	for _, s := range []string{"%05.2f", "%-+ #0x", "%%", "%*d", "%1$s", "%<a>d", "%99999999999999999999d", "%18446744073709551616d", "%9227000000000000000B", "%.", "%", "x%d%s!"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		dirs, _, ok := parseLiteralFormat(s)
+		if !ok {
+			return
+		}
+		for _, d := range dirs {
+			if d.width < 0 || d.width > 4096 || d.prec < -1 || d.prec > 4096 {
+				t.Fatalf("parseLiteralFormat(%q): accepted width %d prec %d", s, d.width, d.prec)
+			}
 		}
 	})
 }

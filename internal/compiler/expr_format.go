@@ -46,11 +46,17 @@ func parseLiteralFormat(s string) (dirs []fmtDirective, tail string, ok bool) {
 		}
 		for ; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
 			d.width = d.width*10 + int(s[i]-'0')
+			if d.width > 4096 { // before the digit run can wrap
+				return nil, "", false
+			}
 		}
 		if i < len(s) && s[i] == '.' {
 			d.prec = 0
 			for i++; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
 				d.prec = d.prec*10 + int(s[i]-'0')
+				if d.prec > 4096 {
+					return nil, "", false
+				}
 			}
 		}
 		if i >= len(s) || strings.IndexByte("sdiuxXfeEgGoboBcp", s[i]) < 0 || d.width > 4096 || d.prec > 4096 {
