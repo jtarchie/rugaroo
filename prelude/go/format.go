@@ -269,6 +269,12 @@ func rbFormatOne(spec string, verb byte, v any) string {
 		}
 		switch x := v.(type) {
 		case Integer:
+			if x > math.MaxInt32 { // a C int, as MRI's NUM2INT
+				panic(NewRangeError(Ref(String("integer " + strconv.Itoa(int(x)) + " too big to convert to 'int'"))))
+			}
+			if x < math.MinInt32 {
+				panic(NewRangeError(Ref(String("integer " + strconv.Itoa(int(x)) + " too small to convert to 'int'"))))
+			}
 			if x < 0 || x > utf8.MaxRune || !utf8.ValidRune(rune(x)) {
 				panic(NewArgumentError(Ref(String("invalid character"))))
 			}
@@ -285,9 +291,16 @@ func rbFormatOne(spec string, verb byte, v any) string {
 		}
 		return fmt.Sprintf(spec+"c", r)
 	case 'd', 'i', 'u':
-		return fmt.Sprintf(spec+"d", rbFormatInt(v))
+		n := rbFormatInt(v)
+		if z, ok := rbFormatZeroPrec(spec, n); ok {
+			return z
+		}
+		return fmt.Sprintf(spec+"d", n)
 	case 'x', 'X', 'o', 'b', 'B':
 		n := rbFormatInt(v)
+		if z, ok := rbFormatZeroPrec(spec, n); ok && !(verb == 'o' && strings.Contains(spec, "#")) {
+			return z
+		}
 		if n < 0 && !strings.ContainsAny(spec, "+ ") {
 			return rbFormatTwos(spec, verb, n)
 		}
@@ -304,14 +317,24 @@ func rbFormatOne(spec string, verb byte, v any) string {
 			flags = flags[:k]
 		}
 		if verb != 'o' && strings.Contains(flags, "#") && strings.Contains(flags, "0") && !strings.Contains(flags, "-") && !strings.Contains(spec, ".") {
-			// MRI's width counts the 0x/0b prefix, Go's does not
+			// MRI's width counts the sign and the 0x/0b prefix, and the zeros go after both; Go's width counts neither
 			w, _ := strconv.Atoi(strings.TrimLeft(spec[1:], "#0+ "))
 			prefix := map[byte]string{'x': "0x", 'X': "0X", 'b': "0b", 'B': "0B"}[verb]
-			body := fmt.Sprintf("%0*"+string(map[byte]byte{'x': 'x', 'X': 'X', 'b': 'b', 'B': 'b'}[verb]), max(w-len(prefix), 0), n)
-			if verb == 'B' {
+			m := uint64(n)
+			sign := ""
+			switch {
+			case n < 0:
+				sign, m = "-", -m
+			case strings.Contains(flags, "+"):
+				sign = "+"
+			case strings.Contains(flags, " "):
+				sign = " "
+			}
+			body := strconv.FormatUint(m, map[byte]int{'x': 16, 'X': 16, 'b': 2, 'B': 2}[verb])
+			if verb == 'X' || verb == 'B' {
 				body = strings.ToUpper(body)
 			}
-			return prefix + body
+			return sign + prefix + strings.Repeat("0", max(w-len(sign)-len(prefix)-len(body), 0)) + body
 		}
 		if verb == 'B' {
 			return strings.ToUpper(fmt.Sprintf(spec+"b", n))
@@ -320,6 +343,10 @@ func rbFormatOne(spec string, verb byte, v any) string {
 	case 'a', 'A':
 		return rbFormatHexFloat(spec, verb, rbFormatFloat(v))
 	case 'f', 'e', 'E', 'g', 'G':
+		if x, ok := v.(Integer); ok && verb == 'f' && (x >= 1<<53 || x <= -1<<53 || strings.Contains(spec, "#")) {
+			// MRI prints an Integer's digits exactly, not through a float64, and # forces no point on them
+			return fmt.Sprintf(strings.ReplaceAll(spec, "#", "")+"f", new(big.Float).SetInt64(int64(x)))
+		}
 		f := rbFormatFloat(v)
 		if (verb == 'g' || verb == 'G') && !strings.Contains(spec, ".") {
 			spec += ".6" // C's default precision; Go's %g is shortest-exact
@@ -396,6 +423,9 @@ func rbFormatHexFloat(spec string, verb byte, f float64) string {
 	case math.IsInf(f, 0):
 		s = map[bool]string{true: "Inf", false: "-Inf"}[f > 0]
 	default:
+		if prec == 13 && !math.IsInf(f, 0) {
+			f = rbHexFloat13(f)
+		}
 		s = strconv.FormatFloat(f, 'x', prec, 64)
 		if p := strings.LastIndexAny(s, "+-"); p > 0 && s[p-1] == 'p' {
 			exp := strings.TrimLeft(s[p+1:], "0")
@@ -427,6 +457,53 @@ func rbFormatHexFloat(spec string, verb byte, f float64) string {
 		s = s[:x+1] + strings.Repeat("0", w-len(s)) + s[x+1:] // zeros go after the 0x, as C's
 	}
 	return fmt.Sprintf("%*s", w, s)
+}
+
+// rbHexFloat13 is what MRI's %.13a prints for f: it rounds the 52-bit mantissa half-to-even at its last bit (BSD hdtoa's digit
+// count is off by one there), so ...039 prints as ...038 though 13 digits are exact. Subnormals are left alone.
+func rbHexFloat13(f float64) float64 {
+	bits := math.Float64bits(f)
+	exp := bits >> 52 & 0x7ff
+	if exp == 0 || exp == 0x7ff {
+		return f
+	}
+	mant := bits & (1<<52 - 1)
+	if mant&1 == 1 {
+		q := mant >> 1
+		if q&1 == 1 {
+			q++
+		}
+		bits = bits&^(1<<52-1) + q<<1 // a carry into the exponent is the next power of two, as it should
+	}
+	return math.Float64frombits(bits)
+}
+
+// rbFormatZeroPrec is C's zero at precision 0 (%.0d of 0): no digits, but the sign flag's sign stays, padded to the width; false for any other value or precision.
+func rbFormatZeroPrec(spec string, n int) (string, bool) {
+	dot := strings.IndexByte(spec, '.')
+	if n != 0 || dot < 0 {
+		return "", false
+	}
+	if p, _ := strconv.Atoi(spec[dot+1:]); p != 0 {
+		return "", false
+	}
+	i := 1
+	for i < dot && strings.IndexByte("-+ #0", spec[i]) >= 0 {
+		i++
+	}
+	flags := spec[1:i]
+	sign := ""
+	switch {
+	case strings.Contains(flags, "+"):
+		sign = "+"
+	case strings.Contains(flags, " "):
+		sign = " "
+	}
+	w, _ := strconv.Atoi(spec[i:dot])
+	if strings.Contains(flags, "-") {
+		return fmt.Sprintf("%-*s", w, sign), true
+	}
+	return fmt.Sprintf("%*s", w, sign), true
 }
 
 // rbFormatTwos is MRI's %x/%o/%b of a negative number without + or space: its two's complement with ".." for the

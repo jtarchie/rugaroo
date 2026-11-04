@@ -113,6 +113,9 @@ func rbFormatFast(spec string, verb byte, v any) (string, bool) {
 	var s string
 	switch verb {
 	case 'f':
+		if x, ok := v.(Integer); ok && (x >= 1<<53 || x <= -1<<53) { // MRI prints an Integer's digits exactly (rbFormatOne)
+			return "", false
+		}
 		f := rbFormatFloat(v)
 		if math.IsInf(f, 0) || math.IsNaN(f) {
 			return "", false

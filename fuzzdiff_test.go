@@ -138,6 +138,11 @@ func fuzzFloat(r *rand.Rand) string {
 	default:
 		f = math.Float64frombits(r.Uint64() &^ (0x7ff << 52)) // subnormal
 	}
+	return floatHex(f)
+}
+
+// floatHex is f's big-endian IEEE bits, the driver's float encoding.
+func floatHex(f float64) string {
 	var b [8]byte
 	bits := math.Float64bits(f)
 	for i := range b {
@@ -219,11 +224,16 @@ func genFmtCase(r *rand.Rand) string {
 	line := func(op string, args ...string) string { return op + "\t" + strings.Join(args, "\t") }
 	switch r.IntN(19) {
 	case 0, 1, 2:
-		return line("fmt_float", hx(fuzzFmtSpec(r, "eEfgGaAdsi")), fuzzFloat(r))
+		spec := fuzzFmtSpec(r, "eEfgGaAdsi")
+		f := fuzzFloat(r)
+		if strings.ContainsAny(spec, "dixXobBuc") || strings.ContainsAny(spec, "eE") && f[:3] == "000" { // past 64 bits MRI answers a Bignum (decision 35); MRI's %e of a subnormal rounds its 13th digit wrongly
+			f = floatHex(float64(r.Int64N(1<<40)-1<<39) / float64(1+r.IntN(1000)))
+		}
+		return line("fmt_float", hx(spec), f)
 	case 3, 4:
 		return line("fmt_int", hx(fuzzFmtSpec(r, "dixXobBcsuf")), fuzzInt(r))
 	case 5:
-		return line("fmt_str", hx(fuzzFmtSpec(r, "scpd")), hx(fuzzString(r, strAlphabet)))
+		return line("fmt_str", hx(fuzzFmtSpec(r, "scpd")), hx(fuzzString(r, validAlphabet)))
 	case 6:
 		return line("float_to_s", fuzzFloat(r))
 	case 7:

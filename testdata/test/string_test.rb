@@ -7,6 +7,12 @@ require "digest"
 require "securerandom"
 require "zlib"
 
+# A format held in a variable reaches the runtime directive parser, not the compile-time lowering of a literal (decision 377).
+#: (String, untyped) -> String
+def string_fmt_dyn(f, a)
+  format(f, a)
+end
+
 # Helpers for the checks that were testdata/run/string_split.rb.
 #: (String) -> Integer
 def vowels(s)
@@ -2484,6 +2490,22 @@ module StringTests
         t.append_as_bytes(1.5)
         nil
       end
+    end
+
+    # Found by TestFuzzDiff: flags, signs and big arguments through the runtime format parser.
+    def test_format_runtime_flags
+      assert_equal " 0X000000000001CC", string_fmt_dyn("% 0#17X", 460)
+      assert_equal "+0x000000000001cc", string_fmt_dyn("%+0#17x", 460)
+      assert_equal "-0x00000000000000000000ff", string_fmt_dyn("%+0#25x", -255)
+      assert_equal "-0B1000000000000000000000000000000000000000000000000000000000000000", string_fmt_dyn("% 0#25B", -9_223_372_036_854_775_808)
+      assert_equal "+", string_fmt_dyn("%+.0d", 0)
+      assert_equal "+    |", string_fmt_dyn("%-+5.0d|", 0)
+      assert_equal "4611686018427387905.000000", string_fmt_dyn("%f", 4_611_686_018_427_387_905)
+      assert_equal "+976", string_fmt_dyn("%+#.0f", 976)
+      assert_equal "0x1.ecf2f60175038p+65", string_fmt_dyn("%.13a", 7.104144739428618e+19)
+      assert_raises(RangeError) { string_fmt_dyn("%c", 2**31) }
+      assert_raises(RangeError) { string_fmt_dyn("%c", -2**31 - 1) }
+      assert_raises(ArgumentError) { string_fmt_dyn("%c", -1) }
     end
   end
 
