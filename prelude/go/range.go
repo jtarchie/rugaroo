@@ -126,12 +126,20 @@ func rbStrSucc(s string) string {
 	if len(b) == 0 {
 		return ""
 	}
-	first := -1
+	first, anyAlnum, gap := -1, false, false // first: the leftmost wrapped alnum; gap: the last byte seen was not alnum
 	for i := len(b) - 1; i >= 0; i-- {
 		c := b[i]
 		if !rbIsAlnum(c) {
+			// MRI stops the carry at a gap that separates a letter from a digit: "a1\nZ".succ is "a1\nAA"
+			gap = true
 			continue
 		}
+		if gap && first >= 0 {
+			if l := b[first]; l >= '0' && l <= '9' && (c|0x20) >= 'a' && (c|0x20) <= 'z' || (l|0x20) >= 'a' && (l|0x20) <= 'z' && c >= '0' && c <= '9' {
+				break
+			}
+		}
+		gap, anyAlnum = false, true
 		first = i
 		switch c {
 		case 'z':
@@ -144,6 +152,9 @@ func rbStrSucc(s string) string {
 			b[i]++
 			return string(b)
 		}
+	}
+	if !anyAlnum {
+		first = -1
 	}
 	if first < 0 {
 		for i := len(b) - 1; i >= 0; i-- {

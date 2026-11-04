@@ -167,6 +167,7 @@ func fuzzString(r *rand.Rand, alphabet []string) string {
 }
 
 var strAlphabet = []string{"a", "b", "z", "Z", "9", " ", "-", "_", "\n", "é", "日", "\xff", "\xc3", "0x", "1_0", "+", ".", "e", "0b1", "  ", "\x00", "zz", "Az"}
+var asciiAlphabet = []string{"a", "b", "z", "Z", "9", "0", "1", " ", "-", "_", "\n", ".", "A", "zz", "99", "\x00"}
 var setAlphabet = []string{"a", "z", "-", "^", "\\", "a-z", "A-Z", "0-9", "a-c", "x-b", "é", "\\-", "\\^", "\\\\", "^a", "日", "z-a"}
 
 func fuzzFmtSpec(r *rand.Rand, convs string) string {
@@ -240,7 +241,7 @@ func genFmtCase(r *rand.Rand) string {
 	case 13:
 		return line(pick(r, "str_delete", "str_squeeze", "str_count"), hx(fuzzString(r, strAlphabet)), hx(fuzzString(r, setAlphabet)))
 	case 14:
-		return line("str_succ", hx(fuzzString(r, strAlphabet)))
+		return line("str_succ", hx(fuzzString(r, asciiAlphabet))) // rbStrSucc is ASCII only: MRI also steps é to ê and 日 to 旦
 	case 15:
 		return line("str_to_i", hx(fuzzString(r, strAlphabet)), strconv.Itoa(2+r.IntN(35)))
 	case 16:

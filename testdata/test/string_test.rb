@@ -431,6 +431,9 @@ continued"
       assert_equal "AAa", "Zz".succ
       assert_equal "2.0", "1.9".next
       assert_equal "", "".succ
+      assert_equal "_-_AA", "_-_Z".succ # the carry stops at a gap between a letter and a digit (found by TestFuzzDiff)
+      assert_equal "b0b1\nAA", "b0b1\nZ".succ
+      assert_equal "2.0.0", "1.9.9".succ
       assert_equal 5, "hello world".count("lo")
       assert_equal 5, "hello".count("a-y")
       assert_equal 3, "hello".count("^l")
