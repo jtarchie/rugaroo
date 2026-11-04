@@ -45,6 +45,22 @@ module JsonTests
   end
 
   class NestingTest < Minitest::Test
+    # Found by TestFuzzDiff: the json gem skips // and /* */ comments as whitespace, and a lone high surrogate escape is a ParserError.
+    def test_parse_comments
+      assert_equal [1, 2], JSON.parse("[1,/*c*/2]")
+      assert_equal [1], JSON.parse("/*c*/[1] // end")
+      assert_equal({ "a" => 1 }, JSON.parse("{\"a\"//c\n:1}"))
+      assert_equal({ "a" => "x//y" }, JSON.parse('{"a":"x//y"}'))
+      assert_equal ["/*"], JSON.parse('["/*"]')
+      assert_equal JSON::ParserError, begin; JSON.parse("[1] /* x"); rescue JSON::ParserError => e; e.class; end
+    end
+
+    def test_parse_lone_surrogate
+      assert_equal ["\u{1F600}"], JSON.parse('["\\ud83d\\ude00"]')
+      assert_equal JSON::ParserError, begin; JSON.parse('["\\ud800"]'); rescue JSON::ParserError => e; e.class; end
+      assert_equal JSON::ParserError, begin; JSON.parse('["\\ud800x"]'); rescue JSON::ParserError => e; e.class; end
+    end
+
     def test_parse_depth_limit_is_100
       assert_nil JsonTests.raised { JSON.parse(JsonTests.parse_text(100)) }
       assert_equal JSON::NestingError, JsonTests.raised { JSON.parse(JsonTests.parse_text(101)) }

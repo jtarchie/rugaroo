@@ -93,6 +93,7 @@ func rbJSONParse(s string, opts *Hash[Symbol, any]) any {
 		}
 	}
 	limit = rbJSONLimit(limit)
+	s = rbJSONPrep(s)
 	var (
 		fast any
 		ok   bool
@@ -130,6 +131,67 @@ func rbJSONParse(s string, opts *Hash[Symbol, any]) any {
 		rbJSONFreeze(rv.v)
 	}
 	return rv.v
+}
+
+// rbJSONPrep is the json gem's two parse-time rules Go's decoder lacks: `//` and `/* */` comments are whitespace (blanked here, same
+// length with newlines kept, so offsets and line numbers in messages stay), and a high-surrogate \u escape needs a low one after it.
+func rbJSONPrep(s string) string {
+	if strings.IndexByte(s, '/') < 0 && !strings.Contains(s, "\\u") {
+		return s
+	}
+	var b []byte // a copy, made at the first comment
+	blank := func(from, to int) {
+		if b == nil {
+			b = []byte(s)
+		}
+		for k := from; k < to; k++ {
+			if b[k] != '\n' {
+				b[k] = ' '
+			}
+		}
+	}
+	hex4 := func(at int) (int, bool) {
+		if at+4 > len(s) {
+			return 0, false
+		}
+		n, err := strconv.ParseUint(s[at:at+4], 16, 32)
+		return int(n), err == nil
+	}
+	inStr := false
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case inStr && c == '\\' && i+1 < len(s):
+			if s[i+1] == 'u' {
+				if hi, ok := hex4(i + 2); ok && hi >= 0xd800 && hi < 0xdc00 {
+					lo, ok := hex4(i + 8)
+					if !strings.HasPrefix(s[i+6:], "\\u") || !ok || lo < 0xdc00 || lo > 0xdfff {
+						panic(NewJSON_ParserError(Ref(String("incomplete surrogate pair at '" + rbJSONSnippet(s, i) + "'" + rbJSONAt(s, i)))))
+					}
+				}
+			}
+			i++
+		case c == '"':
+			inStr = !inStr
+		case !inStr && c == '/' && i+1 < len(s) && s[i+1] == '/':
+			j := i
+			for j < len(s) && s[j] != '\n' {
+				j++
+			}
+			blank(i, j)
+			i = j - 1
+		case !inStr && c == '/' && i+1 < len(s) && s[i+1] == '*':
+			j := strings.Index(s[i+2:], "*/")
+			if j < 0 {
+				panic(NewJSON_ParserError(Ref(String("unterminated comment, expected closing '*/'" + rbJSONAt(s, i)))))
+			}
+			blank(i, i+2+j+2)
+			i += 2 + j + 1
+		}
+	}
+	if b != nil {
+		return string(b)
+	}
+	return s
 }
 
 // rbJSONFast parses well-formed JSON a byte at a time, several times faster than json.Decoder's Token stream. It gives

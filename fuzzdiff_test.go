@@ -10,13 +10,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // TestFuzzDiff is decision 436: each testdata/fuzz/<area>.rb driver is compiled once, fed the same generated cases as `ruby`, and the outputs must agree line for line.
 // Plain `go test` replays testdata/fuzz/corpus/<area>.txt only; RUGAROO_FUZZ_DIFF=1 adds RUGAROO_FUZZ_N (default 20000) cases from RUGAROO_FUZZ_SEED (default 1).
 func TestFuzzDiff(t *testing.T) {
 	t.Parallel()
-	gens := map[string]func(*rand.Rand) string{"fmt": genFmtCase}
+	gens := map[string]func(*rand.Rand) string{"fmt": genFmtCase, "json": genJSONCase}
 	for area, gen := range gens {
 		t.Run(area, func(t *testing.T) {
 			t.Parallel()
@@ -270,5 +271,68 @@ func genFmtCase(r *rand.Rand) string {
 			return line("str_split", hx(fuzzString(r, validAlphabet)), hx(pick(r, " ", "", "a", "-", "é")), strconv.Itoa(r.IntN(6)-2))
 		}
 		return line("str_slice", hx(fuzzString(r, validAlphabet)), strconv.Itoa(r.IntN(14)-7), strconv.Itoa(r.IntN(10)-3))
+	}
+}
+
+var jsonAtoms = []string{"null", "true", "false", "0", "-0", "1", "-1", "12", "1.5", "-2.5e3", "1E+2", "1e-7", "0.1", "123456789012345678", "NaN", "Infinity", "-Infinity", "01", "1.", ".5", "-", "+1", "1e", "0x10", `""`, `"a"`, `"é"`, `"é"`, `"😀"`, `"\ud800"`, `"\n\t\"\\\/"`, `"\x"`, `"a` + "\n" + `b"`, `"\u12"`}
+
+func fuzzJSONValue(r *rand.Rand, depth int) string {
+	if depth <= 0 || r.IntN(3) == 0 {
+		return pick(r, jsonAtoms...)
+	}
+	n := r.IntN(4)
+	parts := make([]string, n)
+	for i := range parts {
+		if r.IntN(2) == 0 {
+			parts[i] = fuzzJSONValue(r, depth-1)
+		} else {
+			parts[i] = pick(r, `"k"`, `"a"`, `"é"`, `""`) + pick(r, ":", " : ", ":") + fuzzJSONValue(r, depth-1)
+		}
+	}
+	if r.IntN(2) == 0 {
+		return "[" + strings.Join(parts, pick(r, ",", " , ", ",\n")) + "]"
+	}
+	return "{" + strings.Join(parts, ",") + "}"
+}
+
+// fuzzJSONText is a mostly well-formed document, mutated a third of the time: one byte deleted, inserted or replaced.
+func fuzzJSONText(r *rand.Rand) string {
+	s := pick(r, "", " ", "\n") + fuzzJSONValue(r, 4) + pick(r, "", " ", "\n", "x", ",", "//c", "/*c*/")
+	if r.IntN(3) == 0 && len(s) > 0 {
+		orig := s
+		i := r.IntN(len(s))
+		switch r.IntN(3) {
+		case 0:
+			s = s[:i] + s[i+1:]
+		case 1:
+			s = s[:i] + pick(r, "{", "}", "[", "]", `"`, ",", ":", `\`, "-", "e", "0", " ", "\x00") + s[i:]
+		default:
+			s = s[:i] + pick(r, "{", "}", "[", "]", `"`, ",", ":", `\`, "-", "e", "0", " ") + s[i+1:]
+		}
+		if !utf8.ValidString(s) { // a cut multibyte character is invalid UTF-8, which rugaroo strings cannot hold (decision 324)
+			s = orig
+		}
+	}
+	if r.IntN(60) == 0 {
+		s = strings.Repeat("[", 95+r.IntN(10)) + strings.Repeat("]", 95+r.IntN(10)) // around the nesting limit of 100
+	}
+	return s
+}
+
+func genJSONCase(r *rand.Rand) string {
+	line := func(op string, args ...string) string { return op + "\t" + strings.Join(args, "\t") }
+	switch r.IntN(9) {
+	case 0, 1, 2:
+		return line("gen_float", fuzzFloat(r))
+	case 3:
+		return line("float_roundtrip", fuzzFloat(r))
+	case 4:
+		return line("gen_str", hx(fuzzString(r, append([]string{"\"", "\\", "/", "\x01", "\x1f", "\x7f", " ", "😀", " "}, strAlphabet...))))
+	case 5:
+		return line("gen_int", fuzzInt(r))
+	case 6, 7:
+		return line("parse", hx(fuzzJSONText(r)))
+	default:
+		return line(pick(r, "regen", "pretty"), hx(fuzzJSONText(r)))
 	}
 }
