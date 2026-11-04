@@ -431,6 +431,11 @@ continued"
       assert_equal "AAa", "Zz".succ
       assert_equal "2.0", "1.9".next
       assert_equal "", "".succ
+      assert_equal "1z0z9", "1_0a9".tr('\\\\-a-z', "z") # an escaped start can open a range (found by TestFuzzDiff)
+      assert_equal "9999\n9", "AzAz\n-".tr('\\--\\-^\\é日z', "0-9") # a range end is read raw
+      assert_equal "Z", "Z".tr("\\-", "A-Zzz日-\\") # the to-list is read only as far as the from-list needs
+      assert_equal "", "".delete("x-b") # tr and delete do not read the lists of an empty string
+      assert_raises(ArgumentError) { "".count("x-b") } # count and squeeze do
       assert_equal "_-_AA", "_-_Z".succ # the carry stops at a gap between a letter and a digit (found by TestFuzzDiff)
       assert_equal "b0b1\nAA", "b0b1\nZ".succ
       assert_equal "2.0.0", "1.9.9".succ

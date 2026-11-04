@@ -374,8 +374,35 @@ func rbPad(pad string, n int) string {
 	return strings.Repeat(pad, n/len(r)) + string(r[:n%len(r)])
 }
 
-// rbCharSet is a tr/count/squeeze character set: ranges (a-z), \-escapes,
-// and a leading ^ to negate.
+// rbTrExpand is a tr-style character list expanded, as MRI's trnext reads it: `\x` is x for a range's start, `a-z` a range whose
+// end is read raw (so `a-\z` ends at the backslash), a `-` first or last itself; a reversed range is an ArgumentError.
+// It stops once it has limit characters (limit < 0: all), since MRI reads a to-list only as far as the from-list needs.
+func rbTrExpand(cs []rune, limit int) []rune {
+	var out []rune
+	for i := 0; i < len(cs) && (limit < 0 || len(out) < limit); {
+		start := cs[i]
+		if start == '\\' && i+1 < len(cs) {
+			i++
+			start = cs[i]
+		}
+		i++
+		if i < len(cs)-1 && cs[i] == '-' {
+			end := cs[i+1]
+			if start > end {
+				panic(NewArgumentError(Ref(String(fmt.Sprintf("invalid range \"%c-%c\" in string transliteration", start, end)))))
+			}
+			for r := start; r <= end; r++ {
+				out = append(out, r)
+			}
+			i += 2
+			continue
+		}
+		out = append(out, start)
+	}
+	return out
+}
+
+// rbCharSet is a tr/count/squeeze character set: rbTrExpand's list, and a leading ^ to negate.
 func rbCharSet(spec string) func(rune) bool {
 	rs := []rune(spec)
 	negate := len(rs) > 1 && rs[0] == '^'
@@ -383,22 +410,8 @@ func rbCharSet(spec string) func(rune) bool {
 		rs = rs[1:]
 	}
 	set := map[rune]bool{}
-	for i := 0; i < len(rs); i++ {
-		switch {
-		case rs[i] == '\\' && i+1 < len(rs):
-			i++
-			set[rs[i]] = true
-		case i+2 < len(rs) && rs[i+1] == '-':
-			if rs[i] > rs[i+2] {
-				panic(NewArgumentError(Ref(String(fmt.Sprintf("invalid range \"%c-%c\" in string transliteration", rs[i], rs[i+2])))))
-			}
-			for r := rs[i]; r <= rs[i+2]; r++ {
-				set[r] = true
-			}
-			i += 2
-		default:
-			set[rs[i]] = true
-		}
+	for _, r := range rbTrExpand(rs, -1) {
+		set[r] = true
 	}
 	return func(r rune) bool { return set[r] != negate }
 }
@@ -1035,26 +1048,8 @@ func rbStrRindex(s, t String) (Integer, bool) {
 // binLists (a binary String's twin, decision 352). sq is tr_s: a run of translated characters giving one character
 // keeps one.
 func rbTr(s String, from, to string, bin, binLists, sq bool) String {
-	expand := func(cs []rune) []rune {
-		var out []rune
-		for i := 0; i < len(cs); i++ {
-			switch {
-			case cs[i] == '\\' && i+1 < len(cs):
-				i++
-				out = append(out, cs[i])
-			case i+2 < len(cs) && cs[i+1] == '-':
-				if cs[i] > cs[i+2] {
-					panic(NewArgumentError(Ref(String(fmt.Sprintf("invalid range \"%c-%c\" in string transliteration", cs[i], cs[i+2])))))
-				}
-				for r := cs[i]; r <= cs[i+2]; r++ {
-					out = append(out, r)
-				}
-				i += 2
-			default:
-				out = append(out, cs[i])
-			}
-		}
-		return out
+	if len(s) == 0 { // MRI returns before reading either list
+		return s
 	}
 	runes := func(x string) []rune { // a binary list's bytes are characters too
 		if !bin || !binLists && utf8.ValidString(x) {
@@ -1071,7 +1066,14 @@ func rbTr(s String, from, to string, bin, binLists, sq bool) String {
 	if negate {
 		f = f[1:]
 	}
-	f, t := expand(f), expand(runes(to))
+	f = rbTrExpand(f, -1)
+	var t []rune
+	if len(f) > 0 { // MRI reads the to-list only as the from-list's characters need it
+		t = rbTrExpand(runes(to), len(f))
+	}
+	if negate { // only the to-list's last character counts, so it is read whole
+		t = rbTrExpand(runes(to), -1)
+	}
 	// An empty to-list deletes; otherwise it pads with its last rune.
 	last := rune(-1)
 	if len(t) > 0 {
