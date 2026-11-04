@@ -227,7 +227,7 @@ func genFmtCase(r *rand.Rand) string {
 	case 6:
 		return line("float_to_s", fuzzFloat(r))
 	case 7:
-		return line(pick(r, "float_round", "float_floor", "float_ceil"), fuzzFloat(r), strconv.Itoa(r.IntN(24)-6))
+		return line(pick(r, "float_round", "float_floor", "float_ceil"), fuzzFloat(r), strconv.Itoa(1+r.IntN(24))) // digits <= 0 make MRI answer an Integer, which a computed digits cannot (decision 299)
 	case 8, 9:
 		ints := make([]string, r.IntN(5))
 		for i := range ints {

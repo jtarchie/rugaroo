@@ -119,56 +119,27 @@ class Float < Object
     if digits <= 0 {
       panic(NewArgumentError(Ref(String("rugaroo: Float#round(digits) needs digits > 0"))))
     }
-    x := float64(self)
-    if digits >= 15 || math.IsInf(x, 0) || math.IsNaN(x) {
-      return self
-    }
-    s := math.Pow(10, float64(digits))
-    f := math.Round(x * s)
-    if x > 0 && (f+0.5)/s <= x {
-      f++
-    } else if x < 0 && (f-0.5)/s >= x {
-      f--
-    }
-    return Float(f / s)
+    return Float(rbFloatDigits(float64(self), int(digits), 3))
   }
 
   # MRI's rb_float_floor/ceil: scale, floor, then step back if the scaled
   # result overshot. digits <= 0 would be an Integer in MRI, so they raise.
   #: (Integer) -> Float
   def __floor_1(digits) = %x{
-    x := float64(self)
     rbIntDigitsArg(digits)
     if digits <= 0 {
       panic(NewArgumentError(Ref(String("rugaroo: Float#floor(digits) needs digits > 0"))))
     }
-    if digits >= 15 || math.IsInf(x, 0) || math.IsNaN(x) {
-      return self
-    }
-    f := math.Pow(10, float64(digits))
-    mul := math.Floor(x * f)
-    if res := (mul + 1) / f; res <= x {
-      return Float(res)
-    }
-    return Float(mul / f)
+    return Float(rbFloatDigits(float64(self), int(digits), 0))
   }
 
   #: (Integer) -> Float
   def __ceil_1(digits) = %x{
-    x := float64(self)
     rbIntDigitsArg(digits)
     if digits <= 0 {
       panic(NewArgumentError(Ref(String("rugaroo: Float#ceil(digits) needs digits > 0"))))
     }
-    if digits >= 15 || math.IsInf(x, 0) || math.IsNaN(x) {
-      return self
-    }
-    f := math.Pow(10, float64(digits))
-    mul := math.Ceil(x * f)
-    if res := (mul - 1) / f; res >= x {
-      return Float(res)
-    }
-    return Float(mul / f)
+    return Float(rbFloatDigits(float64(self), int(digits), 1))
   }
 
   #: () -> Integer

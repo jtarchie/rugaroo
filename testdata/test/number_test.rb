@@ -1810,6 +1810,15 @@ module NumberTests
       assert_equal [1, 3, 5, 7], steps
       assert_equal "3.14", (3.14159.floor(2)).to_s
       assert_equal "3.15", (3.14159.ceil(2)).to_s
+      # TestFuzzDiff: 15+ digits go through an exact Rational, tiny numbers round to a positive 0.0, non-finite floor/ceil(15+) raise
+      assert_equal "-4.959293e-09", (-4.959292644760041e-09).floor(15).to_s
+      assert_equal "1.0e-17", 5.0e-324.ceil(17).to_s
+      assert_equal "0.0", (-0.000339).round(1).to_s
+      assert_equal "0.0", (-1.0e-300).ceil(3).to_s
+      assert_equal "-0.001", (-1.0e-300).floor(3).to_s
+      assert_equal "Infinity", Float::INFINITY.round(17).to_s
+      fdigits = 17
+      assert_equal FloatDomainError, begin; Float::INFINITY.floor(fdigits); rescue FloatDomainError => e; e.class; end
       assert_equal "-3.2", (-3.14159.floor(1)).to_s
       assert_equal 2, 2.5.truncate
       assert_equal -2, -2.5.truncate

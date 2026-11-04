@@ -6,6 +6,7 @@ package prelude
 import (
 	"errors"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -87,4 +88,72 @@ func rbFloatStepX(beg, end, unit float64, excl bool, yield func(Float) bool) {
 			return
 		}
 	}
+}
+
+// rbFloatDigits is MRI's Float#round (mode 3, half up), #floor (0) and #ceil (1) for digits nd > 0: a number already exact at nd
+// digits is itself (float_round_overflow), one too small rounds to 0.0 (float_round_underflow), more than 14 digits go through
+// an exact Rational because pow(10, nd) is no longer exact, and the rest scale by pow(10, nd) with a one-step correction.
+func rbFloatDigits(x float64, nd int, mode int) float64 {
+	if x == 0 || mode == 3 && (math.IsInf(x, 0) || math.IsNaN(x)) {
+		return x
+	}
+	_, binexp := math.Frexp(x)
+	over, under := 0, 0
+	if binexp > 0 {
+		over, under = binexp/4, binexp/3+1
+	} else {
+		over, under = binexp/3-1, binexp/4
+	}
+	if nd >= 17-over {
+		return x
+	}
+	if nd < -under && (mode == 3 || mode == 0 && x > 0 || mode == 1 && x < 0) {
+		return 0
+	}
+	if nd > 14 {
+		if math.IsInf(x, 0) || math.IsNaN(x) {
+			panic(NewFloatDomainError(Ref(rbFloatToS(x))))
+		}
+		scale := new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(nd)), nil))
+		v := new(big.Rat).SetFloat64(x)
+		v.Mul(v, scale)
+		q := new(big.Int)
+		switch mode {
+		case 0:
+			q.Div(v.Num(), v.Denom()) // Euclidean: floor, as the denominator is positive
+		case 1:
+			q.Neg(q.Div(new(big.Int).Neg(v.Num()), v.Denom()))
+		default: // half away from zero
+			twice := new(big.Int).Lsh(new(big.Int).Abs(v.Num()), 1)
+			twice.Add(twice, v.Denom())
+			q.Div(twice, new(big.Int).Lsh(v.Denom(), 1))
+			if v.Sign() < 0 {
+				q.Neg(q)
+			}
+		}
+		f, _ := new(big.Rat).SetFrac(q, new(big.Int).Set(scale.Num())).Float64()
+		return f
+	}
+	f := math.Pow(10, float64(nd))
+	switch mode {
+	case 0:
+		mul := math.Floor(x * f)
+		if res := (mul + 1) / f; res <= x {
+			return res
+		}
+		return mul / f
+	case 1:
+		mul := math.Ceil(x * f)
+		if res := (mul - 1) / f; res >= x {
+			return res
+		}
+		return mul / f
+	}
+	r := math.Round(x * f)
+	if x > 0 && (r+0.5)/f <= x {
+		r++
+	} else if x < 0 && (r-0.5)/f >= x {
+		r--
+	}
+	return r / f
 }
