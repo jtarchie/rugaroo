@@ -22,6 +22,8 @@ func rbStrictFloat(s String) Float {
 	switch {
 	case len(t)-len(body) > 1:
 		err = strconv.ErrSyntax
+	case len(body) > 2 && strings.EqualFold(body[:2], "0x") && body[2] == '_': // Go lets an underscore follow the prefix; MRI does not
+		err = strconv.ErrSyntax
 	case len(body) > 2 && strings.EqualFold(body[:2], "0x"):
 		if f, err = strconv.ParseFloat(t, 64); err != nil && !strings.ContainsAny(body, "pP") {
 			f, err = strconv.ParseFloat(t+"p0", 64)
@@ -131,7 +133,12 @@ func rbFloatDigits(x float64, nd int, mode int) float64 {
 				q.Neg(q)
 			}
 		}
-		f, _ := new(big.Rat).SetFrac(q, new(big.Int).Set(scale.Num())).Float64()
+		r := new(big.Rat).SetFrac(q, new(big.Int).Set(scale.Num()))
+		const fix = 1 << 62 // MRI's Rational#to_f divides two fixnums as doubles (each rounded first), and only a Bignum part gets a correctly rounded quotient
+		if n, d := r.Num(), r.Denom(); n.IsInt64() && d.IsInt64() && n.Int64() > -fix && n.Int64() < fix && d.Int64() < fix {
+			return float64(n.Int64()) / float64(d.Int64())
+		}
+		f, _ := r.Float64()
 		return f
 	}
 	f := math.Pow(10, float64(nd))
@@ -142,12 +149,8 @@ func rbFloatDigits(x float64, nd int, mode int) float64 {
 			return res
 		}
 		return mul / f
-	case 1:
-		mul := math.Ceil(x * f)
-		if res := (mul - 1) / f; res >= x {
-			return res
-		}
-		return mul / f
+	case 1: // no step back, unlike floor: 0.000253.ceil(6) is 0.000254 as x*f is 253.00000000000003
+		return math.Ceil(x*f) / f
 	}
 	r := math.Round(x * f)
 	if x > 0 && (r+0.5)/f <= x {

@@ -1817,6 +1817,10 @@ module NumberTests
       assert_equal "0.0", (-1.0e-300).ceil(3).to_s
       assert_equal "-0.001", (-1.0e-300).floor(3).to_s
       assert_equal "Infinity", Float::INFINITY.round(17).to_s
+      cdigits = 6
+      assert_equal "0.000254", 0.000253.ceil(cdigits).to_s # ceil does not step back, floor does: 253.00000000000003 rounds up
+      assert_equal "0.0522000001", 0.0522.ceil(10).to_s
+      assert_equal "-9.334282670881224", (-9.334282670881223).round(15).to_s # Rational#to_f divides two doubles, not one exact quotient
       fdigits = 17
       assert_equal FloatDomainError, begin; Float::INFINITY.floor(fdigits); rescue FloatDomainError => e; e.class; end
       assert_equal "-3.2", (-3.14159.floor(1)).to_s

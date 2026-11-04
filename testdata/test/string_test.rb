@@ -2492,6 +2492,13 @@ module StringTests
       end
     end
 
+    # Found by TestFuzzDiff: MRI reads a pack format as it runs it, so an earlier directive's TypeError comes before a later bad directive.
+    def test_pack_error_order
+      assert_equal TypeError, begin; [593, 516].pack("aE>*"); rescue TypeError, ArgumentError => e; e.class; end
+      assert_equal RangeError, begin; [-277, 27].pack("UE7"); rescue RangeError, TypeError, ArgumentError => e; e.class; end
+      assert_equal ArgumentError, begin; [1].pack("C!"); rescue ArgumentError, TypeError => e; e.class; end
+    end
+
     # Found by TestFuzzDiff: flags, signs and big arguments through the runtime format parser.
     def test_format_runtime_flags
       assert_equal " 0X000000000001CC", string_fmt_dyn("% 0#17X", 460)
@@ -2503,6 +2510,9 @@ module StringTests
       assert_equal "4611686018427387905.000000", string_fmt_dyn("%f", 4_611_686_018_427_387_905)
       assert_equal "+976", string_fmt_dyn("%+#.0f", 976)
       assert_equal "0x1.ecf2f60175038p+65", string_fmt_dyn("%.13a", 7.104144739428618e+19)
+      assert_equal "-484.000000                 ", string_fmt_dyn("%-0#28f", -484)
+      assert_equal "0000", string_fmt_dyn("%#.4o", 0)
+      assert_equal "         00000000000000000000", string_fmt_dyn("%#29.20o", 0)
       assert_raises(RangeError) { string_fmt_dyn("%c", 2**31) }
       assert_raises(RangeError) { string_fmt_dyn("%c", -2**31 - 1) }
       assert_raises(ArgumentError) { string_fmt_dyn("%c", -1) }

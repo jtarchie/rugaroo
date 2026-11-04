@@ -176,6 +176,9 @@ var strAlphabet = []string{"a", "b", "z", "Z", "9", " ", "-", "_", "\n", "é", "
 // validAlphabet is strAlphabet without invalid UTF-8: MRI raises on a broken string in tr/count/split, and rugaroo strings are valid UTF-8 (decision 380 area, not a set-parser bug).
 var validAlphabet = []string{"a", "b", "z", "Z", "9", " ", "-", "_", "\n", "é", "日", "0x", "1_0", "+", ".", "e", "0b1", "  ", "\x00", "zz", "Az"}
 
+// numAlphabet is strAlphabet without NUL: MRI's Integer() ends a parse at a NUL after an underscored digit run (and raises otherwise), a quirk not worth copying.
+var numAlphabet = []string{"a", "b", "z", "Z", "9", " ", "-", "_", "\n", "é", "日", "\xff", "\xc3", "0x", "1_0", "+", ".", "e", "0b1", "  ", "zz", "Az"}
+
 var asciiAlphabet = []string{"a", "b", "z", "Z", "9", "0", "1", " ", "-", "_", "\n", ".", "A", "zz", "99", "\x00"}
 var setAlphabet = []string{"a", "z", "-", "^", "\\", "a-z", "A-Z", "0-9", "a-c", "x-b", "é", "\\-", "\\^", "\\\\", "^a", "日", "z-a"}
 
@@ -233,7 +236,7 @@ func genFmtCase(r *rand.Rand) string {
 	case 3, 4:
 		return line("fmt_int", hx(fuzzFmtSpec(r, "dixXobBcsuf")), fuzzInt(r))
 	case 5:
-		return line("fmt_str", hx(fuzzFmtSpec(r, "scpd")), hx(fuzzString(r, validAlphabet)))
+		return line("fmt_str", hx(fuzzFmtSpec(r, "scpd")), hx(strings.ReplaceAll(fuzzString(r, validAlphabet), "\x00", ""))) // NUL: see numAlphabet
 	case 6:
 		return line("float_to_s", fuzzFloat(r))
 	case 7:
@@ -249,7 +252,7 @@ func genFmtCase(r *rand.Rand) string {
 		for i := range raw {
 			raw[i] = byte(r.IntN(256))
 		}
-		return line("unpack", hx(fuzzPackFmt(r)), hex.EncodeToString(raw))
+		return line("unpack", hx(strings.NewReplacer("J", "j", "Q", "q", "L!", "l!", "L_", "l_", "w", "C").Replace(fuzzPackFmt(r))), hex.EncodeToString(raw)) // unsigned 64-bit past 2^63 is a Bignum (decision 35)
 	case 12:
 		return line(pick(r, "str_tr"), hx(fuzzString(r, validAlphabet)), hx(fuzzString(r, setAlphabet)), hx(fuzzString(r, setAlphabet)))
 	case 13:
@@ -259,9 +262,9 @@ func genFmtCase(r *rand.Rand) string {
 	case 15:
 		return line("str_to_i", hx(fuzzString(r, strAlphabet)), strconv.Itoa(2+r.IntN(35)))
 	case 16:
-		return line("str_integer", hx(fuzzString(r, strAlphabet)), strconv.Itoa(pick(r, 2, 8, 10, 16, 36, 0)))
+		return line("str_integer", hx(fuzzString(r, numAlphabet)), strconv.Itoa(pick(r, 2, 8, 10, 16, 36, 0)))
 	case 17:
-		return line("str_float", hx(fuzzString(r, strAlphabet)))
+		return line("str_float", hx(fuzzString(r, numAlphabet)))
 	default:
 		if r.IntN(2) == 0 {
 			return line("str_split", hx(fuzzString(r, validAlphabet)), hx(pick(r, " ", "", "a", "-", "é")), strconv.Itoa(r.IntN(6)-2))

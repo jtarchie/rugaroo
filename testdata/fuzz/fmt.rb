@@ -13,6 +13,12 @@ def unfloat(h)
   unhex(h).unpack("G").fetch(0).to_f
 end
 
+# Strings as hex bytes: MRI tags unpack's a/A/Z/m/M/u results binary, and a rugaroo String carries no tag, so their inspect differs by design (decisions 324, 352).
+#: (Array[untyped] xs) -> String
+def unpack_view(xs)
+  xs.map { |x| x.is_a?(String) ? "s:" + x.unpack1("H*").to_s : x.inspect }.join(",")
+end
+
 #: (String op, Array[String] a) -> String
 def run_case(op, a)
   case op
@@ -24,7 +30,7 @@ def run_case(op, a)
   when "float_floor" then unfloat(a.fetch(0)).floor(Integer(a.fetch(1))).to_s
   when "float_ceil" then unfloat(a.fetch(0)).ceil(Integer(a.fetch(1))).to_s
   when "pack_int" then a.fetch(1).split(",").map { |x| Integer(x) }.pack(unhex(a.fetch(0)))
-  when "unpack" then unhex(a.fetch(1)).unpack(unhex(a.fetch(0))).inspect
+  when "unpack" then unpack_view(unhex(a.fetch(1)).unpack(unhex(a.fetch(0))))
   when "str_tr" then unhex(a.fetch(0)).tr(unhex(a.fetch(1)), unhex(a.fetch(2)))
   when "str_delete" then unhex(a.fetch(0)).delete(unhex(a.fetch(1)))
   when "str_squeeze" then unhex(a.fetch(0)).squeeze(unhex(a.fetch(1)))

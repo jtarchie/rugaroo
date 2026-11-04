@@ -307,7 +307,9 @@ func rbFormatOne(spec string, verb byte, v any) string {
 		if n == 0 {
 			if verb == 'o' && strings.Contains(spec, "#") {
 				if k := strings.IndexByte(spec, '.'); k >= 0 {
-					spec = spec[:k] // %#o always shows the leading 0, even at precision 0
+					if p, _ := strconv.Atoi(spec[k+1:]); p == 0 {
+						spec = spec[:k] // %#o always shows the leading 0, even at precision 0; a larger precision is the zeros themselves
+					}
 				}
 			}
 			spec = strings.ReplaceAll(spec, "#", "") // MRI's %#x of 0 is "0", with no prefix
@@ -345,7 +347,15 @@ func rbFormatOne(spec string, verb byte, v any) string {
 	case 'f', 'e', 'E', 'g', 'G':
 		if x, ok := v.(Integer); ok && verb == 'f' && (x >= 1<<53 || x <= -1<<53 || strings.Contains(spec, "#")) {
 			// MRI prints an Integer's digits exactly, not through a float64, and # forces no point on them
-			return fmt.Sprintf(strings.ReplaceAll(spec, "#", "")+"f", new(big.Float).SetInt64(int64(x)))
+			bs := strings.ReplaceAll(spec, "#", "")
+			flags := bs[1:]
+			if k := strings.IndexFunc(flags, func(r rune) bool { return r >= '1' && r <= '9' || r == '.' }); k >= 0 {
+				flags = flags[:k]
+			}
+			if strings.Contains(flags, "-") {
+				bs = rbFormatNoZeroFlag(bs) // - beats 0
+			}
+			return fmt.Sprintf(bs+"f", new(big.Float).SetInt64(int64(x)))
 		}
 		f := rbFormatFloat(v)
 		if (verb == 'g' || verb == 'G') && !strings.Contains(spec, ".") {

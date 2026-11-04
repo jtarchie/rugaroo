@@ -21,6 +21,7 @@ type rbPackDir struct {
 	star, counted bool
 	native        bool
 	order         byte
+	fail          func() // a malformed directive: raised when pack/unpack reaches it
 }
 
 // rbPackBigEndian is the platform's byte order, for directives without `<`/`>`.
@@ -42,7 +43,9 @@ func rbPackParse(format, what string) []rbPackDir {
 			continue
 		}
 		if d == 'P' || d == 'p' {
-			panic(NewArgumentError(Ref(String("rugaroo: " + what + " directive '" + string(d) + "' (a C pointer) is not supported"))))
+			return append(out, rbPackDir{fail: func() {
+				panic(NewArgumentError(Ref(String("rugaroo: " + what + " directive '" + string(d) + "' (a C pointer) is not supported"))))
+			}})
 		}
 		if strings.IndexByte("aAZBbHhuMmUwCcSsLlQqJjIinNvVDdFfEeGgxX@", d) < 0 {
 			shown := string(d)
@@ -53,12 +56,16 @@ func rbPackParse(format, what string) []rbPackDir {
 			if strings.ContainsFunc(format, func(r rune) bool { return r < ' ' || r == 0x7f }) {
 				shownFmt = rbPackEscape(format)
 			}
-			panic(NewArgumentError(Ref(String("unknown " + what + " directive '" + shown + "' in '" + shownFmt + "'"))))
+			return append(out, rbPackDir{fail: func() {
+				panic(NewArgumentError(Ref(String("unknown " + what + " directive '" + shown + "' in '" + shownFmt + "'"))))
+			}})
 		}
 		dir := rbPackDir{d: d, count: 1}
 		for i < len(format) && strings.IndexByte("<>_!", format[i]) >= 0 {
 			if strings.IndexByte("sSiIlLqQjJ", d) < 0 {
-				panic(NewArgumentError(Ref(String("'" + format[i:i+1] + "' allowed only after types sSiIlLqQjJ"))))
+				return append(out, rbPackDir{fail: func() {
+					panic(NewArgumentError(Ref(String("'" + format[i:i+1] + "' allowed only after types sSiIlLqQjJ"))))
+				}})
 			}
 			if format[i] == '<' || format[i] == '>' {
 				dir.order = format[i]
@@ -78,7 +85,7 @@ func rbPackParse(format, what string) []rbPackDir {
 			}
 			n, err := strconv.Atoi(format[i:j])
 			if err != nil {
-				panic(NewRangeError(Ref(String("pack length too big"))))
+				return append(out, rbPackDir{fail: func() { panic(NewRangeError(Ref(String("pack length too big")))) }})
 			}
 			dir.count, dir.counted = n, true
 			i = j
@@ -291,6 +298,9 @@ func rbPack(items []any, format string) string {
 		}
 	}
 	for _, d := range rbPackParse(format, "pack") {
+		if d.fail != nil {
+			d.fail()
+		}
 		if size, _, big, ok := d.rbPackInt(); ok {
 			n := d.count
 			if d.star {
@@ -520,6 +530,9 @@ func rbUnpackWrap(s, format string, wrap bool, offset Integer) *Array[any] {
 		return Integer(u) //nolint:gosec // wraps only when asked
 	}
 	for _, d := range rbPackParse(format, "unpack") {
+		if d.fail != nil {
+			d.fail()
+		}
 		rest := s[pos:]
 		count := d.count
 		if !d.counted && d.d == '@' {
