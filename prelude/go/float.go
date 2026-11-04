@@ -100,7 +100,7 @@ func rbFloatDigits(x float64, nd int, mode int) float64 {
 		return x
 	}
 	_, binexp := math.Frexp(x)
-	over, under := 0, 0
+	var over, under int
 	if binexp > 0 {
 		over, under = binexp/4, binexp/3+1
 	} else {
