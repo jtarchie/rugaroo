@@ -851,7 +851,7 @@ func (c *Compiler) classEvalSites(m *boot.Manifest) map[boot.Loc]bool {
 // Each file is real Go (decision 154): its import block names the std packages its helpers use, which join stdImports,
 // so the table only needs hand entries for `%x{}` bodies in .rb files.
 func (c *Compiler) loadPreludeGo() {
-	names, err := fs.Glob(c.preludeFS, "prelude/go/*.go")
+	names, err := fs.Glob(c.preludeFS, "prelude/go/[a-z]*.go") // the embed pattern: a checkout on disk also holds the generated 0_stubs.go
 	if err != nil {
 		panic(compileError{msg: fmt.Sprintf("prelude: %v", err)})
 	}
