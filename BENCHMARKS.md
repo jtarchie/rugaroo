@@ -38,7 +38,7 @@ these rows: rugaroo's total is 1.55s against 1.53s and MRI's 5.58s against 5.50s
 Struct `==`/`eql?`/`hash` now guard against a struct that holds itself (decision 407) only where a member could lead back to it;
 a struct of Integer, String and the like compiles to the code it had, and 20M `==` calls on untyped integer members take 0.22s
 against 0.46s before.
-`TestCompileCost` compiles 2,058 / 7,923 / 30,325 functions for 05_word_count / 64_observable / 116_cuba_web (2,032 / 7,948 /
+`TestCompileCost` compiles 2,058 / 7,923 / 30,325 functions for 005_word_count / 064_observable / 116_cuba_web (2,032 / 7,948 /
 30,419 on 2026-10-26; the two small programs are unchanged by this work, 116_cuba_web gained 45 for the struct helpers).
 
 ## What the columns are

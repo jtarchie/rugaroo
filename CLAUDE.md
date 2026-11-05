@@ -9,7 +9,7 @@ git submodule update --init         # gems/*: vendored gem sources; the build em
 bundle install                      # rbs, rbs-inline, webrick (needed by tests)
 bundle install --gemfile examples/135_roundhouse_blog/Gemfile   # example 135's roundhouse-rugaroo gem, from GitHub
 go test ./...                       # the oracle; see below. ~6 min warm (2026-11-01); a prelude line shift costs nothing more (decision 434); an edit to a helper the big programs keep rebuilds and re-lints them, ~40 min (docs/research/test-time-2026-11.md)
-go test -run 'TestExamples/each/05_word_count' .   # one example
+go test -run 'TestExamples/each/005_word_count' .   # one example
 go test -run 'TestRun/^string_' .             # behaviour snippets by prefix
 go test -run 'TestErrors/^regexp$' .          # one compile-error archive
 go test -run 'TestMinitest/^string$' .        # one minitest file (testdata/test/string_test.rb), vs MRI
@@ -29,7 +29,7 @@ RUGAROO_GEM_WARNINGS=1 go run ./cmd/rugaroo gen ...       # also print gem files
 RUGAROO_GEM_WARNINGS=1 RUGAROO_UNTYPED_WHY=1 go run ./cmd/rugaroo gen ...  # each dynamic-call warning names the root of its untyped receiver (sig untyped, widened local, unannotated return, ...)
 RUGAROO_BACKTRACE=1 ./prog                       # a built program reports an uncaught exception as MRI does, file:line and from lines (decision 178)
 RUGAROO_GO_STACK=1 ./prog                        # a Go runtime panic turned into a Ruby exception carries its Go stack (decision 324)
-RUGAROO_COST=1 go test -run TestCompileCost -v .    # compiled functions + compile time/memory of 05_word_count, 64_observable, 116_cuba_web (#96); or a comma list of examples
+RUGAROO_COST=1 go test -run TestCompileCost -v .    # compiled functions + compile time/memory of 005_word_count, 064_observable, 116_cuba_web (#96); or a comma list of examples
 RUGAROO_CPUPROFILE=gen.prof go run ./cmd/rugaroo gen x.rb > /dev/null  # CPU profile of the compile itself (go tool pprof -top gen.prof)
 go -C scripts/census run . /path/main.go           # what a generated main.go spends its functions on (forwarders, Dyn wrappers, stubs); ./inst walks generic instantiations
 go test -run '^$' -fuzz FuzzCompile -fuzztime 60s .              # fuzz targets: FuzzCompile (.),
@@ -69,7 +69,7 @@ For each `examples/*/main.rb`, `TestExamples` (rugaroo_test.go):
 
 Generated programs are built with `-trimpath`, plus `-race` when they start goroutines (decision 88) (`-trimpath` lets the build cache hit across temp dirs; the first run after a Go upgrade rebuilds the race std once). Examples are vetted and linted in one pass over a shared module after all of them pass. MRI output is cached by source, Ruby version, TZ and checkout directory (so worktrees do not share entries holding `__dir__`).
 
-Add one new example per new feature, numbered next in sequence: a plain program that shows the feature and prints what it computes (examples are scripts, as in a Ruby project's `examples/`; behaviour checks go in `testdata/test`). User code must run on MRI unchanged. There are no golden Go files; MRI's output is the only expectation.
+Add one new example per new feature, numbered next in sequence, always `NNN_name` (three digits): a plain program that shows the feature and prints what it computes (examples are scripts, as in a Ruby project's `examples/`; behaviour checks go in `testdata/test`). User code must run on MRI unchanged. There are no golden Go files; MRI's output is the only expectation.
 
 Smaller cases go in `testdata/`:
 - `testdata/test/<area>_test.rb`: minitest files (decision 81), preferred for new behaviour checks. `TestMinitest` runs each with `--seed 1`; MRI must pass (else the test is wrong), then rugaroo's output must equal MRI's apart from timings, and every assertion's operands must equal MRI's (the trace oracle, decision 105: `RUGAROO_MT_TRACE` on both sides, MRI preloading `testdata/mt_trace.rb`; the failure names the test and both operands). So a message rugaroo words differently by design (decision 20's `TypeError`) is checked with `begin`/`rescue` and a class check, not `assert_raises`, which logs the message. Tests must not print. One file per area (`array`, `control`, `number`, ...); all files load together into one program (decision 84), as Ruby loads a suite into one process, so each file keeps its classes and constants inside a `module <Area>Tests` namespace, prefixes its top-level helper defs (`array_ident`: a top-level def is a private method on every object), and reopens core classes only to add methods. Don't name a top-level method `describe` (minitest's Kernel#describe; decision 83). Check the suite loads in one MRI process: `ruby $(ruby -e 'print Gem.bin_path("minitest","minitest")') testdata/test --seed 1`.

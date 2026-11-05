@@ -70,7 +70,7 @@ func TestCompileCost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := []string{"05_word_count", "64_observable", "116_cuba_web"}
+	names := []string{"005_word_count", "064_observable", "116_cuba_web"}
 	if want != "1" {
 		names = strings.Split(want, ",")
 	}

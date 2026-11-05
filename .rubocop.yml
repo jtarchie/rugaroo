@@ -19,7 +19,7 @@ Style/StringLiterals:
   EnforcedStyle: double_quotes
   Exclude:
     # the shell example's quoting is what it demonstrates
-    - examples/73_shell/main.rb
+    - examples/073_shell/main.rb
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
 

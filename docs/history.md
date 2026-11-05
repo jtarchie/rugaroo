@@ -34,8 +34,8 @@ s.equal?(s)          # BasicObject  → true
 (`Object` defines no methods of its own in MRI — `Object.instance_methods(false)`
 is `[]` — everything comes from `Kernel`.)
 
-Example: [00_string_hierarchy](../examples/00_string_hierarchy/) —
-[main.rb](../examples/00_string_hierarchy/main.rb).
+Example: [000_string_hierarchy](../examples/000_string_hierarchy/) —
+[main.rb](../examples/000_string_hierarchy/main.rb).
 
 ### The prelude idea
 
@@ -85,7 +85,7 @@ Rules the prelude relies on:
   *Amended (decisions 154, 263):* helpers now live in `prelude/go/*.go`, real
   Go with its own import block; the table stays for `%x{}` bodies.
 - **Testing** — the prelude can't run on MRI, so it's tested by transpiling and
-  running the Go. `examples/00_string_hierarchy/main.rb` is the prelude's
+  running the Go. `examples/000_string_hierarchy/main.rb` is the prelude's
   first test.
 - **Error mapping** — `%x{}` bodies aren't type-checked until `go build`. Emit
   `//line prelude.rb:N` directives so Go errors point back to Ruby source.
@@ -109,7 +109,7 @@ Rules the prelude relies on:
   constants convert to `String` when the parameter is `String`
   (`s.Op_lt("world")` compiles), but become Go `string` when the parameter is
   `any`. Always emit `String("...")` when the target type is an interface or
-  `untyped` (see [06_puts](../examples/06_puts/)), and when the literal is a
+  `untyped` (see [006_puts](../examples/006_puts/)), and when the literal is a
   receiver or bound with `:=` (`(-1).abs`, `case 3`, `false && x`), where Go
   would infer `int`/`string`/`bool`.
 
@@ -126,7 +126,7 @@ each feature compiles to.
 
 ### 01 — Inheritance, `super`, overriding
 
-[main.rb](../examples/01_inheritance/main.rb)
+[main.rb](../examples/001_inheritance/main.rb)
 
 `describe` is defined on `Shape` but must call the subclass's `area`/`name`.
 
@@ -145,7 +145,7 @@ each feature compiles to.
 
 ### 02 — Enumerable, blocks, generic containers
 
-[main.rb](../examples/02_enumerable/main.rb)
+[main.rb](../examples/002_enumerable/main.rb)
 
 `Enumerable` written once in the prelude against `each`; Go generics, with
 type arguments spelled out from the Ruby types (Go would infer `*Foo` or an
@@ -175,7 +175,7 @@ untyped constant from the arguments).
 
 ### 03 — `nil` and optional types
 
-[main.rb](../examples/03_nil/main.rb)
+[main.rb](../examples/003_nil/main.rb)
 
 `T?`, `&.`, `||`, truthiness narrowing. The biggest cross-cutting decision: it
 affects `Hash#[]`, `find`, `first`, and every `if x`.
@@ -203,7 +203,7 @@ affects `Hash#[]`, `find`, `first`, and every `if x`.
 
 ### 04 — Exceptions
 
-[main.rb](../examples/04_exceptions/main.rb)
+[main.rb](../examples/004_exceptions/main.rb)
 
 `raise`/`rescue`/`ensure`, user-defined hierarchies. Feasibility proof more than
 a design driver.
@@ -229,7 +229,7 @@ a design driver.
 
 ### 05 — A real program: word count
 
-[main.rb](../examples/05_word_count/main.rb)
+[main.rb](../examples/005_word_count/main.rb)
 
 Three mechanism tests prove feasibility; one small real program shows what a
 user would actually write, and surfaces what the toys don't.
@@ -261,7 +261,7 @@ user would actually write, and surfaces what the toys don't.
 
 ### 06 — `puts`
 
-[main.rb](../examples/06_puts/main.rb) ·
+[main.rb](../examples/006_puts/main.rb) ·
 [prelude `Kernel#puts`](../prelude.rb)
 
 `puts` is not `fmt.Println`: `nil` → blank line, arrays flatten recursively,
@@ -325,7 +325,7 @@ returning values (31).
 
 ### 25 and 32 — resty: a web framework over `net/http`
 
-[main.rb](../examples/25_resty/main.rb) is a typed port of
+[main.rb](../examples/025_resty/main.rb) is a typed port of
 [jtarchie/resty](https://github.com/jtarchie/resty), a Rack framework that
 forces RESTful conventions. The program mounts it on WEBrick, then drives
 it with `Net::HTTP`, replaying resty's own integration specs over a real
@@ -350,7 +350,7 @@ anti-goal list above:
 - idioms whose types are unions (`path =~ re || …` as a `bool`,
   `match(...)[1]` on a possible nil) are spelled with `match?` and a check.
 
-[Example 32](../examples/32_resty_reflective/main.rb) then compiles resty's
+[Example 32](../examples/032_resty_reflective/main.rb) then compiles resty's
 own `lib/` code as written, reflection and all: `constantize`,
 `const_get`, `constants.map { const_get }`, `NullAction`'s
 `method_missing`, `Struct.new ... do`, `extend Enumerable`. It adds type

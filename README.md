@@ -185,7 +185,7 @@ Bundler and [golangci-lint](https://golangci-lint.run) on `PATH`:
 ```sh
 bundle install          # rbs, rbs-inline, webrick, rackup
 go test ./...           # every example and test file, compared against MRI
-go test -run 'TestExamples/each/05_word_count' .    # one example
+go test -run 'TestExamples/each/005_word_count' .    # one example
 ```
 
 There are no golden files: MRI's output is the only expectation. Each

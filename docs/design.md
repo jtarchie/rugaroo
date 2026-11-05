@@ -18,7 +18,7 @@ Anti-goals:
 
 - we don't need to support eval or `define_method` **at runtime**. Class-based
   virtual dispatch on `self` **is** required — inheritance doesn't work
-  without it (see [01_inheritance](../examples/01_inheritance/)).
+  without it (see [001_inheritance](../examples/001_inheritance/)).
   *Amended (#82):* a gem that builds methods at boot (`define_method`, a
   string `eval`) is evaluated by MRI **at compile time** instead (decision
   161), and the compiled binary still never runs either. Programs with no

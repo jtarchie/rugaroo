@@ -17,33 +17,33 @@ ruby/spec numbers come from a dated `go run ./cmd/rubyspec` run (see
 
 | Feature | Proof | Notes |
 |---|---|---|
-| Classes, inheritance, `super`, modules, `include`/`extend`/`prepend` | [01](../examples/01_inheritance/main.rb), [15](../examples/15_namespaces/main.rb), [16](../examples/16_class_methods/main.rb), [27](../examples/27_extend_block/main.rb) | Every class and method must be visible at compile time (a closed world). |
-| Blocks, procs, lambdas, `yield`, `Method` objects | [44](../examples/44_procs/main.rb), [98](../examples/98_method_objects/main.rb), [105](../examples/105_variadic_lambdas/main.rb), [108](../examples/108_proc_instance_eval/main.rb) | Some `break`/`return` forms out of blocks are compile errors (below). |
-| Exceptions: `raise`, `rescue`, `ensure`, `retry`, custom hierarchies, `catch`/`throw` | [04](../examples/04_exceptions/main.rb), [13](../examples/13_exceptions_flow/main.rb), [14](../examples/14_uncaught/main.rb), [68](../examples/68_catch_throw/main.rb), [78](../examples/78_backtrace/main.rb) | Uncaught exceptions print and exit as MRI; `RUGAROO_BACKTRACE=1` adds MRI-style backtraces. |
-| Control flow, `case`/`when`, pattern matching (`case`/`in`) | [08](../examples/08_control_flow/main.rb), [93](../examples/93_pattern_matching/main.rb) | |
-| Arguments: optional, splat, keyword, block; multiple assignment; `\|\|=` | [12](../examples/12_optionals/main.rb), [21](../examples/21_or_assign/main.rb), [22](../examples/22_multiple_assign/main.rb), [88](../examples/88_keyword_arguments/main.rb) | |
-| `Struct`, `Data` | [09](../examples/09_structs/main.rb), [28](../examples/28_struct_data/main.rb) | |
-| Ruby 4.0 syntax (`it`, endless methods, leading `&&`) | [07](../examples/07_ruby4_syntax/main.rb), [87](../examples/87_ruby_spec_syntax/main.rb) | |
-| Constants and reflection: `const_get`, `constants`, `instance_variable_get`/`set`, `defined?`, `respond_to?` | [26](../examples/26_constants_reflection/main.rb), [106](../examples/106_ivar_defined/main.rb) | Answered from the whole program at compile time, never by `reflect` ([decision 123](decisions/123.md)). |
-| `method_missing`, `send` and `public_send` | [29](../examples/29_method_missing/main.rb), [30](../examples/30_dynamic_send/main.rb) | On `untyped` values the call goes through a generated dispatcher ([dynamic dispatch](dynamic-dispatch.md)). |
+| Classes, inheritance, `super`, modules, `include`/`extend`/`prepend` | [01](../examples/001_inheritance/main.rb), [15](../examples/015_namespaces/main.rb), [16](../examples/016_class_methods/main.rb), [27](../examples/027_extend_block/main.rb) | Every class and method must be visible at compile time (a closed world). |
+| Blocks, procs, lambdas, `yield`, `Method` objects | [44](../examples/044_procs/main.rb), [98](../examples/098_method_objects/main.rb), [105](../examples/105_variadic_lambdas/main.rb), [108](../examples/108_proc_instance_eval/main.rb) | Some `break`/`return` forms out of blocks are compile errors (below). |
+| Exceptions: `raise`, `rescue`, `ensure`, `retry`, custom hierarchies, `catch`/`throw` | [04](../examples/004_exceptions/main.rb), [13](../examples/013_exceptions_flow/main.rb), [14](../examples/014_uncaught/main.rb), [68](../examples/068_catch_throw/main.rb), [78](../examples/078_backtrace/main.rb) | Uncaught exceptions print and exit as MRI; `RUGAROO_BACKTRACE=1` adds MRI-style backtraces. |
+| Control flow, `case`/`when`, pattern matching (`case`/`in`) | [08](../examples/008_control_flow/main.rb), [93](../examples/093_pattern_matching/main.rb) | |
+| Arguments: optional, splat, keyword, block; multiple assignment; `\|\|=` | [12](../examples/012_optionals/main.rb), [21](../examples/021_or_assign/main.rb), [22](../examples/022_multiple_assign/main.rb), [88](../examples/088_keyword_arguments/main.rb) | |
+| `Struct`, `Data` | [09](../examples/009_structs/main.rb), [28](../examples/028_struct_data/main.rb) | |
+| Ruby 4.0 syntax (`it`, endless methods, leading `&&`) | [07](../examples/007_ruby4_syntax/main.rb), [87](../examples/087_ruby_spec_syntax/main.rb) | |
+| Constants and reflection: `const_get`, `constants`, `instance_variable_get`/`set`, `defined?`, `respond_to?` | [26](../examples/026_constants_reflection/main.rb), [106](../examples/106_ivar_defined/main.rb) | Answered from the whole program at compile time, never by `reflect` ([decision 123](decisions/123.md)). |
+| `method_missing`, `send` and `public_send` | [29](../examples/029_method_missing/main.rb), [30](../examples/030_dynamic_send/main.rb) | On `untyped` values the call goes through a generated dispatcher ([dynamic dispatch](dynamic-dispatch.md)). |
 | `Class.new`/`Module.new` literals, `class_eval`/`module_eval` in a class body | [100](../examples/100_class_new/main.rb), [109](../examples/109_class_eval/main.rb) | One class per literal, declared at compile time ([decision 145](decisions/145.md)). |
-| `require_relative`, `require` with `-I`, `autoload` | [89](../examples/89_require_relative/main.rb), [90](../examples/90_load_path/main.rb), [118](../examples/118_autoload/main.rb) | The path must be a string literal at a file's top level. |
-| `at_exit`, `trap`, `freeze`/`frozen?` | [72](../examples/72_freeze/main.rb), [75](../examples/75_trap/main.rb) | |
-| Types: rbs-inline `#:` annotations, `.rbs` files in `sig/` (with overloads), union types, inference | [20](../examples/20_untyped/main.rb), [34](../examples/34_inferred_returns/main.rb), [101](../examples/101_inferred_params/main.rb), [104](../examples/104_union_types/main.rb), [107](../examples/107_rbs_sig/main.rb), [117](../examples/117_rbs_overloads/main.rb) | Inline overloads (`#\|`) are not supported; put them in a `.rbs` file. A union member must be a class, tuple, proc or nil, not a module ([decision 385](decisions/385.md)). |
-| Threads, `Queue`, `Mutex`, `Monitor`, `Fiber`, enumerator generators | [23](../examples/23_threads/main.rb), [42](../examples/42_queues/main.rb), [79](../examples/79_monitor/main.rb), [92](../examples/92_generators/main.rb) | Goroutines and channels underneath, a Fiber an `iter.Pull` coroutine, and `rand` lock-free unless the program seeds (decision 403); programs that start goroutines are built with `-race` in the tests. |
+| `require_relative`, `require` with `-I`, `autoload` | [89](../examples/089_require_relative/main.rb), [90](../examples/090_load_path/main.rb), [118](../examples/118_autoload/main.rb) | The path must be a string literal at a file's top level. |
+| `at_exit`, `trap`, `freeze`/`frozen?` | [72](../examples/072_freeze/main.rb), [75](../examples/075_trap/main.rb) | |
+| Types: rbs-inline `#:` annotations, `.rbs` files in `sig/` (with overloads), union types, inference | [20](../examples/020_untyped/main.rb), [34](../examples/034_inferred_returns/main.rb), [101](../examples/101_inferred_params/main.rb), [104](../examples/104_union_types/main.rb), [107](../examples/107_rbs_sig/main.rb), [117](../examples/117_rbs_overloads/main.rb) | Inline overloads (`#\|`) are not supported; put them in a `.rbs` file. A union member must be a class, tuple, proc or nil, not a module ([decision 385](decisions/385.md)). |
+| Threads, `Queue`, `Mutex`, `Monitor`, `Fiber`, enumerator generators | [23](../examples/023_threads/main.rb), [42](../examples/042_queues/main.rb), [79](../examples/079_monitor/main.rb), [92](../examples/092_generators/main.rb) | Goroutines and channels underneath, a Fiber an `iter.Pull` coroutine, and `rand` lock-free unless the program seeds (decision 403); programs that start goroutines are built with `-race` in the tests. |
 
 ## Language — experimental
 
 | Feature | Proof | Notes |
 |---|---|---|
-| `Ractor`, `Ractor::Port` | [77](../examples/77_ractor/main.rb), [ractor_test](../testdata/test/ractor_test.rb) | A goroutine and a queue; messages are deep-copied and isolation is checked at compile time. The isolation rules are new. |
+| `Ractor`, `Ractor::Port` | [77](../examples/077_ractor/main.rb), [ractor_test](../testdata/test/ractor_test.rb) | A goroutine and a queue; messages are deep-copied and isolation is checked at compile time. The isolation rules are new. |
 
 ## Language — not supported
 
 | Feature | Why | Instead |
 |---|---|---|
 | `eval`, `instance_eval(string)`, `load`, code built at run time | The binary has no interpreter; everything is compiled ahead of time. | Write the code out. Gems that `eval` at load time can still compile (see [gems](#gems--experimental)). |
-| `define_method`, `define_singleton_method` in your own code | Methods must be known at compile time. | `def`, or `method_missing` with a signature ([29](../examples/29_method_missing/main.rb)). A gem's load-time `define_method` is supported ([decision 198](decisions/198.md)). |
+| `define_method`, `define_singleton_method` in your own code | Methods must be known at compile time. | `def`, or `method_missing` with a signature ([29](../examples/029_method_missing/main.rb)). A gem's load-time `define_method` is supported ([decision 198](decisions/198.md)). |
 | In-place String mutation (`upcase!`, `gsub!`, `[]=`; `<<` on a String something else may hold) | A `String` is an immutable Go string value ([decision 58](decisions/058.md)). `s << x` and `s.concat(x)` do work on a local the compiler proves nothing else holds: built fresh, not a parameter, not stored or passed before its last append ([decision 382](decisions/382.md)). `s.setbyte(i, b)` works on such a local too, and on an ivar that `initialize` first sets to a new String and changes before `self` or the String escapes; before the last `setbyte` the String may only be read for numbers (`getbyte`, `bytesize`, `==`, ...), not sliced, copied or interpolated ([decision 395](decisions/395.md)). The error names what breaks the proof. | Build new strings (`s += "x"`, `s = s.upcase`), append to a local and pass it on after the last `<<` ([130](../examples/130_string_append/main.rb)), `setbyte` a `dup` and return it ([133](../examples/133_string_setbyte/main.rb)), or use `StringIO`. |
 | The 34 encodings listed under [Encodings](#encodings) (ISO-2022-JP, Big5-HKSCS, macGreek, ...) | x/text has no table for them, or they keep state between characters ([decision 380](decisions/380.md)). | Convert at the edges with another tool. |
 | `break v`; a `break` out of a block whose call's value is used; `return` from a block stored as a closure; `next v` where the value is thrown away (`while`, `each`) | Go closures cannot unwind their caller ([decision 4](decisions/004.md)). | Restructure: plain `break`/`return` work in `while` and in blocks that run inline (like `each`). |
@@ -141,48 +141,48 @@ compiler answers. A standard library name not listed compiles as a no-op.
 
 | `require` | Tier | Proof | Notes |
 |---|---|---|---|
-| `abbrev` | stable | [63](../examples/63_abbrev/main.rb) | |
-| `base64` | stable | [46](../examples/46_digests/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | |
-| `benchmark` | stable | [48](../examples/48_time_parse/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | |
-| `bigdecimal`, `bigdecimal/util` | stable | [82](../examples/82_bigdecimal/main.rb), [bigdecimal_test](../testdata/test/bigdecimal_test.rb) | Over Go's `math/big`, with bigdecimal 4.1's precision rules. |
-| `cgi`, `cgi/escape`, `cgi/util` | stable | [46](../examples/46_digests/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | Escaping helpers. |
-| `csv` | stable | [49](../examples/49_csv/main.rb), [85](../examples/85_csv_headers/main.rb) | |
-| `date` | stable | [39](../examples/39_date/main.rb), [94](../examples/94_datetime/main.rb), [date_test](../testdata/test/date_test.rb) | Proleptic Gregorian only: MRI's Julian dates before 1582 are not modelled. |
-| `delegate` | stable | [86](../examples/86_delegation/main.rb) | `DelegateClass(Foo)` is typed; `SimpleDelegator` dispatches dynamically. |
-| `digest`, `digest/md5`, `digest/sha1`, `digest/sha2` | stable | [46](../examples/46_digests/main.rb) | |
+| `abbrev` | stable | [63](../examples/063_abbrev/main.rb) | |
+| `base64` | stable | [46](../examples/046_digests/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | |
+| `benchmark` | stable | [48](../examples/048_time_parse/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | |
+| `bigdecimal`, `bigdecimal/util` | stable | [82](../examples/082_bigdecimal/main.rb), [bigdecimal_test](../testdata/test/bigdecimal_test.rb) | Over Go's `math/big`, with bigdecimal 4.1's precision rules. |
+| `cgi`, `cgi/escape`, `cgi/util` | stable | [46](../examples/046_digests/main.rb), [stdlib_test](../testdata/test/stdlib_test.rb) | Escaping helpers. |
+| `csv` | stable | [49](../examples/049_csv/main.rb), [85](../examples/085_csv_headers/main.rb) | |
+| `date` | stable | [39](../examples/039_date/main.rb), [94](../examples/094_datetime/main.rb), [date_test](../testdata/test/date_test.rb) | Proleptic Gregorian only: MRI's Julian dates before 1582 are not modelled. |
+| `delegate` | stable | [86](../examples/086_delegation/main.rb) | `DelegateClass(Foo)` is typed; `SimpleDelegator` dispatches dynamically. |
+| `digest`, `digest/md5`, `digest/sha1`, `digest/sha2` | stable | [46](../examples/046_digests/main.rb) | |
 | `English` | stable | [globals_test](../testdata/test/globals_test.rb), ruby/spec `library/English` | English.rb's names for the punctuation globals, which rugaroo knows whether or not it is required ([decision 415](decisions/415.md)); `$;`, `$,` and `$\` are honored by `split`, `join` and `print`. `$.` (`$NR`) is the last read's line number ([decision 425](decisions/425.md)); no `$_` (`$LAST_READ_LINE`): `gets` keeps no last line. |
-| `erb` | stable | [81](../examples/81_erb/main.rb), [erb_test](../testdata/test/erb_test.rb) | A template that is a string literal compiles with the program ([decision 111](decisions/111.md)). |
-| `etc` | stable | [60](../examples/60_etc/main.rb) | |
+| `erb` | stable | [81](../examples/081_erb/main.rb), [erb_test](../testdata/test/erb_test.rb) | A template that is a string literal compiles with the program ([decision 111](decisions/111.md)). |
+| `etc` | stable | [60](../examples/060_etc/main.rb) | |
 | `fcntl` | stable | [stdlib_test](../testdata/test/stdlib_test.rb) | Constants for `IO#fcntl`. |
-| `fileutils` | stable | [54](../examples/54_fileutils/main.rb), [fileutils_test](../testdata/test/fileutils_test.rb) | |
-| `find` | stable | [56](../examples/56_find/main.rb) | |
-| `forwardable` | stable | [74](../examples/74_forwardable/main.rb) | |
-| `ipaddr` | stable | [59](../examples/59_ipaddr/main.rb) | |
-| `json` | stable | [19](../examples/19_json/main.rb), [json_test](../testdata/test/json_test.rb) | |
-| `logger` | stable | [58](../examples/58_logger/main.rb) | |
-| `minitest`, `minitest/autorun`, `minitest/spec`, `minitest/mock`, `minitest/pride` | stable | [65](../examples/65_minitest/main.rb), [66](../examples/66_minitest_spec/main.rb), and rugaroo's own suite | A port of minitest 6.0.6; `rugaroo test` runs a directory of test files as one program. |
-| `net/http`, `net/https` | stable | [24](../examples/24_net_http/main.rb), [net_test](../testdata/test/net_test.rb) | Client and server. |
-| `observer` | stable | [64](../examples/64_observable/main.rb) | |
-| `open-uri` | stable | [95](../examples/95_open_uri/main.rb) | |
-| `open3` | stable | [57](../examples/57_open3/main.rb) | |
-| `optparse`, `optionparser` | stable | [76](../examples/76_optparse/main.rb) | |
-| `ostruct` | stable | [86](../examples/86_delegation/main.rb) | Fields are `untyped`. |
-| `rexml`, `rexml/document` | stable | [84](../examples/84_rexml/main.rb), [rexml_test](../testdata/test/rexml_test.rb) | A DOM and an XPath subset over a Go tokenizer. |
-| `securerandom` | stable | [46](../examples/46_digests/main.rb) | |
-| `shellwords` | stable | [47](../examples/47_strscan/main.rb) | |
-| `singleton` | stable | [50](../examples/50_format_regexp/main.rb) | |
-| `socket` | stable | [91](../examples/91_socket/main.rb), [socket_test](../testdata/test/socket_test.rb) | TCP, UDP and Unix sockets over Go's `net`; `Socket.new` is not supported. |
-| `stringio` | stable | [45](../examples/45_stringio/main.rb) | |
-| `strscan` | stable | [47](../examples/47_strscan/main.rb) | |
-| `tempfile` | stable | [54](../examples/54_fileutils/main.rb) | No finalizer: close and unlink explicitly. |
-| `time` | stable | [48](../examples/48_time_parse/main.rb) | `Time.parse`, `iso8601`, `strptime`, ... |
-| `timeout` | stable | [61](../examples/61_timeout/main.rb) | |
-| `tmpdir` | stable | [56](../examples/56_find/main.rb) | |
-| `tsort` | stable | [62](../examples/62_tsort/main.rb) | |
+| `fileutils` | stable | [54](../examples/054_fileutils/main.rb), [fileutils_test](../testdata/test/fileutils_test.rb) | |
+| `find` | stable | [56](../examples/056_find/main.rb) | |
+| `forwardable` | stable | [74](../examples/074_forwardable/main.rb) | |
+| `ipaddr` | stable | [59](../examples/059_ipaddr/main.rb) | |
+| `json` | stable | [19](../examples/019_json/main.rb), [json_test](../testdata/test/json_test.rb) | |
+| `logger` | stable | [58](../examples/058_logger/main.rb) | |
+| `minitest`, `minitest/autorun`, `minitest/spec`, `minitest/mock`, `minitest/pride` | stable | [65](../examples/065_minitest/main.rb), [66](../examples/066_minitest_spec/main.rb), and rugaroo's own suite | A port of minitest 6.0.6; `rugaroo test` runs a directory of test files as one program. |
+| `net/http`, `net/https` | stable | [24](../examples/024_net_http/main.rb), [net_test](../testdata/test/net_test.rb) | Client and server. |
+| `observer` | stable | [64](../examples/064_observable/main.rb) | |
+| `open-uri` | stable | [95](../examples/095_open_uri/main.rb) | |
+| `open3` | stable | [57](../examples/057_open3/main.rb) | |
+| `optparse`, `optionparser` | stable | [76](../examples/076_optparse/main.rb) | |
+| `ostruct` | stable | [86](../examples/086_delegation/main.rb) | Fields are `untyped`. |
+| `rexml`, `rexml/document` | stable | [84](../examples/084_rexml/main.rb), [rexml_test](../testdata/test/rexml_test.rb) | A DOM and an XPath subset over a Go tokenizer. |
+| `securerandom` | stable | [46](../examples/046_digests/main.rb) | |
+| `shellwords` | stable | [47](../examples/047_strscan/main.rb) | |
+| `singleton` | stable | [50](../examples/050_format_regexp/main.rb) | |
+| `socket` | stable | [91](../examples/091_socket/main.rb), [socket_test](../testdata/test/socket_test.rb) | TCP, UDP and Unix sockets over Go's `net`; `Socket.new` is not supported. |
+| `stringio` | stable | [45](../examples/045_stringio/main.rb) | |
+| `strscan` | stable | [47](../examples/047_strscan/main.rb) | |
+| `tempfile` | stable | [54](../examples/054_fileutils/main.rb) | No finalizer: close and unlink explicitly. |
+| `time` | stable | [48](../examples/048_time_parse/main.rb) | `Time.parse`, `iso8601`, `strptime`, ... |
+| `timeout` | stable | [61](../examples/061_timeout/main.rb) | |
+| `tmpdir` | stable | [56](../examples/056_find/main.rb) | |
+| `tsort` | stable | [62](../examples/062_tsort/main.rb) | |
 | `uri` | stable | [stdlib_test](../testdata/test/stdlib_test.rb) | |
-| `weakref` | stable | [80](../examples/80_weakref/main.rb) | |
-| `webrick` | stable | [24](../examples/24_net_http/main.rb), [115](../examples/115_rack_server/main.rb) | |
-| `zlib` | stable | [46](../examples/46_digests/main.rb) | Checksums, Deflate/Inflate, gzip. |
+| `weakref` | stable | [80](../examples/080_weakref/main.rb) | |
+| `webrick` | stable | [24](../examples/024_net_http/main.rb), [115](../examples/115_rack_server/main.rb) | |
+| `zlib` | stable | [46](../examples/046_digests/main.rb) | Checksums, Deflate/Inflate, gzip. |
 | `fiddle`, `fiddle/import`, `fiddle/closure`, `fiddle/cparser`, `fiddle/function` | experimental | [121](../examples/121_fiddle/main.rb), [fiddle_test](../testdata/test/fiddle_test.rb) | Calls C libraries without cgo, through purego ([decision 326](decisions/326.md)), or through cgo with `-cgo`, which also makes variadic calls (`TYPE_VARIADIC`) and calls with more than 8 arguments ([decision 426](decisions/426.md)). Needs the library on the machine that runs the binary. |
 | `ffi` | experimental | [127](../examples/127_ffi/main.rb), [ffi_test](../testdata/test/ffi_test.rb) | The ffi gem's `FFI::Library`, `Pointer`, `MemoryPointer`, `Struct`, `Union`, callbacks and `enum` over `fiddle`'s purego path ([decision 375](decisions/375.md)). `attach_function` needs literal types; no `attach_variable`, and varargs, more than 8 arguments and `Struct.by_value` (with a literal `layout`) need `-cgo` ([decision 426](decisions/426.md)). Needs the library at run time. |
 | `sqlite3` | experimental | [122](../examples/122_sqlite3/main.rb), [sqlite3_test](../testdata/test/sqlite3_test.rb) | The sqlite3 gem's API from the vendored pure-Ruby [sqlite3-fiddle](https://github.com/jtarchie/sqlite3-fiddle) over `fiddle` ([decision 328](decisions/328.md)). Needs libsqlite3 at run time. |

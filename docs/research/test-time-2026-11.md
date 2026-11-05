@@ -96,22 +96,22 @@ Timeline of run a (seconds from the test binary's start): 0-65 package tests and
 
 Decision 88 pins prelude `//line`s to `:1` in TestRun, TestMinitest and (it says) TestMulti, so a line shift changes no testdata program's bytes. The examples were left out on purpose: lint needs distinct positions to correlate `//nolint` comments. Diffing the kept main.go files of runs a and b1 (`RUGAROO_TEST_KEEP`):
 
-- all 137 examples changed, and in each the only difference is `//line prelude/string.rb:N` lines (05_word_count: 28 directives, nothing else);
+- all 137 examples changed, and in each the only difference is `//line prelude/string.rb:N` lines (005_word_count: 28 directives, nothing else);
 - TestMulti/basic and TestMulti/require changed the same way: TestMulti never called `stablePreludeLines` (the decision's text is wrong there), nor did TestBootAutoload, TestTracedEntry, TestTraceEval, TestTraceRun, TestGemCorpus, TestPrimeVendoredSig;
 - TestMinitest/method and TestMinitest/prism changed through `rbMethodInfo{... key: "String#@prelude/string.rb:2874"}`: the method key carries a prelude byte offset, which a line shift moves (a leak of 2 programs, as decision 88's `assert_respond_to` note anticipated).
 
-Cost of those 147 misses: 883 s of `go build` CPU (the biggest, under contention: TestGemCorpus 76 s, 30_dynamic_send 74 s, 124_liquid 57 s, 116_cuba_web 52 s, TestMinitest/prism 47 s) and a 1530 s lint pass, serial after the last example. Wall 1974 s against 337 s warm.
+Cost of those 147 misses: 883 s of `go build` CPU (the biggest, under contention: TestGemCorpus 76 s, 030_dynamic_send 74 s, 124_liquid 57 s, 116_cuba_web 52 s, TestMinitest/prism 47 s) and a 1530 s lint pass, serial after the last example. Wall 1974 s against 337 s warm.
 
 ### 2. The lint pass is per-package incremental, and a few programs are most of it
 
-On a 5-example module (30_dynamic_send 123k lines + 05_word_count, 109_class_eval, 107_rbs_sig, 14_uncaught), `golangci-lint run` with the generated config, `GOFLAGS=-trimpath`, cache cleaned first (beside a full run, so contended):
+On a 5-example module (030_dynamic_send 123k lines + 005_word_count, 109_class_eval, 107_rbs_sig, 014_uncaught), `golangci-lint run` with the generated config, `GOFLAGS=-trimpath`, cache cleaned first (beside a full run, so contended):
 
 | state | wall |
 |---|---|
 | cold | 344 s |
 | unchanged | 3.3 s |
-| after appending a comment to 14_uncaught | 4.8 s |
-| after appending a comment to 30_dynamic_send | 395 s |
+| after appending a comment to 014_uncaught | 4.8 s |
+| after appending a comment to 030_dynamic_send | 395 s |
 
 So the cache works per package (decision 88's `-trimpath` fix holds), and one every-name program costs 5-6 minutes of lint CPU on its own. b2 re-linted 42 examples in 1804 s, b1 137 in 1530 s: the time is the big programs, which every prelude edit of a widely kept helper reaches.
 
@@ -121,7 +121,7 @@ A comment inside `rbDump` changed 114 programs: the 114 that keep `func rbDump` 
 
 ### 4. `-race`: 54 of 245 programs, 51 of them only because Thread is reachable
 
-`goBuild` adds `-race` when the generated Go has more than one `go` statement. Attributing the `go` statements in the 54 programs to their functions: `rbTrapSignals` (the always-on one) in all 54; `rbThreadStart` in 51; `rbStartChild` (spawn) in 6; `Timeout_Meta___Race` in 1. Only 61_timeout, 23_threads, 42_queues, 79_monitor, 77_ractor and the thread/fiber/ractor/process minitest files start goroutines in their own code; the other ~40 (every minitest file, kramdown, liquid, cuba, rack, resty, prism...) keep `Thread.new`'s helper because minitest or a gem names Thread, and never run it in the test. The cost of `-race`, paired cold builds of run a's kept programs (fresh GOCACHE with the race and plain std prebuilt, machine otherwise idle, `-trimpath -gcflags=-dwarf=false`, `-l` for the minitest ones as the harness does):
+`goBuild` adds `-race` when the generated Go has more than one `go` statement. Attributing the `go` statements in the 54 programs to their functions: `rbTrapSignals` (the always-on one) in all 54; `rbThreadStart` in 51; `rbStartChild` (spawn) in 6; `Timeout_Meta___Race` in 1. Only 061_timeout, 023_threads, 042_queues, 079_monitor, 077_ractor and the thread/fiber/ractor/process minitest files start goroutines in their own code; the other ~40 (every minitest file, kramdown, liquid, cuba, rack, resty, prism...) keep `Thread.new`'s helper because minitest or a gem names Thread, and never run it in the test. The cost of `-race`, paired cold builds of run a's kept programs (fresh GOCACHE with the race and plain std prebuilt, machine otherwise idle, `-trimpath -gcflags=-dwarf=false`, `-l` for the minitest ones as the harness does):
 
 | program | -race wall | -race CPU | plain wall | plain CPU |
 |---|---|---|---|---|
@@ -130,17 +130,17 @@ A comment inside `rbDump` changed 114 programs: the 114 that keep `func rbDump` 
 | TestMinitest/hash | 27.6 s | 36.4 s | 15.6 s | 37.7 s |
 | 116_cuba_web | 29.8 s | 52.4 s | 18.8 s | 50.3 s |
 | 123_kramdown | 39.9 s | 53.1 s | 15.9 s | 43.5 s |
-| 66_minitest_spec | 11.7 s | 16.4 s | 7.0 s | 16.4 s |
+| 066_minitest_spec | 11.7 s | 16.4 s | 7.0 s | 16.4 s |
 
 `-race` doubles the wall of a build (it turns off the compiler's concurrent backend, decision 88) but adds only 0-22% CPU. In a full run the builds overlap ten-wide and the machine is CPU-bound, so dropping `-race` from the 40 programs that never start a goroutine would save CPU in that range, not the 2x; the 2x shows on an idle machine building one program, as `go test -run TestMinitest/object` does after an edit.
 
 ### 5. rbs-inline + rbs validate: 640-910 s of CPU per run, deterministic
 
-Every run spends 166-231 s in rbs-inline and 474-681 s in `rbs validate` over the 137 examples (3.5-5 s each; 25_resty, 95_open_uri, 24_net_http 9 s: they load the net-http signature set). The inputs are the example's files, `sig/*.rbs`, and the rbs/rbs-inline gems Gemfile.lock pins: a pass is reproducible from those, exactly as MRI's output is (decision 272). It is 35-40% of a warm run's CPU.
+Every run spends 166-231 s in rbs-inline and 474-681 s in `rbs validate` over the 137 examples (3.5-5 s each; 025_resty, 095_open_uri, 024_net_http 9 s: they load the net-http signature set). The inputs are the example's files, `sig/*.rbs`, and the rbs/rbs-inline gems Gemfile.lock pins: a pass is reproducible from those, exactly as MRI's output is (decision 272). It is 35-40% of a warm run's CPU.
 
 ### 6. MRI cache: hits on reruns; a worktree pays 76 s once
 
-Run 0 (fresh worktree) missed all 237 MRI runs; they cost 76 s CPU in total (TestMinitest/process 3.3 s the slowest), spread over the parallel phase. Runs a, b1, b2 hit all 238. A worktree's real first-run cost is elsewhere: 17 programs embed absolute paths in `//line` directives for `-I`, `-gem` and traced files (`//line /Users/.../transpiler-test-time/examples/90_load_path/lib/units/report.rb:7`), so every worktree misses the Go build cache for 89_require_relative, 90_load_path, 123_kramdown, 124_liquid, 135_roundhouse_blog, TestRun/gem_lenient, TestGemCorpus, TestBootAutoload, the traced tests: 419 s of builds and the 490 s lint pass of run 0.
+Run 0 (fresh worktree) missed all 237 MRI runs; they cost 76 s CPU in total (TestMinitest/process 3.3 s the slowest), spread over the parallel phase. Runs a, b1, b2 hit all 238. A worktree's real first-run cost is elsewhere: 17 programs embed absolute paths in `//line` directives for `-I`, `-gem` and traced files (`//line /Users/.../transpiler-test-time/examples/090_load_path/lib/units/report.rb:7`), so every worktree misses the Go build cache for 089_require_relative, 090_load_path, 123_kramdown, 124_liquid, 135_roundhouse_blog, TestRun/gem_lenient, TestGemCorpus, TestBootAutoload, the traced tests: 419 s of builds and the 490 s lint pass of run 0.
 
 ### 7. Program count
 
@@ -169,7 +169,7 @@ Ranked by measured gain per effort and risk. "Prototyped" levers are commits on 
 
 ### L1. Stable `//line` numbers for every test program (prototyped: decision 434, commit 3e200ddd)
 
-Gain: scenario b1 (comment line in prelude/string.rb) 668 s against 1974 s (run P2); the 147 rebuilds become 3 (TestBootAutoload, 98_method_objects, 136_prism_parse: the `rbMethodInfo` key offsets, L1b) and the lint pass 320 s, all of it 136_prism_parse (105k lines) re-linting. With L1b the run should be a warm run. Effort: 40 lines in the harness. Risk: lint positions on a failing example name a consecutive line instead of the prelude's (`rugaroo build -work` on the example gives the real one); the parity checks above found no difference in what lint reports. One-off cost: every example's bytes change once, a cold run (2297 s measured, run P0).
+Gain: scenario b1 (comment line in prelude/string.rb) 668 s against 1974 s (run P2); the 147 rebuilds become 3 (TestBootAutoload, 098_method_objects, 136_prism_parse: the `rbMethodInfo` key offsets, L1b) and the lint pass 320 s, all of it 136_prism_parse (105k lines) re-linting. With L1b the run should be a warm run. Effort: 40 lines in the harness. Risk: lint positions on a failing example name a consecutive line instead of the prelude's (`rugaroo build -work` on the example gives the real one); the parity checks above found no difference in what lint reports. One-off cost: every example's bytes change once, a cold run (2297 s measured, run P0).
 
 What it does not cover: an edit that changes kept code (b2) still rebuilds and re-lints exactly its keepers, and those are the big programs (L3, L4).
 

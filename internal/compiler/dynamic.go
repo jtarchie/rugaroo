@@ -92,7 +92,7 @@ type dynGenCase struct{ key, body string }
 
 // emitDynGen emits this batch's wrappers of each generic class as one method switching on the name. Go compiles
 // every method of a generic type for each instantiation, so 120 DynX methods on Array[E] were 120 bodies per
-// element type (64_observable: 10.1k of 51k compiled functions); the batch number keeps names unique across
+// element type (064_observable: 10.1k of 51k compiled functions); the batch number keeps names unique across
 // emitNext rounds, and the dispatchers this batch emitted name it. The pruner keeps a case only while its name's
 // dispatcher is kept (visitSwitch), as a wrapper method was kept only while selected (decision 209).
 func (c *Compiler) emitDynGen() {
