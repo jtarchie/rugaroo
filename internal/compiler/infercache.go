@@ -24,7 +24,7 @@ var inferCacheOn atomic.Bool
 // SetInferCache turns the inference cache on for this process; the CLI does, tests do not, so the oracle stays cold.
 func SetInferCache(on bool) { inferCacheOn.Store(on) }
 
-const inferCacheVersion = 2
+const inferCacheVersion = 3 // 3: refine records carry decision 440's nil sites
 
 // cachedType is a Type with its classes by Ruby name; decode builds placeholder classes that rehome resolves.
 type cachedType struct {

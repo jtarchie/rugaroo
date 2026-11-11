@@ -546,7 +546,7 @@ func (f *fctx) plusAppend(name string, depth uint32, loc parser.Location, args [
 	}
 	opt := TOpt{Elem: str}
 	for _, a := range args {
-		if t := f.probeType(a, str); !typeEq(t, str) && (!typeEq(t, opt) || !f.nilRuntime()) {
+		if t := f.probeType(a, str); !typeEq(t, str) && (!typeEq(t, opt) || !f.nilAt(a)) {
 			return expr{}, false
 		}
 	}
@@ -560,7 +560,7 @@ func (f *fctx) plusAppend(name string, depth uint32, loc parser.Location, args [
 		if typeEq(x.typ, opt) { // MRI's TypeError for `s + nil` (decision 393)
 			prev := f.nilArg
 			f.nilArg = nilCall{m: plus.M, recv: str, param: str}
-			x = f.nilUnwrap(x, str)
+			x = f.nilUnwrap(a, x, str)
 			f.nilArg = prev
 		}
 		codes[i] = x.code

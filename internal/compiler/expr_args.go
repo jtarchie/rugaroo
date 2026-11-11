@@ -639,7 +639,7 @@ func (f *fctx) classOverload(m *Method, owner *Class, name string, args []parser
 	}
 	var a expr
 	f.probe(func() { a = f.genExpr(args[0], nil) })
-	if o, ok := a.typ.(TOpt); ok && !nilEqualOps[m.Name] && (f.lenient() || f.nilTwin(m, o)) { // a gem's T? is its T, nil raising where used (decisions 172, 393); `==` answers false (decision 404)
+	if o, ok := a.typ.(TOpt); ok && !nilEqualOps[m.Name] && (f.lenient() || f.nilTwin(args[0], m, o)) { // a gem's T? is its T, nil raising where used (decisions 172, 393); `==` answers false (decision 404)
 		a.typ = o.Elem
 	}
 	if c, ok := a.typ.(TClass); ok {

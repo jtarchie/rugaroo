@@ -14,6 +14,7 @@ import (
 // see the ivar fails to compile or adds a conversion; the rest are kept,
 // greedily in name order.
 func (c *Compiler) refineIvars() {
+	c.nilDefer = nil
 	var cands []*Ivar
 	typed, orig := map[*Ivar]Type{}, map[*Ivar]Type{}
 	for range 8 { // one typed ivar can type the next: re-discover with it typed
@@ -40,7 +41,7 @@ func (c *Compiler) refineIvars() {
 		iv.Type = orig[iv]
 	}
 	kind, sig := c.refineKind(), refineCands(cands, typed, orig)
-	if r := c.refineIn[kind]; !c.round && r != nil && slices.Equal(r.Cands, sig) && len(r.Accepted) == len(cands) { // a hit: the same candidates from the same state (decision 433)
+	if r := c.refineIn[kind]; !c.round && r != nil && slices.Equal(r.Cands, sig) && len(r.Accepted) == len(cands) && (r.NilSites == nil || !c.noNilDefer) { // a hit: the same candidates from the same state (decision 433)
 		c.replayRefine(r, cands, typed, orig)
 		c.refineOut[kind] = r
 		return
@@ -50,6 +51,17 @@ func (c *Compiler) refineIvars() {
 		snap = c.takeRefineSnap()
 	}
 	base, _ := c.dryRunIvarUsers(cands)
+	var pre map[nilSite]bool // the untyped run's nil sites: not a typing's (decision 440)
+	preDone := false
+	attempt := func(d *nilDeferral) (*compileError, bool) {
+		c.nilDefer = d
+		convs, err := c.dryRunIvarUsers(cands)
+		ok := err == nil
+		for k := range convs {
+			ok = ok && base[k]
+		}
+		return err, ok
+	}
 	try := func(set map[*Ivar]bool) bool {
 		for _, iv := range cands {
 			iv.Type = orig[iv]
@@ -57,13 +69,37 @@ func (c *Compiler) refineIvars() {
 				iv.Type = typed[iv]
 			}
 		}
-		convs, ok := c.dryRunIvarUsers(cands)
-		for k := range convs {
-			ok = ok && base[k]
+		err, ok := attempt(nil)
+		if ok || err == nil || !err.nilVeto || c.noNilDefer {
+			return ok
 		}
+		if !preDone {
+			preDone = true
+			types := map[*Ivar]Type{}
+			for _, iv := range cands {
+				types[iv], iv.Type = iv.Type, orig[iv]
+			}
+			rec := &nilDeferral{rec: map[nilSite]bool{}}
+			if err, _ := attempt(rec); err == nil {
+				pre = rec.rec
+			}
+			for _, iv := range cands {
+				iv.Type = types[iv]
+			}
+		}
+		if pre == nil {
+			c.nilDefer = nil
+			return false
+		}
+		d := &nilDeferral{pre: pre, sites: map[nilSite]bool{}}
+		if _, ok = attempt(d); !ok {
+			c.nilDefer = nil
+		}
+		d.pre = nil // the emission's other sites are not the typing's
 		return ok
 	}
 	salvage(cands, try) // a failed last try leaves the original types
+	c.nilDeferUsed = c.nilDeferUsed || c.nilDefer != nil && len(c.nilDefer.sites) > 0
 	if c.round || c.refineOut == nil {
 		return
 	}
@@ -106,8 +142,8 @@ func salvage[K comparable](cands []K, try func(map[K]bool) bool) bool {
 }
 
 // dryRunIvarUsers emits, and discards, every method of the classes that
-// can see one of ivs, returning the conversion sites and whether it compiled.
-func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, bool) {
+// can see one of ivs, returning the conversion sites and its compile error.
+func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, *compileError) {
 	saved, nw := c.out.String(), len(c.Warnings)
 	for _, m := range c.inferredMethods() {
 		m.Ret = nil // provisional: may depend on the ivar types being tried
@@ -131,7 +167,7 @@ func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, bool) {
 	c.out.Reset()
 	c.out.WriteString(saved)
 	c.dropWarnings(nw)
-	return convs, err == nil
+	return convs, err
 }
 
 // inferReturns re-infers every unannotated return type (decision 36): the

@@ -63,6 +63,7 @@ type fctx struct {
 	refined          map[localKey]Type // `x = []`/`{}` typed by what is put in it (analyze)
 	openArgs         map[int]localKey  // an open literal passed as a memo (`each_with_object({})`): its offset -> the block param it binds (decision 344)
 	convs            map[int]bool      // pass 1's rbAs/OptOf conversion sites, by offset
+	nilDefer         *nilDeferral      // the nil sites the local typings analyze kept are checked at (decision 440)
 	retTypes         *[]Type           // `return` values, while inferring the method's return type
 	unset            map[localKey]bool // locals read where they may be unassigned (maybeUnset)
 	scope            *scope

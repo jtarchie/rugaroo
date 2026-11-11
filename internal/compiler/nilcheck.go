@@ -30,6 +30,59 @@ func (f *fctx) nilRuntime() bool {
 	return f.c.env.NilCheck == "runtime"
 }
 
+// nilSite is where a T? meets a T: the file and the offset of the node coerced.
+type nilSite struct {
+	file *File
+	off  int
+}
+
+// nilDeferral: sites an inferred container's typing made possibly-nil are checked at run time (decision 440).
+type nilDeferral struct {
+	rec   map[nilSite]bool // the untyped baseline run: every site deferred and noted
+	pre   map[nilSite]bool // while a typing is tried: the baseline's sites, not the typing's, stay errors
+	sites map[nilSite]bool // the deferred sites
+}
+
+// at reports whether d checks site k at run time; decided is false when d has no say.
+func (d *nilDeferral) at(k nilSite) (ok, decided bool) {
+	switch {
+	case d == nil:
+		return false, false
+	case d.rec != nil:
+		d.rec[k] = true
+		return true, true
+	case d.sites[k]:
+		return true, true
+	case d.pre != nil && !d.pre[k]:
+		d.sites[k] = true
+		return true, true
+	}
+	return false, false
+}
+
+// nilAt: the T? coerced at n is checked at run time, under --nil-check=runtime or at a site decision 440 deferred.
+func (f *fctx) nilAt(n parser.Node) bool {
+	if f.nilRuntime() {
+		return true
+	}
+	if n == nil || f.f == nil || f.f.isPrelude() || f.lenient() {
+		return false
+	}
+	k := nilSite{f.f, n.GetLocation().StartOffset}
+	if ok, decided := f.c.nilDefer.at(k); decided { // an ivar's typing (refineIvars)
+		return ok
+	}
+	ok, _ := f.nilDefer.at(k) // a local's (analyze)
+	return ok
+}
+
+// nilErrorf marks decision 20's error a nil veto: a typing it alone vetoes is retried with the sites deferred (decision 440).
+func (f *fctx) nilErrorf(n parser.Node, format string, args ...any) {
+	err := catchCompileError(func() { f.errorf(n, format, args...) })
+	err.nilVeto = true
+	panic(*err)
+}
+
 // nilCall is the call whose argument is being coerced, for the error MRI raises when that argument is nil.
 type nilCall struct {
 	m     *Method
@@ -74,20 +127,20 @@ func (f *fctx) nilMessage(to Type) (string, bool) {
 }
 
 // nilTwin: only numeric operators pick a twin by the unwrapped T; a twin taking T? (`Integer(h[:k])`) already has MRI's message.
-func (f *fctx) nilTwin(m *Method, o TOpt) bool {
-	return f.nilRuntime() && towerOps[m.Name] && m.Name != "<=>" && numLevel(classOf(o.Elem)) >= 0
+func (f *fctx) nilTwin(n parser.Node, m *Method, o TOpt) bool {
+	return towerOps[m.Name] && m.Name != "<=>" && numLevel(classOf(o.Elem)) >= 0 && f.nilAt(n)
 }
 
 // nilNumArgs unwraps a numeric T? argument before numericTower picks the class to convert to, as MRI's coerce fails on nil first.
 func (f *fctx) nilNumArgs(m *Method, recv Type, xs []expr, nodes []parser.Node) {
-	if !f.nilRuntime() || nilEqualOps[m.Name] {
+	if nilEqualOps[m.Name] {
 		return
 	}
 	for i, x := range xs {
-		if o, ok := x.typ.(TOpt); ok && numLevel(classOf(o.Elem)) >= 0 {
+		if o, ok := x.typ.(TOpt); ok && numLevel(classOf(o.Elem)) >= 0 && f.nilAt(nodes[i]) {
 			prev := f.nilArg
 			f.nilArg = nilCall{m: m, recv: recv}
-			xs[i] = f.nilUnwrap(x, o.Elem)
+			xs[i] = f.nilUnwrap(nodes[i], x, o.Elem)
 			f.nilArg = prev
 			nodes[i].(*exprNode).e = xs[i] //nolint:forcetypeassert // genNumArgs makes exprNodes
 		}
@@ -96,7 +149,7 @@ func (f *fctx) nilNumArgs(m *Method, recv Type, xs []expr, nodes []parser.Node) 
 
 // nilSpaceship is `a <=> b` of a T? b: MRI answers nil for a nil b, where the typed `<=>` would take its unwrapped T.
 func (f *fctx) nilSpaceship(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
-	if name != "<=>" || len(args) != 1 || block != nil || !f.nilRuntime() || classOf(recv.typ) == nil {
+	if name != "<=>" || len(args) != 1 || block != nil || classOf(recv.typ) == nil {
 		return expr{}, false
 	}
 	if e := classOf(recv.typ).lookup(name); e == nil || e.Owner.File == nil || !e.Owner.File.isPrelude() {
@@ -105,7 +158,7 @@ func (f *fctx) nilSpaceship(n parser.Node, recv expr, name string, args []parser
 	var a expr
 	f.probe(func() { a = f.genExpr(args[0], nil) })
 	o, ok := a.typ.(TOpt)
-	if !ok || isAny(o.Elem) {
+	if !ok || isAny(o.Elem) || !f.nilAt(args[0]) {
 		return expr{}, false
 	}
 	rt, at, res := f.newTmp(), f.newTmp(), f.newTmp()
@@ -123,26 +176,32 @@ func (f *fctx) nilSpaceship(n parser.Node, recv expr, name string, args []parser
 
 // optWhereClass is a T? where class T is expected: decision 20's error, or under --nil-check=runtime its T, checked.
 func (f *fctx) optWhereClass(n parser.Node, e expr, to TClass) string {
-	if f.nilRuntime() {
-		return f.coerceClass(n, f.nilUnwrap(e, to), to)
+	if f.nilAt(n) {
+		return f.coerceClass(n, f.nilUnwrap(n, e, to), to)
 	}
-	f.errorf(n, "possibly-nil %s where %s is expected; check it first (`if x`, `x ||= ...`, `return unless x`)", e.typ, to)
+	f.nilErrorf(n, "possibly-nil %s where %s is expected; check it first (`if x`, `x ||= ...`, `return unless x`)", e.typ, to)
 	return ""
 }
 
 // unionMismatch is a value no member of to takes; a T? whose T one does is checked under --nil-check=runtime.
 func (f *fctx) unionMismatch(n parser.Node, e expr, to TUnion) string {
-	if isOpt(e.typ) && f.nilRuntime() {
-		return f.coerceToUnion(n, f.nilUnwrap(e, to), to)
+	if isOpt(e.typ) && f.nilAt(n) {
+		return f.coerceToUnion(n, f.nilUnwrap(n, e, to), to)
+	}
+	if isOpt(e.typ) {
+		f.nilErrorf(n, "%s where %s is expected", e.typ, to)
 	}
 	f.errorf(n, "%s where %s is expected", e.typ, to)
 	return ""
 }
 
 // nilUnwrap is a T? value as its T under --nil-check=runtime, raising nilMessage's error when it is nil (decision 393).
-func (f *fctx) nilUnwrap(e expr, to Type) expr {
+func (f *fctx) nilUnwrap(n parser.Node, e expr, to Type) expr {
 	o := e.typ.(TOpt) //nolint:forcetypeassert // callers test isOpt
 	msg, arg := f.nilMessage(to)
+	if !f.nilRuntime() && n != nil { // decision 440's deferred site: not silent
+		f.warn(n, "possibly-nil %s where %s is expected is checked at run time: an inferred `[]`/`{}` keeps its element type (decision 440)", e.typ, to)
+	}
 	if leafOpt(o) { // a leaf's *C or an interface: nil is the value's own zero (decisions 360, 378)
 		return expr{code: fmt.Sprintf("rbNilArgV(%s, %q, %t)", e.code, msg, arg), typ: o.Elem}
 	}

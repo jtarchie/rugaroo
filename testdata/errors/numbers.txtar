@@ -247,6 +247,47 @@ puts "x" + maybe(0)
 # error: main.rb: # nil_check: "lenient" is not compile or runtime
 # nil_check: lenient
 puts 1
+-- nil_read_inferred_ivar.rb --
+# warning: main.rb:11: possibly-nil Float? where Float is expected is checked at run time: an inferred `[]`/`{}` keeps its element type (decision 440)
+# rbs_inline: enabled
+class Box
+  def initialize
+    @xs = []
+    @xs << 1.5 << 2.5
+  end
+
+  #: (Float, Integer) -> bool
+  def above?(x, i)
+    x > @xs[i]
+  end
+end
+puts Box.new.above?(2.0, 0)
+-- nil_read_inferred_local.rb --
+# warning: main.rb:9: possibly-nil Integer? where Integer is expected is checked at run time: an inferred `[]`/`{}` keeps its element type (decision 440)
+# rbs_inline: enabled
+freq = {}
+i = 0
+while i < 3
+  freq["k#{i}"] = i
+  i += 1
+end
+puts 10 + freq["k1"]
+-- nil_read_inferred_other_nil.rb --
+# error: main.rb:11: possibly-nil Integer? where Integer is expected; check it first
+# rbs_inline: enabled
+class Box
+  def initialize
+    @xs = []
+    @xs << 1.5 << 2.5
+  end
+
+  #: (Float, Integer?) -> bool
+  def above?(x, i)
+    j = 1 + i
+    x > @xs[j]
+  end
+end
+puts Box.new.above?(2.0, 0)
 -- float_into_integer_element.rb --
 # error: main.rb:4: Float where Integer is expected
 # rbs_inline: enabled

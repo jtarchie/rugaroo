@@ -18,6 +18,7 @@ type refineRecord struct {
 	RespondNames  []string              `json:"respond_names,omitempty"`
 	DynBlockNames []string              `json:"dyn_block_names,omitempty"`
 	Flags         []bool                `json:"flags,omitempty"`
+	NilSites      map[string][]int      `json:"nil_sites,omitempty"` // decision 440's deferred sites: offsets by file name
 }
 
 // refineMaps is the cache's records and the map this compile's go into.
@@ -104,6 +105,15 @@ func (c *Compiler) recordRefine(s refineSnap, cands []string, accepted []bool) *
 		}
 		r.Marshal[k] = ct
 	}
+	if c.nilDefer != nil {
+		r.NilSites = map[string][]int{}
+		for k := range c.nilDefer.sites {
+			r.NilSites[k.file.Name] = append(r.NilSites[k.file.Name], k.off)
+		}
+		for _, offs := range r.NilSites {
+			slices.Sort(offs)
+		}
+	}
 	r.Flags = c.refineFlags()
 	for i, f := range s.flags { // only what the dry-runs turned on
 		r.Flags[i] = r.Flags[i] && !f
@@ -155,6 +165,15 @@ func (c *Compiler) replayRefine(r *refineRecord, cands []*Ivar, typed, orig map[
 	for i, f := range r.Flags {
 		if f && i < len(flags) {
 			*flags[i] = true
+		}
+	}
+	if r.NilSites != nil {
+		c.nilDeferUsed = true
+		c.nilDefer = &nilDeferral{sites: map[nilSite]bool{}}
+		for _, file := range c.files {
+			for _, off := range r.NilSites[file.Name] {
+				c.nilDefer.sites[nilSite{file, off}] = true
+			}
 		}
 	}
 }

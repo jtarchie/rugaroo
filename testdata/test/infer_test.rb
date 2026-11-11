@@ -652,3 +652,76 @@ module InferTests
     end
   end
 end
+
+# An inferred `[]`/`{}` whose only veto is a possibly-nil read keeps its element type; the read is checked at run time
+# (decision 440).
+#: (Array[String], String) -> Integer
+def infer_freq_plus(words, probe)
+  freq = {}
+  i = 0
+  while i < words.length
+    freq[words[i]] = i
+    i += 1
+  end
+  100 + freq[probe]
+end
+
+module InferTests
+  class NilReadBox
+    def initialize
+      @xs = []
+      @xs << 1.5 << 2.5
+    end
+
+    #: (Float, Integer) -> bool
+    def above?(x, i) = x > @xs[i]
+
+    #: (Float, Integer) -> Float
+    def plus(x, i) = x + @xs[i]
+
+    #: (Integer) -> Float
+    def bumped(i) = @xs[i] + 1.0
+  end
+
+  class NilReadTest < Minitest::Test
+    def test_typed_ivar_reads
+      b = NilReadBox.new
+      assert b.above?(2.0, 0)
+      refute b.above?(2.0, 1)
+      assert_equal 4.0, b.plus(1.5, 1)
+      assert_equal 2.5, b.bumped(0)
+    end
+
+    def test_typed_ivar_nil_read_raises
+      b = NilReadBox.new
+      begin
+        b.above?(2.0, 7)
+        flunk "no raise"
+      rescue ArgumentError => e
+        assert_equal ArgumentError, e.class
+      end
+      begin
+        b.plus(2.0, 7)
+        flunk "no raise"
+      rescue TypeError => e
+        assert_equal TypeError, e.class
+      end
+      begin
+        b.bumped(7)
+        flunk "no raise"
+      rescue NoMethodError => e
+        assert_equal NoMethodError, e.class
+      end
+    end
+
+    def test_typed_local_nil_read
+      assert_equal 101, infer_freq_plus(%w[a b c], "b")
+      begin
+        infer_freq_plus(%w[a b c], "z")
+        flunk "no raise"
+      rescue TypeError => e
+        assert_equal TypeError, e.class
+      end
+    end
+  end
+end

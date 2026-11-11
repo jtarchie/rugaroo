@@ -564,11 +564,11 @@ func (f *fctx) assignTarget(target parser.Node, v expr) {
 			f.destructureInto(t, a, t.Lefts, t.Rest, t.Rights)
 			return
 		}
-		if isOpt(v.typ) && f.nilRuntime() {
-			v = f.nilUnwrap(v, stripOpt(v.typ))
+		if isOpt(v.typ) && f.nilAt(t) {
+			v = f.nilUnwrap(t, v, stripOpt(v.typ))
 		}
 		if isOpt(v.typ) {
-			f.errorf(t, "nested destructuring of a possibly-nil %s is not supported", v.typ)
+			f.nilErrorf(t, "nested destructuring of a possibly-nil %s is not supported", v.typ)
 		}
 		tmp := f.newTmp()
 		f.emit("%s := %s", tmp, f.materialize(v))

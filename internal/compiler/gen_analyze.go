@@ -152,22 +152,48 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 		_ = catchCompileError(func() { run(1) }) // discovery only: try() decides
 	}
 	var proofErr *compileError // a typing the String alias proof refused: leaving it untyped only moves the error to run time
-	try := func(set map[localKey]Type) bool {
+	attempt := func(set map[localKey]Type, d *nilDeferral) (*compileError, bool) {
 		f.c.dropWarnings(nw) // the untyped run's, e.g. dynamic calls on elements
 		restore()
-		f.refined, f.convs = set, map[int]bool{}
+		f.refined, f.convs, f.nilDefer = set, map[int]bool{}, d
 		fresh()
 		err := catchCompileError(func() { run(1) })
 		if err == nil && !f.newConv(before) {
 			err = catchCompileError(func() { run(2) })
 			if err == nil {
-				return true
+				return nil, true
 			}
 		}
-		if err != nil && err.proof && proofErr == nil {
+		if err != nil && err.proof && proofErr == nil && d == nil { // a decision 440 retry gets past nil errors the typing failed on before
 			proofErr = err
 		}
-		return false
+		return err, false
+	}
+	var pre map[nilSite]bool // the untyped run's nil sites: not a typing's (decision 440)
+	preDone := false
+	try := func(set map[localKey]Type) bool {
+		err, ok := attempt(set, nil)
+		if ok || err == nil || !err.nilVeto || f.c.noNilDefer {
+			return ok
+		}
+		if !preDone {
+			preDone = true
+			rec := &nilDeferral{rec: map[nilSite]bool{}}
+			restore()
+			f.convs, f.nilDefer = map[int]bool{}, rec
+			fresh()
+			if catchCompileError(func() { run(1) }) == nil {
+				pre = rec.rec
+			}
+		}
+		if pre == nil {
+			return false
+		}
+		d := &nilDeferral{pre: pre, sites: map[nilSite]bool{}}
+		_, ok = attempt(set, d)
+		d.pre = nil // later sites are not the typing's
+		f.c.nilDeferUsed = f.c.nilDeferUsed || ok && len(d.sites) > 0
+		return ok
 	}
 	if len(order) > 0 {
 		ok := salvage(order, func(set map[localKey]bool) bool {

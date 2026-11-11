@@ -255,6 +255,9 @@ type pathCache struct {
 // tableState: what emitTables reads (see tableInputs) and the tables' bookkeeping.
 type refineState struct {
 	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
+	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
+	noNilDefer          bool                     // options.noNilDefer
+	nilDeferUsed        bool                     // a typing kept by decision 440 (options.nilDeferred)
 }
 
 type tableState struct {
@@ -289,6 +292,7 @@ type compileError struct {
 	msg     string // without the location
 	untyped bool   // a parameter inference left untyped (decision 146): a failed round's own error explains it better
 	proof   bool   // an in-place String edit the alias proof refused (decisions 382, 395, 405): no untyped retry may hide it
+	nilVeto bool   // decision 20's T? where T is expected (decision 440)
 }
 
 // Error is `file:line: msg`, or msg alone when there is no position.
@@ -361,6 +365,8 @@ type Source struct {
 
 // options are a compile's settings beyond its sources.
 type options struct {
+	noNilDefer   bool          // decision 440 off: the recompile after a nil error its dry runs did not see
+	nilDeferred  bool          // out: the last compile kept a typing decision 440's run-time checks allowed
 	purego       bool          // Fiddle's default backend whatever RUGAROO_CGO says: PreludeWhole type-checks without cgo (decision 426)
 	skipTests    bool          // a test_ method that fails to compile becomes a skip (SkippedTest) instead of an error
 	skipped      []SkippedTest // what skipTests skipped
@@ -461,6 +467,12 @@ func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		opts.skipped = nil
 		out, err = compileWith(ctx, preludeFS, sources, opts, true)
 	}
+	var ce compileError
+	if opts.nilDeferred && !opts.noNilDefer && errors.As(err, &ce) && ce.nilVeto { // a nil error decision 440's dry runs did not see (a reader's caller): compile as before it
+		opts.noNilDefer, opts.skipped = true, nil
+		out, err = compileOnce(ctx, preludeFS, sources, opts)
+		opts.noNilDefer = false
+	}
 	return out, err
 }
 
@@ -522,6 +534,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		if c != nil && c.instMissing { // whatever failed may be the template standing in for a missing instance
 			out, err = nil, errNeedInstances
 		}
+		opts.nilDeferred = c != nil && c.nilDeferUsed
 	}()
 	if opts.testHook != nil {
 		opts.testHook()
@@ -546,6 +559,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.methodRequiresRuntime = opts.mainLast
 	c.env = compileEnv(opts)
 	c.genCount, c.genLimit = opts.genCount, opts.genLimit
+	c.noNilDefer = opts.noNilDefer
 	c.loadPreludeGo()
 	libs, parsed, perr := c.scanRequires(ctx, sources)
 	if perr != nil {
