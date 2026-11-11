@@ -90,19 +90,19 @@ type fctx struct {
 	noOwnSend        bool        // generating ownSendOrName's by-name arm: Kernel#send, not a class's own
 	retryDepth       int         // f.closures where retryFlag was set: a block's retry can't reach it
 	hasNamedRet      bool
-	branchLenient    bool                // a gem method's retry: an if/else branch that does not compile raises if reached (decision 251)
-	retTok           string              // a gem method whose block returns: the per-call token its rbReturn panics carry (decision 247)
-	rescues          int                 // nesting depth of rescue clause bodies, where `raise` sets the new exception's cause (r_)
-	yielderFed       *[]Type             // what a probed Enumerator.new block feeds its yielder (inferYielder)
-	paramWiden       map[string]Type     // a gem method's params reassigned what their type does not hold: their widened type (decision 241)
-	anyOrigin        map[localKey]string // RUGAROO_UNTYPED_WHY: where an untyped local's value came from (untypedWhy)
-	blockWhy         string              // RUGAROO_UNTYPED_WHY: the root of the call whose block params are being bound (blockParam)
-	breakCatch       *breakCatch         // the statement call whose closure block `break`s out of it (decision 241)
-	inMarker         bool                // markerCall's own Boolean arm: past its check (decision 241)
-	scopeRoot        parser.Node         // the method or program body genBody is generating: where an appended local's proof looks (decision 382)
-	appendProofs     map[localKey]string // appendWhy's answers for scopeRoot
+	branchLenient    bool                     // a gem method's retry: an if/else branch that does not compile raises if reached (decision 251)
+	retTok           string                   // a gem method whose block returns: the per-call token its rbReturn panics carry (decision 247)
+	rescues          int                      // nesting depth of rescue clause bodies, where `raise` sets the new exception's cause (r_)
+	yielderFed       *[]Type                  // what a probed Enumerator.new block feeds its yielder (inferYielder)
+	paramWiden       map[string]Type          // a gem method's params reassigned what their type does not hold: their widened type (decision 241)
+	anyOrigin        map[localKey]string      // RUGAROO_UNTYPED_WHY: where an untyped local's value came from (untypedWhy)
+	blockWhy         string                   // RUGAROO_UNTYPED_WHY: the root of the call whose block params are being bound (blockParam)
+	breakCatch       *breakCatch              // the statement call whose closure block `break`s out of it (decision 241)
+	inMarker         bool                     // markerCall's own Boolean arm: past its check (decision 241)
+	scopeRoot        parser.Node              // the method or program body genBody is generating: where an appended local's proof looks (decision 382)
+	appendProofs     map[localKey]string      // appendWhy's answers for scopeRoot
 	strHoists        map[*localInfo]*strHoist // String locals the enclosing loops hoisted (decision 399)
-	ivarBufs         map[string]bool     // initialize's setbyte'd ivars, whose buffers hoistLocals declares (decision 395)
+	ivarBufs         map[string]bool          // initialize's setbyte'd ivars, whose buffers hoistLocals declares (decision 395)
 }
 
 // genEnd is `END { }`: Kernel#at_exit with that block, registered the

@@ -11,7 +11,7 @@ import (
 // strHoist names the Go locals holding a String local's length and rbStrLenA's byte-index bound, set before a loop that cannot change it.
 type strHoist struct {
 	length, lim string
-	frames        int // len(rbFrames) at the loop: a block inside may run after it, when the local holds another String
+	frames      int // len(rbFrames) at the loop: a block inside may run after it, when the local holds another String
 }
 
 // hoistStrLoop scans, once before a while/until loop, each String local whose length its condition reads (a scan that condition paid anyway) and the loop cannot change, so the loop's length/[] calls skip their per-call scan (decision 399); the func it returns ends the hoists.
@@ -96,7 +96,9 @@ func (f *fctx) mayAppendArg(c *parser.CallNode, a parser.Node) bool {
 			return f.outCallArg(c, a)
 		}
 	}
-	hasOut := func(m *Method) bool { return m != nil && slices.ContainsFunc(m.Params, func(p Param) bool { return p.Out }) }
+	hasOut := func(m *Method) bool {
+		return m != nil && slices.ContainsFunc(m.Params, func(p Param) bool { return p.Out })
+	}
 	if hasOut(f.c.topDefs[c.Name]) {
 		return true
 	}
