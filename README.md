@@ -125,7 +125,7 @@ the program compiles, and the binary has no interpreter. So there is no `eval`
 and no `define_method` in your own code (a gem's load-time `define_method` is
 compiled in). Strings are immutable Go strings, so `upcase!` is a compile
 error and `<<` and `setbyte` work only on a local nothing else holds (built fresh, not
-stored or passed before its last change; `setbyte` also on an ivar built in `initialize`); build new strings or use `StringIO`. Integers are 64-bit and
+stored or passed before its last change; `setbyte` also on an ivar built in `initialize`) or through a method's String parameter it appends to; not through a block parameter (an Array element) or an attribute: build new strings (`map! { |r| r + x }`) or use `StringIO`. Integers are 64-bit and
 raise `RangeError` on overflow unless you opt into `--int-overflow=wrap` or
 `promote`. `Hash#[]` returns `T?`, so typed code checks for nil or uses
 `fetch`, unless you opt into `--nil-check=runtime`. Each of these trade-offs has a numbered decision in the
