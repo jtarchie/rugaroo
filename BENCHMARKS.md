@@ -180,7 +180,7 @@ Every other row is rugaroo's default.
 | bm_object_new_no_escape | 0.29s | 0.17s | 0.009s | 0.006s |
 | bm_partial_sums | 1.28s | 1.28s | 0.064s | 0.025s |
 | bm_pidigits | 0.055s | 0.055s | 0.008s | 0.006s |
-| bm_point_in_polygon | 1.03s | 0.34s | 0.18s | 0.060s |
+| bm_point_in_polygon | 1.03s | 0.34s | 0.079s | 0.060s |
 | bm_poly_cells | 0.054s | 0.055s | - | 0.007s |
 | bm_range_each | 22.46s | 14.51s | 0.67s | 0.44s |
 | bm_rbs_items | 0.23s | 0.19s | 0.014s | 0.027s |
@@ -258,10 +258,15 @@ includes the 8 programs rugaroo does not build.
   blocks as Go loops at the call, #140) and the `Integer#*` part of 400:
   `bm_life` 0.081s to 0.050s (1,082M to 615M instructions; spinel 478M),
   `bm_matmul` † 249M to 205M instructions.
+- **Closed by decision 440** (an inferred `[]`/`{}` whose only veto is a nil
+  read keeps its element type, the read checked at run time, #141):
+  `bm_point_in_polygon` 0.18s to 0.079s (1,515M to 440M instructions; spinel
+  300M), `bm_csv_process` 4,504M to 4,264M. `bm_wordfreq` retires more
+  (3,126M to 3,633M at 1M words, cycles +2.5%): its `freq` is now
+  `Hash[String?, Integer]`, whose keys take #138's boxed path.
 - **Furthest behind:** `bm_getivar_module` (10x; Go does not hoist the ivar
   load out of the loop, as clang does for spinel; decision 398),
   `bm_nested_loop` (3.2x: spinel's C compiler folds the loops away),
-  `bm_point_in_polygon` (3x: its Float arrays fall back to untyped, #141),
   `bm_inline`, `bm_so_lists`, `bm_getivar`,
   `bm_partial_sums` (2.6-2.8x: Go's pure-Go `math.Sin`/`Cos` on arm64).
 - Rows under 10 ms are mostly process start-up for both binaries.

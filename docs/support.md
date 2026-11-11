@@ -100,7 +100,8 @@ ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-10-30 (commit f393057d; 
 nil-checks it or uses `fetch` ([decision 5](decisions/005.md)), unless the
 program opts into `--nil-check=runtime` or a `# nil_check: runtime` line
 (experimental; [decision 393](decisions/393.md)), which checks it when it runs
-as MRI does. `Marshal`
+as MRI does. A read from an unannotated `[]`/`{}` that rugaroo typed itself is
+checked that way by default, with a warning ([decision 440](decisions/440.md)). `Marshal`
 round-trips its own bytes, not MRI's.
 
 ### Encodings

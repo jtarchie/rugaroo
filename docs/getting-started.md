@@ -144,6 +144,11 @@ how to silence it.
 - **`+ called on possibly-nil Integer (raises NoMethodError on nil)`**: the
   value can be nil (`Hash#[]`, `Array#find`, `first`), and the call raises if it
   is, as in Ruby. Use `fetch`, a default (`h["a"] || 0`), or a check.
+- **`possibly-nil Float? where Float is expected is checked at run time`**:
+  an unannotated `[]` or `{}` was typed by what the program puts in it, and a
+  read from it (`x > @box[i]`) can be nil. Instead of making the container
+  untyped, rugaroo checks that read when it runs and raises MRI's error on nil
+  ([decision 440](decisions/440.md)). A check or `fetch` removes the warning.
 
 ## Testing
 
