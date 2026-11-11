@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/pprof"
 	"slices"
 	"strings"
 	"syscall"
@@ -374,9 +375,45 @@ func TestBuildFlags(t *testing.T) {
 		{buildOpts{gcflags: "-e"}, []string{"-ldflags=-w", "-gcflags=-dwarf=false -e"}},
 		{buildOpts{gcflags: "all=-N -l"}, []string{"-ldflags=-w", "-gcflags=-dwarf=false", "-gcflags=all=-N -l"}},
 		{buildOpts{debug: true, gcflags: "-e"}, []string{"-gcflags=-e"}},
+		{buildOpts{debug: true, pgo: "/p/cpu.pprof"}, []string{"-pgo=/p/cpu.pprof"}},
 	} {
 		if got := buildFlags(c.opts); !slices.Equal(got, c.want) {
 			t.Errorf("%+v: %q, want %q", c.opts, got, c.want)
 		}
+	}
+}
+
+// -pgo hands go build a profile by absolute path; a missing one fails before the compile, naming the path (#116).
+func TestPGO(t *testing.T) {
+	cli, err := cliBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	err = os.WriteFile(filepath.Join(dir, "main.rb"), []byte("puts 6 * 7\n"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prof, err := os.Create(filepath.Join(dir, "cpu.pprof")) //nolint:gosec // under t.TempDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = pprof.StartCPUProfile(prof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pprof.StopCPUProfile()
+	_ = prof.Close()
+	cmd := exec.CommandContext(t.Context(), cli, "run", "-pgo", "cpu.pprof", "main.rb") //nolint:gosec // built by cliBinary
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil || string(out) != "42\n" {
+		t.Errorf("run -pgo: %v %q", err, out)
+	}
+	cmd = exec.CommandContext(t.Context(), cli, "build", "--pgo=missing.pprof", "main.rb") //nolint:gosec // built by cliBinary
+	cmd.Dir = dir
+	out, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), filepath.Join(dir, "missing.pprof")) {
+		t.Errorf("build -pgo missing: %v %q, want an error naming the path", err, out)
 	}
 }

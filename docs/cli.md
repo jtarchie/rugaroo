@@ -29,6 +29,7 @@ For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, 
 | `-race` | stable | Build with Go's race detector. |
 | `-gcflags flags` | stable | Passed to `go build`, after the default `-dwarf=false`; `-gcflags=-e` shows every Go error when generated code fails to build (please report those). |
 | `-debug` | stable | Keep Go's debug info (DWARF) for a debugger such as Delve on the generated Go. By default programs are built without it (`-gcflags=-dwarf=false -ldflags=-w`): smaller binaries and a quarter less compile memory; `RUGAROO_BACKTRACE=1` and panic traces do not need it ([decision 437](decisions/437.md)). |
+| `-pgo profile` | experimental | `build` and `run`: a CPU profile (pprof format) recorded from this same program, passed to `go build -pgo` so the Go compiler inlines more at the program's hot call sites (profile-guided optimization; 0-15% faster in our benchmarks). A profile only helps the program it came from, and goes stale as the Ruby source changes. A missing or unreadable file is an error naming it. |
 | `-work` | stable | Keep the temporary module (`main.go`, `go.mod`) and print its path as `WORK=...`. |
 | `-trace` | experimental | Run the program once under MRI, with the arguments after the file, and compile every file that run loaded. For gems that `require` files by computed name. **The run executes the program.** |
 | `-trace-also "args"` | experimental | With `-trace`: one more traced run with these arguments, merged into the same binary, for a program that serves several commands. Repeatable. |
