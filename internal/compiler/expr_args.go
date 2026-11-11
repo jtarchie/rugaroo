@@ -760,8 +760,8 @@ func overloadBase(name string) string {
 // is typed by its switch strings (decision 101).
 func (f *fctx) literalOverload(m *Method, owner *Class, args []parser.Node) *entry {
 	switch {
-	case owner.RubyName == "String" && len(args) == 1:
-		return f.stringLiteralOverload(m, owner, args[0])
+	case owner.RubyName == "String" && len(args) >= 1:
+		return f.stringLiteralOverload(m, owner, args)
 	case owner.RubyName == "Array" && m.Name == "pack" && len(args) == 1: // a literal format without U packs bytes (decision 365)
 		if s, ok := args[0].(*parser.StringNode); ok && !strings.ContainsAny(s.Unescaped.Value, "UmMu") {
 			return owner.lookup("__pack_binary")
@@ -793,8 +793,18 @@ func (f *fctx) literalOverload(m *Method, owner *Class, args []parser.Node) *ent
 }
 
 // stringLiteralOverload: String#scan with a pattern that has groups yields each match's groups, and force_encoding of a
-// literal BINARY makes a binary String (decision 352).
-func (f *fctx) stringLiteralOverload(m *Method, owner *Class, arg parser.Node) *entry {
+// literal BINARY and unpack1 of a literal a/A/Z/m/u/M first directive make a binary String (decisions 352, 442).
+func (f *fctx) stringLiteralOverload(m *Method, owner *Class, args []parser.Node) *entry {
+	arg := args[0]
+	if m.Name == "unpack1" {
+		if s, ok := arg.(*parser.StringNode); ok && s.Unescaped.Value != "" && strings.IndexByte("aAZmuM", s.Unescaped.Value[0]) >= 0 {
+			return owner.lookup("__unpack1_binary")
+		}
+		return nil
+	}
+	if len(args) != 1 {
+		return nil
+	}
 	switch m.Name {
 	case "scan":
 		g, ok := f.literalGroups(arg)

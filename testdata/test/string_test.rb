@@ -1845,6 +1845,9 @@ continued"
       assert_equal [32, 32], [Digest::SHA256.digest("a").size, Digest::SHA256.new.update("a").digest.size]
       assert_equal [Encoding::ASCII_8BIT] * 3, [Marshal.dump("é").encoding, SecureRandom.random_bytes(4).encoding, Random.new(1).bytes(3).encoding]
       assert_equal [Encoding::ASCII_8BIT, 2], [Zlib::Deflate.deflate("aaaa").encoding, StringIO.new("é").read(2).size]
+      u = "é!".b.unpack1("a*")
+      assert_equal [Encoding::ASCII_8BIT, 3, 2, 2, 1], [u.encoding, u.length, "é".unpack1("A*", offset: 0).size, "w6k=".unpack1("m").length, "é".unpack1("a*", offset: 1).size]
+      assert_equal [Encoding::ASCII_8BIT, 97], ["é".unpack1("Z*").encoding, "ab".unpack1("C")]
     end
 
     def test_binary_flavor_review_cases
