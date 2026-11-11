@@ -580,7 +580,9 @@ func fits(t, to Type) bool {
 			return !slices.ContainsFunc(t.Members, func(m Type) bool { return !fits(m, to) })
 		case TOpt:
 			return fits(TNil{}, to) && fits(t.Elem, to)
-		case TAny, TClass, TFunc, TNil, TTuple, TVar, TVoid:
+		case TAny: // through the union's checker, as into a class (decision 150)
+			return true
+		case TClass, TFunc, TNil, TTuple, TVar, TVoid:
 		}
 		return slices.ContainsFunc(to.Members, func(m Type) bool { return memberFits(t, m) })
 	case TAny, TFunc, TNil, TVar, TVoid: // not a class-vs-class check: left to the caller (doc above)

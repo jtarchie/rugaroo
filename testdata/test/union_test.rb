@@ -628,3 +628,25 @@ module UnionTests
     end
   end
 end
+
+# #127: unions where an ivar or an inferred parameter meets one.
+module UnionTests
+  class UnionWriterBox
+    # @rbs @v: Integer | String
+    attr_writer :v
+
+    def initialize = @v = 1
+    def show = @v.to_s
+  end
+
+  class UnionIvarTest < Minitest::Test
+    def test_untyped_into_union_ivar
+      b = UnionWriterBox.new
+      assert_equal "1", b.show
+      b.v = union_untyped("s")
+      assert_equal "s", b.show
+      b.v = union_untyped(5)
+      assert_equal "5", b.show
+    end
+  end
+end
