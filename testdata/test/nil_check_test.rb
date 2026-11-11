@@ -60,6 +60,33 @@ module NilCheckTests
       assert_equal [TypeError, "no implicit conversion from nil to integer"], error_of { "abc"[int(0)] }
     end
 
+    # decision 382: `s = s + a + b` appends into s's buffer only after every argument is checked (`s.dup`: passing s is an alias)
+    def test_string_plus_append_chain
+      s = "a"
+      i = 0
+      while i < 3
+        s = s + "<" + str(i + 1) + ">"
+        i += 1
+      end
+      assert_equal "a<s1><s2><s3>", s.dup
+      msg = nil
+      begin
+        s = s + "x" + str(0)
+      rescue TypeError => e
+        msg = e.message
+      end
+      assert_equal "a<s1><s2><s3>", s.dup
+      assert_equal "no implicit conversion of nil into String", msg
+      begin
+        s += str(0)
+      rescue TypeError => e
+        msg = e.message
+      end
+      assert_equal "a<s1><s2><s3>", s.dup
+      s += str(4)
+      assert_equal "a<s1><s2><s3>s4", s
+    end
+
     def test_integer
       assert_equal [TypeError, "nil can't be coerced into Integer"], error_of { 1 + int(0) }
       assert_equal [TypeError, "nil can't be coerced into Integer"], error_of { 1 - int(0) }

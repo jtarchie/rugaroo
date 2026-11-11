@@ -78,6 +78,7 @@ type appendProof struct {
 	ivar   bool             // name is an ivar of initialize's self (decision 395)
 	strict bool             // the String is setbyte'd: no read may share its bytes before the seal (decision 395)
 	out    bool             // an out parameter: its caller appends after the method returns, so nothing may keep it (decision 405)
+	plus   bool             // `s += x` and `s = s + x` count as appends: they may extend the local's buffer too (decision 382)
 	depth  int              // blocks entered below root
 	loops  []int            // end offsets of the loops and blocks enclosing the position, outermost first
 	later  int              // > 0 inside a block that may run after its call
@@ -92,8 +93,17 @@ type appendLeak struct {
 }
 
 // appendWhy is "" when the local name in this scope is proven unaliased wherever it is appended to, else why not.
-func (f *fctx) appendWhy(name string) string {
+func (f *fctx) appendWhy(name string) string { return f.cachedAppendWhy(f.localKey(name), false) }
+
+// plusAppendWhy is appendWhy with `s += x` and `s = s + x` among the appends: "" when they may extend the local's own
+// buffer as `<<` does (decision 382). Its cache key's name starts with "+", which no local's does.
+func (f *fctx) plusAppendWhy(name string) string {
 	key := f.localKey(name)
+	key.name = "+" + key.name
+	return f.cachedAppendWhy(key, true)
+}
+
+func (f *fctx) cachedAppendWhy(key localKey, plus bool) string {
 	if why, ok := f.appendProofs[key]; ok {
 		return why
 	}
@@ -110,18 +120,21 @@ func (f *fctx) appendWhy(name string) string {
 			delete(f.appendProofs, key)
 		}
 	}()
-	why := f.proveAppend(key)
+	why := f.proveAppend(localKey{key.scope, strings.TrimPrefix(key.name, "+")}, plus)
 	f.appendProofs[key] = why
 	done = true
 	return why
 }
 
-func (f *fctx) proveAppend(key localKey) string {
+func (f *fctx) proveAppend(key localKey, plus bool) string {
 	out := key.scope == methodScope && f.m != nil && slices.ContainsFunc(f.m.Params, func(p Param) bool { return p.Out && p.Name == key.name })
 	if li := f.locals[key]; li != nil && (li.param || li.noHoist) && !out {
 		return fmt.Sprintf("`%s` is a parameter, so the caller's String would see the append", key.name)
 	}
-	p := &appendProof{f: f, name: key.name, root: f.scopeRoot, frozen: frozenLiteralComment.Match(f.f.Src), out: out}
+	if out && plus { // `s += x` rebinds the callee's local in MRI; the caller's String must not grow
+		return fmt.Sprintf("`%s` is an out parameter", key.name)
+	}
+	p := &appendProof{f: f, name: key.name, root: f.scopeRoot, frozen: frozenLiteralComment.Match(f.f.Src), out: out, plus: plus}
 	if p.root == nil {
 		return "rugaroo cannot see the scope of `" + key.name + "`"
 	}
@@ -273,6 +286,9 @@ func (p *appendProof) walk(n parser.Node, stack []parser.Node) {
 		if p.mine(t.Name, t.Depth) && !p.fresh(t.Value) {
 			p.fail(t, "`%s` is assigned a String that something else may hold", p.name)
 		}
+		if p.plus && p.mine(t.Name, t.Depth) && selfPlusArgs(t) != nil {
+			p.plusAt(t, stack)
+		}
 	case *parser.LocalVariableOrWriteNode:
 		if p.mine(t.Name, t.Depth) && !p.fresh(t.Value) {
 			p.fail(t, "`%s` is assigned a String that something else may hold", p.name)
@@ -284,6 +300,9 @@ func (p *appendProof) walk(n parser.Node, stack []parser.Node) {
 	case *parser.LocalVariableOperatorWriteNode:
 		if p.mine(t.Name, t.Depth) && t.BinaryOperator != "+" && t.BinaryOperator != "*" {
 			p.fail(t, "`%s` is assigned a String that something else may hold", p.name)
+		}
+		if p.plus && p.mine(t.Name, t.Depth) && t.BinaryOperator == "+" {
+			p.plusAt(t, stack)
 		}
 	case *parser.LocalVariableTargetNode:
 		if p.mine(t.Name, t.Depth) {
@@ -472,6 +491,88 @@ func (p *appendProof) appendAt(c *parser.CallNode, stack []parser.Node) {
 	if why := p.use(top, stack); why != "" {
 		p.leak(top, "the value of `"+p.name+" <<` (the String itself)"+why[len("`"+p.name+"`"):])
 	}
+}
+
+// plusAt records `s += x` or `s = s + x` as an append; its value is the String itself, as `s << x`'s is.
+func (p *appendProof) plusAt(w parser.Node, stack []parser.Node) {
+	if p.later > 0 {
+		p.fail(w, "`%s` is appended to inside a block that may run after its call returns", p.name)
+		return
+	}
+	p.sealAt(w)
+	if why := p.use(w, stack); why != "" {
+		p.leak(w, why)
+	}
+}
+
+// selfPlusArgs are a, b, ... in `s = s + a + b ...` (s the local written, at the same depth), else nil.
+func selfPlusArgs(w *parser.LocalVariableWriteNode) []parser.Node {
+	var args []parser.Node
+	for n := w.Value; ; {
+		c, ok := n.(*parser.CallNode)
+		if !ok || c.Name != "+" || c.Block != nil || c.IsSAFE_NAVIGATION() {
+			return nil
+		}
+		xs := callArgs(c)
+		if len(xs) != 1 || isSplat(xs[0]) {
+			return nil
+		}
+		args = append(args, xs[0])
+		if r, ok := c.Receiver.(*parser.LocalVariableReadNode); ok && r.Name == w.Name && r.Depth == w.Depth {
+			slices.Reverse(args)
+			return args
+		}
+		n = c.Receiver
+	}
+}
+
+// plusAppend compiles user code's `s += x` or `s = s + x + ...` (args are the x's) on a String local the proof clears as
+// appends into the local's own buffer, `rbStrAppend` as `s << x` does; anything else is String#+ as written (decision 382).
+// Every argument is evaluated, and a nil one raises, before the first append, so a raise leaves s as MRI does.
+func (f *fctx) plusAppend(name string, depth uint32, loc parser.Location, args []parser.Node) (expr, bool) {
+	str := f.cls("String")
+	if f.lenient() {
+		return expr{}, false
+	}
+	if v := f.visibleLocal(name); v == nil || !typeEq(v.typ, str) || v.view != "" {
+		return expr{}, false
+	}
+	plus := f.c.classes["String"].lookup("+")
+	if plus == nil || plus.M.File == nil || !plus.M.File.isPrelude() {
+		return expr{}, false
+	}
+	opt := TOpt{Elem: str}
+	for _, a := range args {
+		if t := f.probeType(a, str); !typeEq(t, str) && (!typeEq(t, opt) || !f.nilRuntime()) {
+			return expr{}, false
+		}
+	}
+	li := f.localInfo(name)
+	if li == nil || f.plusAppendWhy(name) != "" || f.pass == 2 && !li.appended { // pass 2's buffer was declared from pass 1's verdict
+		return expr{}, false
+	}
+	codes := make([]string, len(args))
+	for i, a := range args {
+		x := f.genExpr(a, str)
+		if typeEq(x.typ, opt) { // MRI's TypeError for `s + nil` (decision 393)
+			prev := f.nilArg
+			f.nilArg = nilCall{m: plus.M, recv: str, param: str}
+			x = f.nilUnwrap(x, str)
+			f.nilArg = prev
+		}
+		codes[i] = x.code
+		if len(args) > 1 {
+			codes[i] = f.newTmp()
+			f.emit("%s := String(%s)", codes[i], x.code)
+		}
+	}
+	li.appended, li.plusBuf = true, true
+	buf := f.appendBufRef(name)
+	code := f.genExpr(&parser.LocalVariableReadNode{Name: name, Depth: depth, Location: loc}, nil).code
+	for _, c := range codes {
+		code = fmt.Sprintf("rbStrAppend(%s, %s, %s)", buf, code, c)
+	}
+	return expr{code: code, typ: str}, true
 }
 
 // changeAt records a setbyte c on the target; its value is the byte argument, not the String.

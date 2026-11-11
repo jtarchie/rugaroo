@@ -148,6 +148,7 @@ type localInfo struct {
 	typ       Type
 	annotated bool
 	appended  bool      // a user String local appended to in place (decision 382)
+	plusBuf   bool      // appended by `s += x`: pass 1 may type the write where pass 2 falls back to String#+, so the buffer gets a use
 	noHoist   bool      // params and block params: declared by Go syntax
 	param     bool      // a method parameter
 	open      bool      // an unannotated `[]`/`{}` that later writes may type (analyze)

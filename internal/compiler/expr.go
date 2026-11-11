@@ -71,6 +71,11 @@ func (f *fctx) genExpr0(n parser.Node, expected Type) expr {
 	case *parser.LocalVariableWriteNode:
 		return f.genLocalWrite(n)
 	case *parser.LocalVariableOperatorWriteNode:
+		if n.BinaryOperator == "+" {
+			if val, ok := f.plusAppend(n.Name, n.Depth, n.Location, []parser.Node{n.Value}); ok {
+				return f.assignLocal(n, n.Name, val, nil)
+			}
+		}
 		cur := f.genExpr(&parser.LocalVariableReadNode{Name: n.Name, Location: n.Location}, nil)
 		val := f.genOp(n, cur, n.BinaryOperator, n.Value)
 		return f.assignLocal(n, n.Name, val, nil)
@@ -187,6 +192,11 @@ func (f *fctx) genLocalWrite(n *parser.LocalVariableWriteNode) expr {
 // localWriteValue is the value a local write stores, expected to be exp.
 func (f *fctx) localWriteValue(n *parser.LocalVariableWriteNode, ann, exp Type) expr {
 	var val expr
+	if xs := selfPlusArgs(n); xs != nil && ann == nil {
+		if v, ok := f.plusAppend(n.Name, n.Depth, n.Location, xs); ok {
+			return v
+		}
+	}
 	if f.lenient() && ann == nil && exp != nil { // a gem's local rebound to what its type does not hold (`data = { **data, ... }`)
 		err := f.tryClean(func() { val = f.genExpr(n.Value, exp) })
 		if err != nil {

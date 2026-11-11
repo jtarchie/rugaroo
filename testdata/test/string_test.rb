@@ -2257,6 +2257,104 @@ module StringTests
       assert_equal "hello", str.concat
     end
   end
+  # decision 382: `s += x` and `s = s + x` on a proven local append into its buffer; an aliased one stays String#+
+  class StringPlusAppendTest < Minitest::Test
+    #: (String) -> String
+    def render(t)
+      out = ""
+      i = 0
+      while i < t.length
+        out += t[i].to_s
+        out = out + "."
+        i += 1
+      end
+      out
+    end
+
+    def test_loop_build
+      assert_equal "a.b.c.", render("abc")
+      big = render("xy" * 100)
+      assert_equal 400, big.size
+      assert_equal "x.y.", big[-4, 4]
+    end
+
+    def test_alias_before_append_keeps_old
+      s = "ab"
+      t = s
+      s += "c"
+      s = s + "d"
+      assert_equal "ab", t
+      assert_equal "abcd", s
+      refute t.equal?(s)
+    end
+
+    def test_empty_append_is_a_new_string
+      s = "ab"
+      t = s
+      s += ""
+      assert_equal "ab", s
+      refute t.equal?(s)
+    end
+
+    def test_snapshots_in_loop
+      s = "q" * 70
+      snaps = [] #: Array[String]
+      3.times do |i|
+        snaps << s
+        s += i.to_s
+      end
+      assert_equal ["q" * 70, "q" * 70 + "0", "q" * 70 + "01"], snaps
+      assert_equal "q" * 70 + "012", s
+    end
+
+    def test_alias_after_loop_then_append
+      s = +""
+      5.times { |i| s += i.to_s * 20 }
+      t = s
+      s += "z"
+      assert_equal 100, t.size
+      assert_equal 101, s.size
+      assert_equal "z", s[-1]
+    end
+
+    def test_block_local_builder
+      got = %w[a bb].map do |w|
+        x = "<"
+        x += w
+        x = x + ">"
+        x
+      end
+      assert_equal ["<a>", "<bb>"], got
+    end
+
+    def test_lambda_keeps_plus
+      s = "x"
+      add = -> { s += "y" }
+      add.call
+      add.call
+      assert_equal "xyy", s
+    end
+
+    def test_self_argument_and_shovel
+      s = +"ab"
+      s << "!"
+      s = s + s
+      s = s + s
+      assert_equal "ab!ab!ab!ab!", s
+      u = "cd"
+      u += u
+      u += u
+      assert_equal "cdcdcdcd", u
+    end
+
+    def test_value_of_plus_used
+      s = "a"
+      t = (s += "b")
+      s += "c"
+      assert_equal "ab", t
+      assert_equal "abc", s
+    end
+  end
 
   class SetbyteGrid
     attr_reader :cells #: String
