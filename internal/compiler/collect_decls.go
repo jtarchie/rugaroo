@@ -203,7 +203,10 @@ func (c *Compiler) declare(f *File, name string, line int, isModule, named bool)
 			cls.bounds = sd.Bounds
 		}
 	}
-	if _, ok := ann["value"]; ok {
+	if v, ok := ann["value"]; ok {
+		if v[0] != "" { // a misspelt assertion would silently keep the pointer
+			c.errorAt(srcPos{f, line}, "`# @value` takes nothing after it (got %q); put a note on its own comment line", v[0])
+		}
 		cls.valueAnn = true
 	}
 	if _, ok := ann["hidden"]; ok && f.isPrelude() {

@@ -2,6 +2,8 @@
 
 # Classes, inheritance, polymorphic calls, attr_accessor and Comparable: an n-body step plus a shape mix.
 
+# A 2D vector is a value: rugaroo holds it as a Go struct, not a pointer (decision 441).
+# @value
 class Vec
   attr_reader :x #: Float
   attr_reader :y #: Float

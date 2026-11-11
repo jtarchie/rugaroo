@@ -1,0 +1,156 @@
+-- writer.rb --
+# error: main.rb:3: P is marked # @value but it has a writer, x=
+# @value
+class P
+  attr_accessor :x #: Integer
+
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+p P.new(1).x
+-- ivar_write.rb --
+# error: main.rb:3: P is marked # @value but bump writes an instance variable (line 11)
+# @value
+class P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+
+  #: () -> void
+  def bump
+    @x += 1
+  end
+end
+P.new(1).bump
+-- subclass.rb --
+# error: main.rb:3: P is marked # @value but it is not a leaf class
+# @value
+class P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+
+class Q < P; end
+p Q.new(1)
+-- superclass.rb --
+# error: main.rb:5: Q is marked # @value but it has a superclass
+class P; end
+
+# @value
+class Q < P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+p Q.new(1)
+-- five_fields.rb --
+# error: main.rb:3: P is marked # @value but it has more than 4 instance variables
+# @value
+class P
+  #: (Integer a, Integer b, Integer c, Integer d, Integer e) -> void
+  def initialize(a, b, c, d, e)
+    @a = a
+    @b = b
+    @c = c
+    @d = d
+    @e = e
+  end
+end
+p P.new(1, 2, 3, 4, 5)
+-- too_big.rb --
+# error: main.rb:3: P is marked # @value but its fields take more than 32 bytes
+# @value
+class P
+  #: (String a, String b, Integer c) -> void
+  def initialize(a, b, c)
+    @a = a
+    @b = b
+    @c = c
+  end
+end
+p P.new("a", "b", 1)
+-- proc_field.rb --
+# error: main.rb:3: P is marked # @value but @f is ^(Integer) -> Integer, which a value struct does not hold
+# @value
+class P
+  #: (^(Integer) -> Integer f) -> void
+  def initialize(f)
+    @f = f
+  end
+end
+p P.new(->(x) { x })
+-- self_in_initialize.rb --
+# error: main.rb:5: P is marked # @value but its initialize uses self as a value (line 9)
+ALL = [] #: Array[untyped]
+
+# @value
+class P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+    ALL << self
+  end
+end
+p P.new(1)
+-- equal.rb --
+# error: main.rb:12: equal? on P, a # @value class: its copies have no identity
+# @value
+class P
+  attr_reader :x #: Integer
+
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+a = P.new(1)
+p a.equal?(P.new(1))
+-- object_id.rb --
+# error: main.rb:12: object_id on P, a # @value class
+# @value
+class P
+  attr_reader :x #: Integer
+
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+
+  #: () -> Integer
+  def id = object_id
+end
+p P.new(1).id
+-- freeze.rb --
+# error: main.rb:11: freeze on P, a # @value class
+# @value
+class P
+  attr_reader :x #: Integer
+
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+p P.new(1).freeze
+-- trailing_text.rb --
+# error: main.rb:4: `# @value` takes nothing after it
+# a note
+# @value: a point
+class P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+end
+p P.new(1)
+-- struct_annotation.rb --
+# error: main.rb:3: P is marked # @value but it has a superclass
+# @value
+P = Struct.new(:x) #: [Integer]
+p P.new(1)

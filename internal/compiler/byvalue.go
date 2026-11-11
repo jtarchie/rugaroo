@@ -152,7 +152,7 @@ func mentionsValueCandidate(t Type) bool {
 	case TUnion:
 		return slices.ContainsFunc(t.Members, mentionsValueCandidate)
 	case TFunc:
-		return true // a Proc field is refused anyway
+		return false // valueFieldSize refuses a Proc field
 	case TAny, TNil, TVar, TVoid:
 	}
 	return false
@@ -162,6 +162,9 @@ func mentionsValueCandidate(t Type) bool {
 func (c *Compiler) valueFieldSize(t Type) (size, align int) {
 	if valOpt(t) {
 		return 16, 8
+	}
+	if _, ok := stripOpt(t).(TFunc); ok {
+		return 0, 0
 	}
 	switch g := c.goType(t); {
 	case g == "Integer", g == "Float":

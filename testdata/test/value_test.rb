@@ -28,6 +28,57 @@ module ValueTests
     end
   end
 
+  # @value
+  class Vec
+    include Comparable
+
+    attr_reader :x #: Float
+    attr_reader :y #: Float
+
+    #: (Float x, Float y) -> void
+    def initialize(x, y)
+      @x = x
+      @y = y
+    end
+
+    #: (Vec other) -> Vec
+    def +(other) = Vec.new(@x + other.x, @y + other.y)
+
+    #: (Float k) -> Vec
+    def *(k) = Vec.new(@x * k, @y * k)
+
+    #: (Vec other) -> Integer
+    def <=>(other) = [x, y] <=> [other.x, other.y]
+
+    # @rbs override
+    #: () -> String
+    def to_s = "(#{x}, #{y})"
+
+    # @rbs override
+    #: () -> String
+    def inspect = "#<Vec #{x}, #{y}>" # Kernel#inspect's address: a value has none (decision 441)
+
+    #: () -> Float
+    def length = Math.sqrt(@x * @x + @y * @y)
+  end
+
+  class Body
+    attr_accessor :pos #: Vec
+    attr_accessor :last #: Vec?
+
+    #: (Vec pos) -> void
+    def initialize(pos)
+      @pos = pos
+      @last = nil
+    end
+
+    #: (Vec step) -> void
+    def move(step)
+      @last = @pos
+      @pos += step
+    end
+  end
+
   class DataValueTest < Minitest::Test
     def test_equality_and_hash
       a = Point.new(x: 4, y: 6)
@@ -131,6 +182,48 @@ module ValueTests
       assert a.respond_to?(:x)
       assert_equal a, a.dup
       assert_equal [{ x: 1, y: 2 }], [a].map(&:to_h)
+    end
+  end
+
+  # A `# @value` class compared through Comparable: MRI's == and the copies' agree.
+  class AnnotatedValueTest < Minitest::Test
+    def test_arithmetic
+      v = Vec.new(1.0, 2.0) + Vec.new(3.0, 4.0) * 2.0
+      assert_equal 7.0, v.x
+      assert_equal 10.0, v.y
+      assert_equal "(7.0, 10.0)", v.to_s
+      assert_equal "(7.0, 10.0)", "#{v}"
+      assert_in_delta 12.2066, v.length, 0.0001
+      assert_equal Vec.new(7.0, 10.0), v
+      assert Vec.new(1.0, 1.0) < v
+      refute v.frozen?
+    end
+
+    def test_owner_holds_a_copy
+      b = Body.new(Vec.new(0.0, 0.0))
+      assert_nil b.last
+      start = b.pos
+      b.move(Vec.new(1.0, 2.0))
+      b.move(Vec.new(1.0, 2.0))
+      assert_equal Vec.new(2.0, 4.0), b.pos
+      assert_equal Vec.new(1.0, 2.0), b.last
+      assert_equal Vec.new(0.0, 0.0), start
+      assert_equal 1.0, b.last.then { |l| l ? l.x : 0.0 }
+      b.pos = Vec.new(9.0, 9.0)
+      assert_equal 9.0, b.pos.x
+    end
+
+    def test_containers
+      vs = [Vec.new(3.0, 1.0), Vec.new(1.0, 2.0), Vec.new(2.0, 0.0)]
+      assert_equal [1.0, 2.0, 3.0], vs.sort.map(&:x)
+      assert_equal Vec.new(3.0, 1.0), vs.max
+      assert_equal Vec.new(6.0, 3.0), vs.reduce(Vec.new(0.0, 0.0)) { |acc, v| acc + v }
+      by_name = { "a" => vs[0] } #: Hash[String, Vec]
+      assert_equal 3.0, by_name.fetch("a").x
+      opt = [vs[1], nil] #: Array[Vec?]
+      assert_equal [Vec.new(1.0, 2.0)], opt.compact
+      u = vs[2] #: untyped
+      assert_equal 2.0, u.x
     end
   end
 end
