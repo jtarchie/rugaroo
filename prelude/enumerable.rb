@@ -598,38 +598,46 @@ module Enumerable
   # One pass over each, with MRI's pairing (enum.c minmax_i): a pair is ordered first, so ties keep the earlier element and the block of a side-effecting each runs once.
   #: () -> [E?, E?]
   def minmax = %x{
-    var lo, hi, last *E
-    update := func(i, j E) {
-      if lo == nil {
-        lo, hi = &i, &j
-        return
-      }
-      if rbCmp(i, *lo) < 0 {
-        lo = &i
-      }
-      if rbCmp(j, *hi) > 0 {
-        hi = &j
-      }
-    }
-    for x := range self.Each() {
-      if last == nil {
-        last = &x
-        continue
-      }
-      j, i := *last, x
-      last = nil
-      if n := rbCmp(j, i); n == 0 {
-        i = j
-      } else if n < 0 {
-        i, j = j, i
-      }
-      update(i, j)
-    }
-    if last != nil {
-      update(*last, *last)
-    }
+    lo, hi := rbMinmax(self.Each(), func(a, b E) int { return int(rbCmp(a, b)) })
     return Tuple2[*E, *E]{lo, hi}
   }
+
+  #: () { (E, E) -> Integer } -> [E?, E?]
+  def __minmax_block = %x{
+    lo, hi := rbMinmax(self.Each(), func(a, b E) int { return int(blk(a, b)) })
+    return Tuple2[*E, *E]{lo, hi}
+  }
+
+  # min/max with a block (enum.c min_ii, max_ii): the block compares (candidate, best).
+  #: () { (E, E) -> Integer } -> E?
+  def __min_block = %x{
+    var best *E
+    for x := range self.Each() {
+      if best == nil || blk(x, *best) < 0 {
+        x := x
+        best = &x
+      }
+    }
+    return best
+  }
+
+  #: () { (E, E) -> Integer } -> E?
+  def __max_block = %x{
+    var best *E
+    for x := range self.Each() {
+      if best == nil || blk(x, *best) > 0 {
+        x := x
+        best = &x
+      }
+    }
+    return best
+  }
+
+  #: (Integer) { (E, E) -> Integer } -> Array[E]
+  def __min_1_block(n) = sort { |a, b| yield a, b }.first(n)
+
+  #: (Integer) { (E, E) -> Integer } -> Array[E]
+  def __max_1_block(n) = sort { |a, b| yield b, a }.first(n)
 
   #: (Integer) -> Array[E]
   def __min_1(n) = sort.first(n)

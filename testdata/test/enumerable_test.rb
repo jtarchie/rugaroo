@@ -57,6 +57,24 @@ module EnumerableTests
       assert_equal 10, (1..4).inject(:+)
     end
 
+    def test_min_max_with_block
+      assert_equal 3, [1, 2, 3].min { |a, b| b <=> a }
+      assert_equal 1, [1, 2, 3].max { |a, b| b <=> a }
+      assert_equal "ccc", %w[a ccc bb].max { |a, b| a.size <=> b.size }
+      assert_equal [3, 1], [1, 2, 3].minmax { |a, b| b <=> a }
+      assert_equal [3, 2], [1, 2, 3].min(2) { |a, b| b <=> a }
+      assert_equal [1, 2], [1, 2, 3].max(2) { |a, b| b <=> a }
+      assert_nil [].min { |a, b| a <=> b }
+      assert_equal [nil, nil], [].minmax { |a, b| a <=> b }
+      assert_equal "a", %w[a b c].minmax { |a, b| a.size <=> b.size }.first
+      assert_equal 3, Bag.new(1, 2, 3).min { |a, b| b <=> a }
+      assert_equal 1, Bag.new(1, 2, 3).max { |a, b| b <=> a }
+      assert_equal [3, 1], Bag.new(1, 2, 3).minmax { |a, b| b <=> a }
+      assert_equal [1, 2], Bag.new(3, 1, 2).max(2) { |a, b| b <=> a }
+      assert_equal 4, (1..4).min { |a, b| b <=> a }
+      assert_equal [4, 1], (1..4).minmax { |a, b| b <=> a }
+    end
+
     def test_tally_into_hash
       h = { 1 => 5 }
       assert_equal({ 1 => 6, 2 => 1, 3 => 1 }, [1, 2, 3].tally(h))
