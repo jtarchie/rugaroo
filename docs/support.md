@@ -120,7 +120,7 @@ byte and character was compared with MRI 4.0.
 A String carries no encoding of its own: it is text (UTF-8) or, where the
 compiler sees it, binary ([decision 352](decisions/352.md)). `force_encoding`
 with any other name (`"ISO-8859-1"`, `"Shift_JIS"`) keeps the bytes and reads
-them as UTF-8, and US-ASCII reports as UTF-8; convert text in another encoding
+them as UTF-8 (a compile-time warning when the name is a literal), and US-ASCII reports as UTF-8; convert text in another encoding
 where it enters, with `s.encode("UTF-8", "ISO-8859-1")`
 ([decision 442](decisions/442.md)).
 

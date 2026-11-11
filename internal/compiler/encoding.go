@@ -78,6 +78,9 @@ func (f *fctx) checkEncodingNames(n parser.Node, recv expr, name string, args []
 		if idx >= 0 && i != idx {
 			continue
 		}
+		if name == "force_encoding" {
+			f.warnTextEncoding(a)
+		}
 		s, isStr := a.(*parser.StringNode)
 		if !isStr {
 			f.linkEncodingValue(a)
@@ -101,6 +104,51 @@ func (f *fctx) checkEncodingNames(n parser.Node, recv expr, name string, args []
 				f.errorf(n, "encoding %s is not supported: rugaroo transcodes UTF-8, ASCII-8BIT, US-ASCII, UTF-16LE/BE, UTF-32LE/BE, UTF-16, UTF-32 and x/text's tables (ISO-8859-*, Windows-125*, KOI8-*, IBM/CP 437-866, macRoman, macCyrillic, Shift_JIS, Windows-31J, EUC-JP, CP51932, EUC-KR, CP949, GBK, GB2312, GB18030, Big5, CP950; decisions 136, 380)", e)
 			}
 		}
+	}
+}
+
+// textTag are the encodings force_encoding can name without a warning, upper-cased without `-`/`_`: UTF-8 and binary,
+// which a String is, and US-ASCII and the default-encoding names, which read as UTF-8 (decision 442).
+var textTag = map[string]bool{
+	"UTF8": true, "CP65001": true, "UTF8MAC": true, "UTF8HFS": true, "ASCII8BIT": true, "BINARY": true, "USASCII": true,
+	"ASCII": true, "ANSIX3.41968": true, "646": true, "LOCALE": true, "EXTERNAL": true, "FILESYSTEM": true, "INTERNAL": true,
+}
+
+// mriEncodingKeys is mriEncodings spelled as textTag is, so an Encoding constant (ISO_8859_1, Shift_JIS) matches its name.
+var mriEncodingKeys = func() map[string]bool {
+	m := map[string]bool{}
+	for n := range mriEncodings {
+		m[encodingKey(n)] = true
+	}
+	return m
+}()
+
+func encodingKey(name string) string {
+	return strings.ToUpper(strings.NewReplacer("-", "", "_", "").Replace(name))
+}
+
+// warnTextEncoding warns at `s.force_encoding(lit)` whose literal names a text encoding but UTF-8: the String keeps its
+// bytes and reads them as UTF-8, where MRI retags them (decision 442).
+func (f *fctx) warnTextEncoding(a parser.Node) {
+	var enc string
+	switch a := a.(type) {
+	case *parser.StringNode:
+		enc = a.Unescaped.Value
+		if _, xtext := xtextEncodings[strings.ToUpper(enc)]; !xtext && !rugarooEncodings[strings.ToUpper(enc)] {
+			return // unsupported: checkEncodingNames' compile error says so
+		}
+	case *parser.ConstantPathNode:
+		t := strings.TrimPrefix(f.f.text(a.Location), "::")
+		if !strings.HasPrefix(t, "Encoding::") {
+			return
+		}
+		enc = strings.TrimPrefix(t, "Encoding::")
+	default:
+		return
+	}
+	if k := encodingKey(enc); mriEncodingKeys[k] && !textTag[k] {
+		src := f.f.text(a.GetLocation())
+		f.warn(a, "force_encoding(%s) keeps the bytes and reads them as UTF-8: a String carries no encoding tag (decision 442); convert the text with encode(\"UTF-8\", %s)", src, src)
 	}
 }
 
