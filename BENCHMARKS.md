@@ -261,9 +261,8 @@ includes the 8 programs rugaroo does not build.
 - **Closed by decision 440** (an inferred `[]`/`{}` whose only veto is a nil
   read keeps its element type, the read checked at run time, #141):
   `bm_point_in_polygon` 0.18s to 0.079s (1,515M to 440M instructions; spinel
-  300M), `bm_csv_process` 4,504M to 4,264M. `bm_wordfreq` retires more
-  (3,126M to 3,633M at 1M words, cycles +2.5%): its `freq` is now
-  `Hash[String?, Integer]`, whose keys take #138's boxed path.
+  300M), `bm_csv_process` 2,087M to 2,009M, `bm_wordfreq` 3,292M to 1,417M at 1M
+  words (its `freq` is now `Hash[String?, Integer]`).
 - **Furthest behind:** `bm_getivar_module` (10x; Go does not hoist the ivar
   load out of the loop, as clang does for spinel; decision 398),
   `bm_nested_loop` (3.2x: spinel's C compiler folds the loops away),
