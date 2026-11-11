@@ -59,6 +59,9 @@ const (
 
 func (f *File) isPrelude() bool { return f.origin == originPrelude }
 
+// goBodies: a %x{} body is Go only in the prelude and in an extern's generated twin (decision 442).
+func (f *File) goBodies() bool { return f.isPrelude() || f.goBody }
+
 // synthOrigin is the origin for source re-parsed from f's declaration: a prelude's stays prelude, anything else starts unclassified and
 // is classified through the path the caller copies from f, so a gem's synthesized code stays gem code (decision 172).
 func (f *File) synthOrigin() Origin {
