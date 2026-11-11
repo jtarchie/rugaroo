@@ -277,6 +277,16 @@ func (f *fctx) genDataWith(n parser.Node, recv expr, args []parser.Node) (expr, 
 			f.errorf(n, "unknown keyword: :%s", k)
 		}
 	}
+	private := false
+	for k := cls; k != nil; k = k.Super {
+		private = private || k.privateNew // __with's self.class.new runs inside the class, where a private new is callable
+	}
+	if cls.leaf() && !private && (cls.meta == nil || isSynthNew(cls.meta.lookup("new"))) {
+		if !slices.ContainsFunc(nodes, func(x parser.Node) bool { _, ok := x.(*withMember); return ok }) {
+			f.discard(recv) // every member given: the receiver is still evaluated
+		}
+		return f.genNew(n, cls, nodes, nil, nil, nil), true // no subclass: self.class.new is the constructor, not a _ClassOf() lookup
+	}
 	return f.genMethodCall(n, recv, "__with", nodes, nil), true
 }
 
