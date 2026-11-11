@@ -53,7 +53,7 @@ func (f *fctx) hoistStrLoop(pred parser.Node, body *parser.StatementsNode) func(
 // strInvariant: local name keeps one String through the loop; a block anywhere in the scope that assigns it may run inside the loop, and an out parameter's callee rebinds it (decision 405).
 func (f *fctx) strInvariant(name string, v *local, pred parser.Node, body *parser.StatementsNode) bool {
 	str := f.cls("String")
-	if !typeEq(v.typ, str) || v.view != "" || v.base != nil || f.isOutParam(name) || writtenInBlock(f.scopeRoot, name, false) {
+	if f.scopeRoot == nil || !typeEq(v.typ, str) || v.view != "" || v.base != nil || f.isOutParam(name) || writtenInBlock(f.scopeRoot, name, false) {
 		return false
 	}
 	for _, m := range []string{"length", "size", "[]", "__idx_2"} {
