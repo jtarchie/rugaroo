@@ -261,6 +261,13 @@ module Enumerable
     out
   end
 
+  # tally(hash): the counts go into hash.
+  #: (Hash[E, Integer]) -> Hash[E, Integer]
+  def __tally_1(out)
+    each { |x| out[x] = (out[x] || 0) + 1 }
+    out
+  end
+
   #: (Integer) -> Array[E]
   def first(n)
     raise ArgumentError, __negative_first if n < 0
@@ -326,6 +333,82 @@ module Enumerable
       return any(Float(s.f + s.c)).(N)
     }
     s := rbSummer{}
+    for x := range self.Each() {
+      s.add(any(blk(x)))
+    }
+    return rbAs[N](s.result(), "numeric")
+  }
+
+  # sum(init) (#145): init starts the sum, so the result is init's class or a wider one; an Integer init sums to the
+  # element type, a Float init to Float (classOverload picks these by init's class), anything else to init's type.
+  #: (Integer) -> E
+  def __sum_integer(start) = %x{
+    var z E
+    if _, ok := any(z).(Integer); ok {
+      t := start
+      for x := range self.Each() {
+        t = t.Op_plus(any(x).(Integer))
+      }
+      return any(t).(E)
+    }
+    s := rbSummer{}
+    s.add(start)
+    for x := range self.Each() {
+      s.add(any(x))
+    }
+    return rbAs[E](s.result(), "numeric")
+  }
+
+  #: (Float) -> Float
+  def __sum_float(start) = %x{
+    s := rbSummer{floating: true, f: float64(start)}
+    for x := range self.Each() {
+      s.add(any(x))
+    }
+    return Float(s.f + s.c)
+  }
+
+  #: [N] (N) -> N
+  def __sum_1(start) = %x{
+    s := rbSummer{}
+    s.add(any(start))
+    for x := range self.Each() {
+      s.add(any(x))
+    }
+    return rbAs[N](s.result(), "numeric")
+  }
+
+  #: [M] (Integer) { (E) -> M } -> M
+  def __sum_integer_block(start) = %x{
+    var z M
+    if _, ok := any(z).(Integer); ok {
+      t := start
+      for x := range self.Each() {
+        t = t.Op_plus(any(blk(x)).(Integer))
+      }
+      return any(t).(M)
+    }
+    s := rbSummer{}
+    s.add(start)
+    for x := range self.Each() {
+      s.add(any(blk(x)))
+    }
+    return rbAs[M](s.result(), "numeric")
+  }
+
+  #: [M] (Float) { (E) -> M } -> Float
+  def __sum_float_block(start) = %x{
+    s := rbSummer{floating: true, f: float64(start)}
+    for x := range self.Each() {
+      s.add(any(blk(x)))
+    }
+    return Float(s.f + s.c)
+  }
+
+  #: [N] (N) { (E) -> N } -> N
+  def __sum_1_block(start) = %x{
+    s := rbSummer{}
+    s.add(any(start))
     for x := range self.Each() {
       s.add(any(blk(x)))
     }

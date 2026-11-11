@@ -606,6 +606,9 @@ func (f *fctx) overload(e *entry, recvT Type, args []parser.Node) *entry {
 		return r
 	}
 	if f.curBlock != nil && m.Block == nil {
+		if r := f.classBlockOverload(m, owner, name, args); r != nil {
+			return r // `xs.sum(0.0) { |x| x }`
+		}
 		return blockOverload(owner, name, len(args))
 	}
 	if f.curBlock == nil && m.Block != nil {
@@ -646,6 +649,22 @@ func (f *fctx) classOverload(m *Method, owner *Class, name string, args []parser
 		if r := owner.lookup(name + snake(c.C.RubyName)); r != nil && len(args) >= requiredArgs(r.M) && (len(args) <= len(r.M.Params) || slices.ContainsFunc(r.M.Params, func(p Param) bool { return p.Rest })) {
 			return r
 		}
+	}
+	return nil
+}
+
+// classBlockOverload is `__<name>_<class>_block` for a call with a block by its one argument's class: sum(init)'s
+// result class follows init's (#145).
+func (f *fctx) classBlockOverload(m *Method, owner *Class, name string, args []parser.Node) *entry {
+	if len(args) != 1 || isSplat(args[0]) || !classTwins(m.Name) || !slices.ContainsFunc(owner.methodSet(), func(x entry) bool {
+		return strings.HasPrefix(x.M.Name, name) && strings.HasSuffix(x.M.Name, "_block") && x.M.Name != name+"block"
+	}) {
+		return nil
+	}
+	var a expr
+	f.probe(func() { a = f.genExpr(args[0], nil) })
+	if c, ok := a.typ.(TClass); ok {
+		return owner.lookup(name + snake(c.C.RubyName) + "_block")
 	}
 	return nil
 }
@@ -701,8 +720,8 @@ var opBases = func() map[string]bool {
 // blockOverload is a call with a block to a method that takes none: `__name_block`, `__name_<count>_block`, or a
 // `__name_<count>` that takes the block.
 func blockOverload(owner *Class, name string, nargs int) *entry {
-	if r := owner.lookup(name + "block"); r != nil {
-		return r // `xs.sum { |x| x.price }`
+	if r := owner.lookup(name + "block"); r != nil && (nargs == 0 || len(r.M.Params) > 0) {
+		return r // `xs.sum { |x| x.price }`; not `xs.sum(10) { }`, which is `__sum_1_block`
 	}
 	if r := owner.lookup(name + strconv.Itoa(nargs) + "_block"); r != nil {
 		return r // `xs.fill(2) { |i| i }`: by count, with a block
