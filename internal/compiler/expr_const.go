@@ -403,9 +403,9 @@ func (f *fctx) genGlobalRead(n *parser.GlobalVariableReadNode) expr {
 		return expr{code: separatorVars[n.Name], typ: TOpt{Elem: f.cls("String")}}
 	}
 	switch n.Name {
-	case "$!": // the exception a rescue clause handles (decision 244); ponytail: elsewhere nil, where MRI's is the frame's last
+	case "$!": // the exception every rescue form handles, never nil there (decision 244); ponytail: elsewhere nil, where MRI's is the frame's last
 		if f.rescues > 0 {
-			return expr{code: "Ref[ExceptionI](rbAs[ExceptionI](r_, \"Exception\"))", typ: TOpt{Elem: f.cls("Exception")}}
+			return expr{code: "rbAs[ExceptionI](r_, \"Exception\")", typ: f.cls("Exception")}
 		}
 		return expr{code: "nil", typ: TOpt{Elem: f.cls("Exception")}}
 	case "$0", "$PROGRAM_NAME":

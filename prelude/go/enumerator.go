@@ -346,6 +346,12 @@ func rbLazy[E comparable](seq func(func(E) bool), src any, meth string) *Enumera
 	return &Enumerator_Lazy[E]{seq: seq, src: src, meth: meth}
 }
 
+// rbLazyCompactNil is Lazy#compact of a Lazy[C?] whose C holds nil itself: a leaf's *C or a non-leaf's interface (decision 378).
+func rbLazyCompactNil[E comparable](l *Enumerator_Lazy[E]) *Enumerator_Lazy[E] {
+	var z E
+	return rbLazyFilter(l, func(x E) bool { return x != z }, "compact")
+}
+
 // rbLazyCompactVal is Lazy#compact of a Lazy[Integer?] or Lazy[Float?] (decision 396).
 func rbLazyCompactVal[E comparable](l *Enumerator_Lazy[rbOpt[E]]) *Enumerator_Lazy[E] {
 	return rbLazy(func(yield func(E) bool) {

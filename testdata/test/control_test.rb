@@ -5780,6 +5780,26 @@ module ControlTests
       assert_equal ["a", nil, [1], nil, [2, 4]], [String.try_convert("a"), String.try_convert(1), Array.try_convert([1]), Array.try_convert("x"), [1, 2].collect { |x| x * 2 }]
     end
 
+    # #130: $! is the handled exception, not nil, in every rescue form
+    def test_bang_every_rescue_form
+      bare = begin
+        raise "x"
+      rescue
+        $!
+      end
+      assert_equal [RuntimeError, "x"], [bare.class, bare.message]
+      named = begin
+        raise ArgumentError, "z"
+      rescue ArgumentError
+        $!.message
+      end
+      assert_equal "z", named
+      v = (raise "y" rescue $!.message)
+      assert_equal "y", v
+      enc = ("é".encode("Shift_JIS") rescue $!)
+      assert_equal Encoding::UndefinedConversionError, enc.class
+    end
+
     def test_thread_raise_on_current_thread
       e = begin
         Thread.current.raise(ArgumentError, "bad")

@@ -432,5 +432,15 @@ module GenericClassTests
       h[:a] = NilSquare.new
       assert_equal "square", h[:a]&.name
     end
+
+    # #130: Lazy#compact on C? for a non-leaf, a leaf and a generic class
+    def test_lazy_compact
+      shapes = [NilSquare.new, nil, NilShape.new] #: Array[NilShape?]
+      assert_equal ["square", "shape"], shapes.lazy.compact.map(&:name).to_a
+      leaves = [nil, NilLeaf.new, nil] #: Array[NilLeaf?]
+      assert_equal ["leaf"], leaves.lazy.compact.map(&:name).first(5)
+      nodes = [NilNode.new(1), nil, NilNode.new(2)] #: Array[NilNode[Integer]?]
+      assert_equal [1, 2], nodes.lazy.compact.map(&:val).to_a
+    end
   end
 end
