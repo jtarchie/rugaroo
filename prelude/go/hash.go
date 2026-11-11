@@ -59,6 +59,14 @@ func (idx *rbKeyIndex[K]) find(k K) (key K, h uint64, byValue bool) {
 	return k, h, true
 }
 
+// rbIdxHash is the bucket find files k under: a String? key's String#hash, as find's fast path, else rbValueKey's.
+func rbIdxHash[K comparable](k K) (uint64, bool) {
+	if p, ok := any(&k).(**String); ok && *p != nil {
+		return uint64(String(**p).Hash()), true
+	}
+	return rbValueKey(k)
+}
+
 func (idx *rbKeyIndex[K]) add(k K, h uint64) {
 	if idx.byHash == nil {
 		idx.byHash = map[uint64][]K{}
@@ -234,7 +242,7 @@ func rbHashDropAt[K, V comparable](h *Hash[K, V], i int) {
 		}
 	}
 	if !h.idx.plain {
-		if hv, byValue := rbValueKey(k); byValue {
+		if hv, byValue := rbIdxHash(k); byValue {
 			h.idx.remove(k, hv)
 		}
 	}
