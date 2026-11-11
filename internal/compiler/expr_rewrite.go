@@ -131,12 +131,67 @@ func (f *fctx) callSugar(n *parser.CallNode, expected Type) (expr, bool) {
 		idx := &parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "[]", Arguments: &parser.ArgumentsNode{Location: n.Location, Arguments: []parser.Node{key}}}
 		return f.genExpr(&parser.OrNode{Location: n.Location, Left: idx, Right: def}, expected), true
 	}
+	if c := f.injectSymbol(n); c != nil {
+		return f.genCall(c, expected), true
+	}
 	if to := renamedCall(n); to != "" {
 		c := *n
 		c.Name = to
 		return f.genCall(&c, expected), true
 	}
 	return expr{}, false
+}
+
+// injectSymbol is Enumerable's `xs.inject(:+)` and `xs.inject(init, :*)` as `xs.inject(&:+)`: the literal Symbol names
+// the method at compile time, so the fold is the block form's (#145). A Symbol only run time knows is a compile error.
+func (f *fctx) injectSymbol(n *parser.CallNode) *parser.CallNode {
+	args := callArgs(n)
+	if n.Name != "inject" && n.Name != "reduce" && (n.Name != "sum" || len(args) != 1) || n.Block != nil || len(args) == 0 || len(args) > 2 {
+		return nil
+	}
+	recvT := f.selfType
+	if n.Receiver != nil {
+		var recv expr
+		f.probe(func() { recv = f.genExpr(n.Receiver, nil) })
+		recvT = recv.typ
+	}
+	if e := f.resolve(recvT, n.Name); e == nil || e.M.Owner.RubyName != "Enumerable" {
+		return nil
+	}
+	if n.Name == "sum" {
+		return f.sumPlus(n, args)
+	}
+	last := args[len(args)-1]
+	sym, ok := last.(*parser.SymbolNode)
+	if !ok {
+		var a expr
+		f.probe(func() { a = f.genExpr(last, nil) })
+		if c, isSym := a.typ.(TClass); isSym && c.C.RubyName == "Symbol" {
+			f.errorf(n, "%s(sym) needs a literal Symbol (`%s(:+)`) or a block", n.Name, n.Name)
+		}
+		return nil
+	}
+	c := *n
+	c.Block = &parser.BlockArgumentNode{Location: sym.Location, Expression: sym}
+	c.Arguments = nil
+	if len(args) == 2 {
+		c.Arguments = &parser.ArgumentsNode{Location: n.Arguments.Location, Arguments: args[:1]}
+	}
+	return &c
+}
+
+// sumPlus is `xs.sum("")` and `xs.sum([])`: MRI adds with `+` past the numeric tower, so a String or Array init is
+// `xs.inject(init, &:+)`.
+func (f *fctx) sumPlus(n *parser.CallNode, args []parser.Node) *parser.CallNode {
+	var a expr
+	f.probe(func() { a = f.genExpr(args[0], nil) })
+	if c, ok := a.typ.(TClass); !ok || c.C.RubyName != "String" && c.C.RubyName != "Array" {
+		return nil
+	}
+	c := *n
+	c.Name = "inject"
+	c.Block = &parser.BlockArgumentNode{Location: n.Location, Expression: &parser.SymbolNode{Location: n.Location, Unescaped: parser.RubyString{Value: "+"}}}
+	return &c
 }
 
 // renamedCall is the prelude name a call goes to (decision 241): Thread.fork is MRI's alias of Thread.start (defined as

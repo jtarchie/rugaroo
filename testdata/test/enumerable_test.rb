@@ -38,6 +38,23 @@ module EnumerableTests
       assert_equal 6.5, Bag.new(1, 2, 3).sum(0.5)
       assert_equal 12.0, Bag.new(1, 2, 3).sum(0.0) { |x| x * 2 }
       assert_equal 16, (1..3).sum(10)
+      assert_equal "abc", %w[b c].sum("a")
+      assert_equal [1, 2, 3], [[2], [3]].sum([1])
+      assert_equal [1, 2], [[1], [2]].sum([])
+    end
+
+    def test_inject_symbol
+      assert_equal 6, [1, 2, 3].inject(:+)
+      assert_equal 6, [1, 2, 3].reduce(:*)
+      assert_equal 6, [1, 2, 3].reduce(1, :*)
+      assert_equal 16, [1, 2, 3].inject(10, :+)
+      assert_nil [].inject(:+)
+      assert_equal 3, [5, 3, 9].inject(:gcd).then { |g| g + 2 }
+      assert_equal "abc", %w[a b c].inject(:+)
+      assert_equal 6.5, [1, 2, 3].inject(0.5, :+)
+      assert_equal 6, Bag.new(1, 2, 3).inject(:+)
+      assert_equal 60, Bag.new(3, 4, 5).reduce(1, :*)
+      assert_equal 10, (1..4).inject(:+)
     end
 
     def test_tally_into_hash

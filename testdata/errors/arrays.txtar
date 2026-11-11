@@ -242,3 +242,7 @@ puts h["a"].size
 # error: main.rb:3: Array#==: wrong number of arguments (given 0, expected 1)
 t = [1, "a", :b]
 p t.==()
+-- inject_symbol_variable.rb --
+# error: main.rb:3: inject(sym) needs a literal Symbol (`inject(:+)`) or a block
+op = :+
+p [1, 2, 3].inject(op)
