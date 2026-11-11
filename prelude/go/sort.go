@@ -15,15 +15,11 @@ func rbSortStable[E any](s []E, cmp func(a, b E) int) {
 		slices.SortStableFunc(s, cmp)
 		return
 	}
-	type at struct {
-		i int
-		e E
-	}
-	t := make([]at, len(s))
+	t := make([]rbSortAt[E], len(s))
 	for i, e := range s {
-		t[i] = at{i, e}
+		t[i] = rbSortAt[E]{i, e}
 	}
-	slices.SortFunc(t, func(a, b at) int {
+	slices.SortFunc(t, func(a, b rbSortAt[E]) int {
 		if c := cmp(a.e, b.e); c != 0 {
 			return c
 		}
@@ -32,6 +28,13 @@ func rbSortStable[E any](s []E, cmp func(a, b E) int) {
 	for i := range t {
 		s[i] = t[i].e
 	}
+}
+
+// rbSortAt is an element with its position, rbSortStable's tie-break; package-level because TinyGo crashes on a type
+// declared inside a generic func (#144).
+type rbSortAt[E any] struct {
+	i int
+	e E
 }
 
 // rbMinmax is Enumerable#minmax with MRI's pairing (enum.c minmax_i, minmax_ii): a pair is ordered first, so ties keep
