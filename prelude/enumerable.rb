@@ -261,10 +261,11 @@ module Enumerable
     out
   end
 
-  # tally(hash): the counts go into hash.
+  # tally(hash): the counts go into hash, past its default; frozen raises even when there is nothing to count.
   #: (Hash[E, Integer]) -> Hash[E, Integer]
   def __tally_1(out)
-    each { |x| out[x] = (out[x] || 0) + 1 }
+    out.__check_frozen
+    each { |x| out[x] = out.fetch(x, 0) + 1 }
     out
   end
 

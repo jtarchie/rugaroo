@@ -80,6 +80,15 @@ module EnumerableTests
       assert_equal({ 1 => 6, 2 => 1, 3 => 1 }, [1, 2, 3].tally(h))
       assert_equal({ 1 => 6, 2 => 1, 3 => 1 }, h)
       assert_equal({ 1 => 2, 2 => 1, 3 => 1 }, Bag.new(1, 2, 3).tally({ 1 => 1 }))
+      assert_equal({ 1 => 1, 2 => 1 }, [1, 2].tally(Hash.new(100)))
+      assert_same h, [4].tally(h)
+      frozen = { 1 => 1 }.freeze
+      begin
+        Bag.new.tally(frozen)
+        flunk "tally into a frozen Hash"
+      rescue FrozenError => e
+        assert_kind_of FrozenError, e
+      end
     end
   end
 end
