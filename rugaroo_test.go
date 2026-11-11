@@ -80,7 +80,11 @@ func requireToolchain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := exec.LookPath("tinygo"); err != nil && tinygoLane() {
+	if !tinygoLane() {
+		return
+	}
+	_, err = exec.LookPath("tinygo")
+	if err != nil {
 		t.Fatal("RUGAROO_COMPILER=tinygo needs tinygo on PATH")
 	}
 }
@@ -791,7 +795,7 @@ var rdocNoise = regexp.MustCompile(`(?m)^.*rdoc.*warning.*\n`)
 
 func testExample(t *testing.T, dir, gen string) {
 	if skip, _ := laneSkips(t); skip {
-		t.Skip("cannot build or run in this lane (testdata/tinygo, decision 443)")
+		t.Skip("listed in this lane's skip file (decision 372's format; testdata/tinygo, decision 443)")
 	}
 	tmp := t.TempDir()
 	// 1. rbs-inline + rbs validate: deterministic in the example's files, the vendored sig/, Ruby and the gem versions, so a pass is cached by those (RUGAROO_NO_MRI_CACHE=1 skips it, as for MRI's output)

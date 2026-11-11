@@ -438,17 +438,19 @@ func TestCompilerTinyGo(t *testing.T) {
 		t.Errorf("--compiler=gc -race: env %q, err %v", os.Getenv("RUGAROO_COMPILER"), err)
 	}
 	t.Setenv("RUGAROO_COMPILER", "clang")
-	if err := checkCompiler(buildOpts{}); err == nil {
+	if checkCompiler(buildOpts{}) == nil {
 		t.Error("-compiler clang: want an error")
 	}
 
 	t.Setenv("RUGAROO_COMPILER", "tinygo")
 	dir := t.TempDir()
 	src := filepath.Join(dir, "main.rb")
-	if _, _, err := compileFile(t.Context(), src, []byte("require \"open3\"\n"), buildOpts{}); err == nil || !strings.Contains(err.Error(), "main.rb:1: require \"open3\" is not supported under -compiler tinygo") {
+	_, _, err = compileFile(t.Context(), src, []byte("require \"open3\"\n"), buildOpts{})
+	if err == nil || !strings.Contains(err.Error(), "main.rb:1: require \"open3\" is not supported under -compiler tinygo") {
 		t.Errorf("require open3: %v", err)
 	}
-	if _, err := exec.LookPath("tinygo"); err != nil {
+	_, err = exec.LookPath("tinygo")
+	if err != nil {
 		t.Skip("tinygo not on PATH")
 	}
 	err = os.WriteFile(src, []byte("h = {[1, 2] => \"a\"}\nt = Thread.new { Thread.current.object_id == Thread.main.object_id }\nputs \"hi #{h[[1, 2]]} #{t.value}\"\nexit 3\n"), 0o600)

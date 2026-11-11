@@ -108,7 +108,8 @@ func main() {
 		fs.Usage()
 		os.Exit(2)
 	}
-	if err := checkCompiler(opts); err != nil {
+	err := checkCompiler(opts)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
