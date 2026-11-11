@@ -2358,7 +2358,7 @@ module HashTests
       log = [] #: Array[Symbol]
       v = ENV.fetch("PATH", hash_snote(log, :d, "dflt"))
       assert_equal [:d], log
-      refute_equal "dflt", v
+      assert_equal false, v == "dflt" # a boolean, so the trace oracle does not log PATH (go test puts GOROOT/bin on it)
       ENV.fetch(hash_snote(log, :k, "PATH"), hash_snote(log, :d2, "dflt"))
       assert_equal [:d, :k, :d2], log
     end
