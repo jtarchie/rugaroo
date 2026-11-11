@@ -918,6 +918,56 @@ func rbStrAt(s String, i Integer) (String, bool) {
 	return rbNewStr(s, s[b:b+n]), true
 }
 
+// rbStrLenA is a String's length, computed once before a loop that cannot change it, and the bound below which its
+// character i is byte i: its length when it is all ASCII and longer than one byte (a one-byte s[0] must not be s itself), else 0 (decision 399).
+func rbStrLenA(s String) (Integer, uint64) {
+	if rbASCII(string(s)) {
+		if len(s) > 1 {
+			return Integer(len(s)), uint64(len(s))
+		}
+		return Integer(len(s)), 0
+	}
+	return Integer(rbStrLen(string(s))), 0
+}
+
+// rbStrIdxA is String#[](i) of a hoisted String, written to the call site's own dst, so the String? needs no allocation
+// whether or not this inlines; below lim, byte i with no prefix scan.
+func rbStrIdxA(s String, i Integer, lim uint64, dst *String) *String {
+	if uint64(i) < lim {
+		*dst = s[i : i+1]
+		return dst
+	}
+	return rbStrIdxSlow(s, i, dst)
+}
+
+//go:noinline
+func rbStrIdxSlow(s String, i Integer, dst *String) *String {
+	v, ok := rbStrAt(s, i)
+	if !ok {
+		return nil
+	}
+	*dst = v
+	return dst
+}
+
+// rbStrSubA is String#[](start, count) of a hoisted String, as rbStrIdxA.
+func rbStrSubA(s String, start, count Integer, lim uint64, dst *String) *String {
+	if lim != 0 && start >= 0 && count >= 0 && int(start) <= len(s) {
+		e := len(s)
+		if int(count) < e-int(start) {
+			e = int(start + count)
+		}
+		*dst = rbNewStr(s, s[start:e])
+		return dst
+	}
+	v, ok := rbStrSub(s, start, count)
+	if !ok {
+		return nil
+	}
+	*dst = v
+	return dst
+}
+
 // rbStrSub is String#[](start, count).
 //
 //go:noinline

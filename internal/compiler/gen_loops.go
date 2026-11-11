@@ -97,6 +97,7 @@ func (f *fctx) genWhile(pred parser.Node, body *parser.StatementsNode, negate bo
 		return
 	}
 	valued := f.loopValue(body, t)
+	defer f.hoistStrLoop(pred, body)()
 	f.pushLoop(loopFor)
 	f.loops[len(f.loops)-1].value = valued
 	saved := f.enterBlock()

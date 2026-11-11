@@ -151,6 +151,9 @@ func (f *fctx) genCall(n *parser.CallNode, expected Type) expr {
 	if e, ok := f.genFusedIndexAssign(n); ok {
 		return e
 	}
+	if e, ok := f.hoistedStrCall(n); ok {
+		return e
+	}
 	if e, ok := f.genCallRewrite(n, expected); ok {
 		return e
 	}

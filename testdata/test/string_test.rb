@@ -2503,6 +2503,144 @@ module StringTests
     end
   end
 
+  # a loop whose condition reads a String local's length, and cannot change it, scans it once before the loop (decision 399)
+  class StringLoopHoistTest < Minitest::Test
+    #: (String) -> Array[String]
+    def hoist_pairs(s)
+      out = [] #: Array[String]
+      i = 0
+      while i < s.length
+        c = s[i]
+        two = s[i, 2]
+        out << "#{c}#{two}" if c && two
+        i += 1
+      end
+      out
+    end
+
+    def test_ascii_and_non_ascii
+      assert_equal ["aab", "bbc", "cc"], hoist_pairs("abc")
+      assert_equal ["hhé", "éél", "lll", "llo", "oo"], hoist_pairs("héllo")
+      assert_equal ["xx"], hoist_pairs("x")
+      assert_equal [], hoist_pairs("")
+      tail = "abcdefgh" * 3 + "ü"
+      assert_equal "üü", hoist_pairs(tail).last
+      assert_equal "hhh", hoist_pairs("abcdefgh" * 2)[-1] + "h"
+    end
+
+    def test_negative_index_and_slices_past_the_end
+      s = "abcd"
+      got = [] #: Array[String?]
+      i = 0
+      until i >= s.length
+        got << s[-1 - i] << s[i, 10] << s[s.length, 1] << s[s.length + 1, 1]
+        i += 1
+      end
+      assert_equal ["d", "abcd", "", nil, "c", "bcd", "", nil, "b", "cd", "", nil, "a", "d", "", nil], got
+    end
+
+    def test_one_byte_string_index_is_a_new_string
+      s = "a"
+      c = nil #: String?
+      i = 0
+      while i < s.length
+        c = s[i]
+        i += 1
+      end
+      assert_equal "a", c
+      refute s.equal?(c)
+    end
+
+    def test_reassigned_in_loop
+      s = "abcdef"
+      seen = [] #: Array[Integer]
+      while s.length > 1
+        seen << s.length
+        s = s[2..] || ""
+      end
+      assert_equal [6, 4, 2], seen
+    end
+
+    def test_appended_in_loop
+      s = +"ab"
+      i = 0
+      while i < s.length && i < 6
+        s << "x" if i.even?
+        i += 1
+      end
+      assert_equal "abxx", s
+    end
+
+    #: (String) -> void
+    def self.hoist_bang(buf)
+      buf << "!"
+      nil
+    end
+
+    def test_passed_to_an_appending_method_in_loop
+      s = +"ab"
+      n = 0
+      while n < s.length && n < 5
+        StringLoopHoistTest.hoist_bang(s)
+        n += 1
+      end
+      assert_equal "ab!!!!!", s
+    end
+
+    #: (String) -> Integer
+    def self.hoist_count_then_append(buf)
+      i = 0
+      i += 1 while i < buf.length
+      buf << "?"
+      i
+    end
+
+    def test_out_parameter
+      s = +"xyz"
+      assert_equal 3, StringLoopHoistTest.hoist_count_then_append(s)
+      assert_equal "xyz?", s
+    end
+
+    def test_lambda_assigns_before_loop
+      s = "abc"
+      shrink = -> { s = s[1..] || "" }
+      count = 0
+      while s.length > 0
+        shrink.call
+        count += 1
+      end
+      assert_equal 3, count
+    end
+
+    def test_block_in_loop_runs_after_it
+      s = "ab"
+      readers = [] #: Array[^() -> String?]
+      i = 0
+      while i < s.length
+        readers << -> { s[0] }
+        i += 1
+      end
+      s = "éz"
+      assert_equal ["é", "é"], readers.map(&:call)
+    end
+
+    def test_nested_loops_share_the_scan
+      s = "a{b}c{d}"
+      keys = [] #: Array[String]
+      i = 0
+      while i < s.length
+        if s[i] == "{"
+          j = i + 1
+          j += 1 while j < s.length && s[j] != "}"
+          keys << (s[i + 1, j - i - 1] || "")
+          i = j
+        end
+        i += 1
+      end
+      assert_equal ["b", "d"], keys
+    end
+  end
+
   ESCAPES = { "&" => "&amp;", "<" => "&lt;" }.freeze
 
   # A view in roundhouse's shape: partials append to the caller's String (decision 405).
