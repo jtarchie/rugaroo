@@ -3188,6 +3188,20 @@ module ArrayTests
       assert_equal :p, x1
       assert_equal :q, x2
     end
+
+    def test_string_hash_key_survives_store
+      a = ["x", "w"]
+      h = {}
+      k = a[0]
+      h[k] = 1
+      a[0] = "z"
+      assert_equal({ "x" => 1 }, h)
+      assert_equal 1, h["x"]
+      assert_nil h["z"]
+      h[a[1]] = 2
+      h.delete("x")
+      assert_equal({ "w" => 2 }, h)
+    end
   end
 end
 

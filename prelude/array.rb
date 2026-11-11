@@ -189,9 +189,6 @@ class Array < Object
     if i < 0 || int(i) >= len(self.s) {
       return nil
     }
-    if rbSlotAlias[E]() { // ponytail: String keeps the slot (decision 397); rbOpt[String] would remove the alias and the box
-      return &self.s[i]
-    }
     x := self.s[i] // a copy: the slot's later writes must not show through (decision 397)
     return &x
   }

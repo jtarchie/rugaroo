@@ -446,11 +446,3 @@ func rbCompactNil[T comparable](a *Array[T]) *Array[T] {
 	}
 	return out
 }
-
-// rbSlotAlias says Array#[] hands out a pointer into the Array's storage for E: String, whose copy is a heap
-// allocation wherever the String? escapes (+5% on spinel's bm_csv_process), so it keeps the alias (decision 397).
-func rbSlotAlias[E any]() bool {
-	var z E
-	_, ok := any(z).(String)
-	return ok
-}

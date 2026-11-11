@@ -39,6 +39,15 @@ func (idx *rbKeyIndex[K]) find(k K) (key K, h uint64, byValue bool) {
 	if idx.plain {
 		return k, 0, false
 	}
+	if p, ok := any(&k).(**String); ok && *p != nil { // String? keys: String#hash and ==, not boxed through rbValueKey (decision 397)
+		h = uint64(String(**p).Hash())
+		for _, c := range idx.byHash[h] {
+			if cp := any(&c).(**String); *cp != nil && **cp == **p {
+				return c, h, true
+			}
+		}
+		return k, h, true
+	}
 	if h, byValue = rbValueKey(k); !byValue {
 		return k, 0, false
 	}
