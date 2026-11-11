@@ -1,0 +1,21 @@
+# Examples TinyGo cannot build or run anywhere, left out of the `RUGAROO_COMPILER=tinygo go test -run TestExamples .` lane (decision 443); decision 372's format.
+TestExamples/each/024_net_http           # require "net/http": refused under -compiler tinygo (no real sockets)
+TestExamples/each/025_resty              # require "net/http": refused (no real sockets)
+TestExamples/each/032_resty_reflective   # require "net/http": refused (no real sockets)
+TestExamples/each/057_open3              # require "open3": refused (no os/exec)
+TestExamples/each/091_socket             # require "socket": refused (no real sockets)
+TestExamples/each/095_open_uri           # require "open-uri": refused (no real sockets)
+TestExamples/each/115_rack_server        # require "net/http": refused (no real sockets)
+TestExamples/each/116_cuba_web           # require "net/http": refused (no real sockets)
+TestExamples/each/121_fiddle             # require "fiddle": refused (purego does not build)
+TestExamples/each/122_sqlite3            # require "sqlite3": refused (purego does not build)
+TestExamples/each/127_ffi                # require "ffi": refused (purego does not build)
+TestExamples/each/135_roundhouse_blog    # require "net/http": refused (no real sockets)
+TestExamples/each/136_prism_parse        # require "prism": refused (wazero does not build)
+TestExamples/each/030_dynamic_send       # File access checks and Process.groups: TinyGo has no os.Getgroups, so the build fails
+TestExamples/each/054_fileutils          # FileUtils.touch: TinyGo has no os.Chtimes ("operation not implemented")
+TestExamples/each/073_shell              # backticks and system: TinyGo has no os/exec (Errno::ENOENT)
+TestExamples/each/065_minitest           # a failure's location: TinyGo has no runtime.Callers, so minitest prints [unknown:-1]
+TestExamples/each/066_minitest_spec      # a failure's location: no runtime.Callers ([unknown:-1])
+TestExamples/each/078_backtrace          # Exception#backtrace: no runtime.Callers
+TestExamples/each/080_weakref            # TinyGo's GC never frees a weakly referenced object

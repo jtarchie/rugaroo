@@ -1,0 +1,4 @@
+# Examples TinyGo cannot build or run on macOS only (decision 443); same format as tinygo-skip.txt.
+TestExamples/each/064_observable         # syscall.Syscall and RawSyscall do not link on darwin
+TestExamples/each/123_kramdown           # syscall.Syscall and RawSyscall do not link on darwin
+TestExamples/each/124_liquid             # syscall.Syscall and RawSyscall do not link on darwin
