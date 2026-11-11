@@ -628,6 +628,9 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 	if f.superTarget != nil && slices.ContainsFunc(f.superTarget.Params, func(q Param) bool { return q.Pending == p.Pending }) {
 		return
 	}
+	if en, ok := n.(*exprNode); ok && en.use != nil { // one use per source argument, not a member per arm: the param would flip between them (decision 150)
+		t = en.use
+	}
 	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: n.GetLocation().StartOffset})
 }
 

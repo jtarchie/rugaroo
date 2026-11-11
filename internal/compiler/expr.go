@@ -258,6 +258,7 @@ type exprNode struct {
 	parser.Node
 	e        expr
 	blockArg bool // a dynamic call's block value, appended to its arguments (universalBlockCall): not a parameter's use
+	use      Type // what a pending parameter records instead of e.typ: a union argument's arm records the union (unionArgCall)
 }
 
 func (x *exprNode) GetLocation() parser.Location {

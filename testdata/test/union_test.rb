@@ -630,6 +630,19 @@ module UnionTests
 end
 
 # #127: unions where an ivar or an inferred parameter meets one.
+def union_render(v)
+  return v if v.is_a?(String)
+  return v.to_s if v.is_a?(Integer)
+
+  "?"
+end
+
+def union_choose(v, c)
+  return "s" if c
+
+  v
+end
+
 module UnionTests
   class UnionWriterBox
     # @rbs @v: Integer | String
@@ -647,6 +660,11 @@ module UnionTests
       assert_equal "s", b.show
       b.v = union_untyped(5)
       assert_equal "5", b.show
+    end
+
+    def test_union_argument_types_an_inferred_param
+      assert_equal "42", union_render(union_choose(42, false))
+      assert_equal "s", union_render(union_choose(7, true))
     end
   end
 end

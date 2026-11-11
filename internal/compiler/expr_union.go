@@ -311,7 +311,7 @@ func (f *fctx) unionArgCall(n parser.Node, recv expr, name string, args []parser
 		f.probe(func() {
 			err = f.try(func() {
 				margs := slices.Clone(args)
-				margs[at] = &exprNode{Node: args[at], e: expr{code: "x", typ: m}}
+				margs[at] = &exprNode{Node: args[at], e: expr{code: "x", typ: m}, use: u}
 				f.unionArm++
 				defer func() { f.unionArm-- }()
 				f.genMethodCall(n, recv, name, margs, block)
@@ -330,7 +330,7 @@ func (f *fctx) unionArgCall(n parser.Node, recv expr, name string, args []parser
 	a := f.genExpr(args[at], nil)
 	return f.unionSwitch(n, a.code, u, func(m Type, code string) (expr, bool) {
 		margs := slices.Clone(nargs)
-		margs[at] = &exprNode{Node: args[at], e: expr{code: code, typ: m}}
+		margs[at] = &exprNode{Node: args[at], e: expr{code: code, typ: m}, use: u}
 		f.unionArm++
 		defer func() { f.unionArm-- }()
 		return f.genMethodCall(n, recv, name, margs, block), true
