@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"strconv"
@@ -78,6 +79,9 @@ func requireToolchain(t *testing.T) {
 	err := toolchainErr()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := exec.LookPath("tinygo"); err != nil && tinygoLane() {
+		t.Fatal("RUGAROO_COMPILER=tinygo needs tinygo on PATH")
 	}
 }
 
@@ -147,11 +151,14 @@ func TestExamples(t *testing.T) {
 			})
 		}
 	})
-	if t.Failed() {
+	if t.Failed() || tinygoLane() { // the generated Go's lint is gc's; TestPreludeGo vets TinyGo's helpers
 		return
 	}
 	lintGenerated(t, mod)
 }
+
+// tinygoLane is RUGAROO_COMPILER=tinygo's opt-in lane: TestExamples builds with tinygo (decision 443).
+func tinygoLane() bool { return os.Getenv("RUGAROO_COMPILER") == "tinygo" }
 
 // lintGenerated vets and lints every generated example at once with the generated-code config.
 func lintGenerated(t *testing.T, mod string) {
@@ -569,10 +576,14 @@ func laneSkips(t *testing.T) (skip bool, methods []string) {
 		backend = "cgo"
 	}
 	var data []byte
-	for _, f := range []string{ // a Fiddle backend's lane is testdata/cgo/<backend>-skip.txt (decision 426)
+	files := []string{ // a Fiddle backend's lane is testdata/cgo/<backend>-skip.txt (decision 426)
 		filepath.Join("testdata", "int-overflow", cmp.Or(os.Getenv("RUGAROO_INT_OVERFLOW"), "raise")+"-skip.txt"),
 		filepath.Join("testdata", "cgo", backend+"-skip.txt"),
-	} {
+	}
+	if tinygoLane() { // what TinyGo cannot build or run, and what it cannot on this OS only (decision 443)
+		files = append(files, filepath.Join("testdata", "tinygo", "tinygo-skip.txt"), filepath.Join("testdata", "tinygo", "tinygo-"+runtime.GOOS+"-skip.txt"))
+	}
+	for _, f := range files {
 		b, err := os.ReadFile(f) //nolint:gosec // testdata path
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			t.Fatal(err)
@@ -672,8 +683,8 @@ func TestPreludeGo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tags := range []string{"rugaroo_prelude", "rugaroo_prelude,rugaroo_cgo"} { // each Fiddle backend (decision 426)
-		cmd := exec.CommandContext(t.Context(), "go", "vet", "-tags", tags, "./prelude/go") //nolint:gosec // the two tag sets above
+	for _, tags := range []string{"rugaroo_prelude", "rugaroo_prelude,rugaroo_cgo", "rugaroo_prelude,rugaroo_tinygo"} { // each Fiddle backend (decision 426), TinyGo's helpers (decision 443)
+		cmd := exec.CommandContext(t.Context(), "go", "vet", "-tags", tags, "./prelude/go") //nolint:gosec // the tag sets above
 		got, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("go vet -tags %s ./prelude/go: %v\n%s", tags, err, got)
@@ -779,6 +790,9 @@ func TestErrors(t *testing.T) {
 var rdocNoise = regexp.MustCompile(`(?m)^.*rdoc.*warning.*\n`)
 
 func testExample(t *testing.T, dir, gen string) {
+	if skip, _ := laneSkips(t); skip {
+		t.Skip("cannot build or run in this lane (testdata/tinygo, decision 443)")
+	}
 	tmp := t.TempDir()
 	// 1. rbs-inline + rbs validate: deterministic in the example's files, the vendored sig/, Ruby and the gem versions, so a pass is cached by those (RUGAROO_NO_MRI_CACHE=1 skips it, as for MRI's output)
 	if !rbsValidated(t, dir) {
@@ -1008,6 +1022,13 @@ func copyPreludeGo(t *testing.T, gen string) {
 func goBuild(t *testing.T, gen string, gcflags string) string {
 	t.Helper()
 	bin := filepath.Join(gen, "prog")
+	if tinygoLane() {
+		out, stderr, bcode, err := runIO(t, gen, progIO{}, "tinygo", "build", "-trimpath", "-no-debug", "-o", bin, ".")
+		if err != nil || bcode != 0 {
+			t.Fatalf("tinygo build: %v\n%s%s", err, out, stderr)
+		}
+		return bin
+	}
 	// -dwarf=false: debug info is a quarter of each cache entry and no test reads it (decision 88); a repeated -gcflags replaces the earlier one, so it is composed here
 	gcflags = strings.TrimSpace(gcflags + " -dwarf=false")
 	// -trimpath: the build cache hits across temp dirs.

@@ -4,7 +4,6 @@
 package prelude
 
 import (
-	"hash/maphash"
 	"strings"
 )
 
@@ -131,7 +130,7 @@ func rbMethodEq(bound bool, recv any, info *rbMethodInfo, other any) bool {
 func rbMethodHash(recv any, info *rbMethodInfo) Integer {
 	h := Integer(rbKeyHash(String(info.key)))
 	if recv != nil {
-		h = h*31 + Integer(maphash.Comparable(rbHashSeed, rbUnbox(recv)))
+		h = h*31 + Integer(rbHashComparable(rbUnbox(recv)))
 	}
 	return h
 }

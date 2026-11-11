@@ -113,6 +113,19 @@ var vendoredLibs = map[string]string{
 	"sqlite3": "vendored/sqlite3-fiddle/sqlite3.rb",
 }
 
+// tinygoUnbuildable maps a require name's first segment to why TinyGo cannot build or run it (decision 443): an error at the require, not at link or run time.
+var tinygoUnbuildable = map[string]string{
+	"socket":   "TinyGo's net has no real sockets",
+	"net":      "TinyGo's net has no real sockets",
+	"webrick":  "TinyGo's net has no real sockets",
+	"open-uri": "TinyGo's net has no real sockets",
+	"open3":    "TinyGo has no os/exec",
+	"fiddle":   "purego, Fiddle's C calls, does not build under TinyGo",
+	"ffi":      "purego, Fiddle's C calls, does not build under TinyGo",
+	"sqlite3":  "purego, Fiddle's C calls, does not build under TinyGo",
+	"prism":    "wazero, which runs prism.wasm, does not build under TinyGo",
+}
+
 // shadowedGemFile is the prelude lib that stands in for a gem file: prism's FFI backend, which the prism/prism lib replaces (decision 427).
 func shadowedGemFile(target string) string {
 	if strings.HasSuffix(filepath.ToSlash(target), "/lib/prism/ffi.rb") {
@@ -288,6 +301,9 @@ func (sc *requireScan) require(f *File, call *parser.CallNode, top bool) {
 		return // a computed require in a method: a no-op at run time
 	}
 	name := str.Unescaped.Value
+	if why := tinygoUnbuildable[strings.SplitN(strings.TrimSuffix(name, ".rb"), "/", 2)[0]]; why != "" && call.Name == "require" && sc.c.env.Compiler == "tinygo" {
+		sc.c.errorf(f, call, "require %q is not supported under -compiler tinygo: %s (decision 443)", name, why)
+	}
 	var target string
 	if call.Name == "require_relative" {
 		target = relativeTarget(f, name)

@@ -253,7 +253,7 @@ class Regexp < Object
   def eql?(other) = self == other
 
   #: () -> Integer
-  def hash = %x{ Integer(maphash.String(rbHashSeed, self.src+"/"+strings.Trim(self.opts, "ues"))) }
+  def hash = %x{ Integer(rbHashString(self.src+"/"+strings.Trim(self.opts, "ues"))) }
 end
 
 # names are the groups' names ("" when unnamed), as Go's SubexpNames; loc holds byte offsets into subj.

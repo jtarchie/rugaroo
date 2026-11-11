@@ -226,4 +226,5 @@ at build time, with your environment and no sandbox
 | `--int-overflow=promote` | experimental | Bignum where MRI would grow past 64 bits ([126](../examples/126_bignum/main.rb)). |
 | `--nil-check=compile` (default), `runtime` | experimental (`runtime`) | A `T?` where `T` is expected raises on nil when it runs instead of failing the compile ([132](../examples/132_nil_check_runtime/main.rb), [decision 393](decisions/393.md)). |
 | `-trace`, `-trace-also`, `-rubyopt`, `-main` | experimental | See gems above. |
+| `-compiler tinygo` | experimental | Builds with TinyGo instead of `go build`: smaller binaries; no sockets, `os/exec`, C calls or backtraces, and threads are slow. Proven by an opt-in lane, `RUGAROO_COMPILER=tinygo go test -run TestExamples .`, with a skip list ([decision 443](decisions/443.md)). |
 | `rugaroo web` and the [playground](https://play.rugaroo.dev) | experimental | [decision 102](decisions/102.md) |

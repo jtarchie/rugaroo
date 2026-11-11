@@ -6,7 +6,6 @@ package prelude
 import (
 	"bufio"
 	"fmt"
-	"hash/maphash"
 	"iter"
 	"math"
 	"math/bits"
@@ -512,7 +511,7 @@ func rbIsRef(a any) bool {
 // rbObjectID is Kernel#object_id: a pointer's address, else the value's hash.
 func rbObjectID(a any) Integer {
 	if rbIsRef(a) {
-		return Integer(maphash.Comparable(rbHashSeed, a) >> 2) //nolint:gosec // an id, not arithmetic
+		return Integer(rbHashComparable(a) >> 2) //nolint:gosec // an id, not arithmetic
 	}
 	return rbHash(a) & (1<<62 - 1)
 }
@@ -1044,8 +1043,6 @@ type rbEqlHash interface {
 	Hash() Integer
 }
 
-var rbHashSeed = maphash.MakeSeed()
-
 // rbValueKey is k's hash when k matches by value rather than Go ==.
 func rbValueKey(k any) (uint64, bool) {
 	if p, ok := rbKeyUnbox(k); ok {
@@ -1061,7 +1058,7 @@ func rbKeyHash(k any) uint64 {
 	if h, ok := rbValueKey(k); ok {
 		return h
 	}
-	return maphash.Comparable(rbHashSeed, k)
+	return rbHashComparable(k)
 }
 
 func rbKeyEql(a, b any) bool {

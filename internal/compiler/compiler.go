@@ -912,16 +912,22 @@ func mergeStdImports(table map[string]string, imports []string) (collisions []st
 // before it reads the table, and Once orders those reads after the write.
 var preludeImports sync.Once
 
-// compileEnv is opts' environment with the modes checked; PreludeWhole's stays on purego (decision 426).
+// compileEnv is opts' environment with the modes checked; PreludeWhole's stays on purego and gc (decisions 426, 443).
 func compileEnv(opts *options) envConfig {
 	env := opts.env
 	env.IntOverflow = checkOverflowMode("--int-overflow", env.IntOverflow)
 	env.NilCheck = checkNilMode("--nil-check", env.NilCheck)
 	env.CGO = env.CGO && !opts.purego
+	if !slices.Contains([]string{"", "gc", "tinygo"}, env.Compiler) {
+		panic(compileError{msg: fmt.Sprintf("-compiler: %q is not gc or tinygo", env.Compiler)})
+	}
+	if opts.purego {
+		env.Compiler = ""
+	}
 	return env
 }
 
-// goFileSelected evaluates a prelude/go file's //go:build line: rugaroo_prelude holds, rugaroo_cgo under --cgo (decision 426).
+// goFileSelected evaluates a prelude/go file's //go:build line: rugaroo_prelude holds, rugaroo_cgo under --cgo, rugaroo_tinygo under -compiler tinygo (decisions 426, 443).
 func (c *Compiler) goFileSelected(src []byte) bool {
 	for line := range strings.Lines(string(src)) {
 		if !constraint.IsGoBuild(line) {
@@ -931,7 +937,9 @@ func (c *Compiler) goFileSelected(src []byte) bool {
 		if err != nil {
 			panic(compileError{msg: fmt.Sprintf("prelude: %v", err)})
 		}
-		return expr.Eval(func(tag string) bool { return tag == "rugaroo_prelude" || tag == "rugaroo_cgo" && c.env.CGO })
+		return expr.Eval(func(tag string) bool {
+			return tag == "rugaroo_prelude" || tag == "rugaroo_cgo" && c.env.CGO || tag == "rugaroo_tinygo" && c.env.Compiler == "tinygo"
+		})
 	}
 	return true
 }

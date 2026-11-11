@@ -8,7 +8,8 @@ to porting your own scripts. For what is and is not supported, see
 
 ## Install
 
-You need Go 1.26 or newer on your `PATH`; rugaroo calls `go build` for you.
+You need Go 1.26 or newer on your `PATH`; rugaroo calls `go build` for you
+(or, with the experimental `-compiler tinygo`, `tinygo build`: see [cli.md](cli.md)).
 Ruby is not needed to compile (the Ruby parser is built in), only to compare
 output or to compile programs that load gems.
 

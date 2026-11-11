@@ -417,3 +417,51 @@ func TestPGO(t *testing.T) {
 		t.Errorf("build -pgo missing: %v %q, want an error naming the path", err, out)
 	}
 }
+
+// -compiler tinygo refuses gc's build flags and unbuildable libs before building, and builds with tinygo when it is on PATH (decision 443).
+func TestCompilerTinyGo(t *testing.T) {
+	t.Setenv("RUGAROO_COMPILER", "")
+	opts, _, err := testBuildFlags([]string{"-compiler", "tinygo", "-race"})
+	if os.Getenv("RUGAROO_COMPILER") != "tinygo" || err == nil || !strings.Contains(err.Error(), "-race") {
+		t.Errorf("-compiler tinygo -race: env %q, err %v", os.Getenv("RUGAROO_COMPILER"), err)
+	}
+	for _, o := range []buildOpts{{gcflags: "-e"}, {pgo: "/p/cpu.pprof"}} {
+		if checkCompiler(o) == nil {
+			t.Errorf("%+v: want an error under -compiler tinygo", o)
+		}
+	}
+	if checkCompiler(opts) == nil {
+		t.Error("-race: want an error under -compiler tinygo")
+	}
+	_, _, err = testBuildFlags([]string{"--compiler=gc", "-race"})
+	if os.Getenv("RUGAROO_COMPILER") != "gc" || err != nil {
+		t.Errorf("--compiler=gc -race: env %q, err %v", os.Getenv("RUGAROO_COMPILER"), err)
+	}
+	t.Setenv("RUGAROO_COMPILER", "clang")
+	if err := checkCompiler(buildOpts{}); err == nil {
+		t.Error("-compiler clang: want an error")
+	}
+
+	t.Setenv("RUGAROO_COMPILER", "tinygo")
+	dir := t.TempDir()
+	src := filepath.Join(dir, "main.rb")
+	if _, _, err := compileFile(t.Context(), src, []byte("require \"open3\"\n"), buildOpts{}); err == nil || !strings.Contains(err.Error(), "main.rb:1: require \"open3\" is not supported under -compiler tinygo") {
+		t.Errorf("require open3: %v", err)
+	}
+	if _, err := exec.LookPath("tinygo"); err != nil {
+		t.Skip("tinygo not on PATH")
+	}
+	err = os.WriteFile(src, []byte("h = {[1, 2] => \"a\"}\nt = Thread.new { Thread.current.object_id == Thread.main.object_id }\nputs \"hi #{h[[1, 2]]} #{t.value}\"\nexit 3\n"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "prog")
+	if code := build(t.Context(), src, bin, buildOpts{}); code != 0 {
+		t.Fatalf("build: exit %d", code)
+	}
+	out, err := exec.CommandContext(t.Context(), bin).Output() //nolint:gosec // built above
+	var exit *exec.ExitError
+	if string(out) != "hi a false\n" || !errors.As(err, &exit) || exit.ExitCode() != 3 {
+		t.Errorf("tinygo build: stdout %q, %v; want \"hi a false\\n\", exit 3", out, err)
+	}
+}

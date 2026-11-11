@@ -56,8 +56,22 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 			if err != nil {
 				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
 			}
+		case want == "-compiler":
+			want = ""
+			err := os.Setenv("RUGAROO_COMPILER", a)
+			if err != nil {
+				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
+			}
 		case a == "-gcflags", a == "-I":
 			want = a
+		case a == "-compiler", a == "--compiler":
+			want = "-compiler"
+		case strings.HasPrefix(a, "-compiler="), strings.HasPrefix(a, "--compiler="):
+			_, c, _ := strings.Cut(a, "=")
+			err := os.Setenv("RUGAROO_COMPILER", c)
+			if err != nil {
+				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
+			}
 		case strings.HasPrefix(a, "-int-overflow="), strings.HasPrefix(a, "--int-overflow="):
 			_, m, _ := strings.Cut(a, "=")
 			err := os.Setenv("RUGAROO_INT_OVERFLOW", m)
@@ -81,7 +95,7 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 	if want != "" {
 		return opts, nil, fmt.Errorf("rugaroo test: %s needs a value", want)
 	}
-	return opts, rest, nil
+	return opts, rest, checkCompiler(opts)
 }
 
 // expandTestArgs splits args into test files and program flags, as

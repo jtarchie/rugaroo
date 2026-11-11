@@ -20,10 +20,10 @@ import (
 	"github.com/jtarchie/rugaroo"
 )
 
-const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [traced args...]
-       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [args...]
-       rugaroo gen [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] main.rb [traced args...] > main.go
-       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-cgo] [-race] [-gcflags flags] [-debug] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
+const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [traced args...]
+       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [args...]
+       rugaroo gen [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] main.rb [traced args...] > main.go
+       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
        rugaroo web [-addr 127.0.0.1:8080]
        rugaroo web -static dir -assets https://host/path/`
 
@@ -92,6 +92,9 @@ func main() {
 	fs.BoolFunc("cgo", "Fiddle and FFI call C through cgo instead of purego, which is then not linked (needs a C compiler; decision 426)", func(string) error {
 		return os.Setenv("RUGAROO_CGO", "1")
 	})
+	fs.Func("compiler", "the Go compiler that builds the output: `gc` (the default) or tinygo, experimental (needs tinygo on PATH; decision 443)", func(c string) error {
+		return os.Setenv("RUGAROO_COMPILER", c)
+	})
 	fs.Func("I", "a directory `require` searches for your own files, as `ruby -I` (repeatable)", func(dir string) error {
 		opts.loadPath = append(opts.loadPath, dir)
 		return nil
@@ -103,6 +106,10 @@ func main() {
 	_ = fs.Parse(os.Args[2:]) // ExitOnError
 	if fs.NArg() < 1 || cmd != "run" && fs.NArg() != 1 && !opts.trace {
 		fs.Usage()
+		os.Exit(2)
+	}
+	if err := checkCompiler(opts); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 	file := fs.Arg(0)
@@ -367,12 +374,19 @@ func buildModule(ctx context.Context, code []byte, warnings []string, err error,
 	if bin == "" {
 		bin = filepath.Join(dir, "prog")
 	}
-	args := []string{"build", "-trimpath"}
-	if opts.race {
-		args = append(args, "-race")
+	tool, args := "go", []string{"build", "-trimpath"}
+	if os.Getenv("RUGAROO_COMPILER") == "tinygo" {
+		tool = "tinygo"
+		if !opts.debug {
+			args = append(args, "-no-debug")
+		}
+	} else {
+		if opts.race {
+			args = append(args, "-race")
+		}
+		args = append(args, buildFlags(opts)...)
 	}
-	args = append(args, buildFlags(opts)...)
-	cmd := exec.CommandContext(ctx, "go", append(args, "-o", bin, ".")...) //nolint:gosec // flags are the user's own
+	cmd := exec.CommandContext(ctx, tool, append(args, "-o", bin, ".")...) //nolint:gosec // flags are the user's own
 	cmd.Dir = dir
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) } // go build stops its compilers on SIGINT; a kill would orphan them
 	cmd.WaitDelay = 10 * time.Second
@@ -380,13 +394,32 @@ func buildModule(ctx context.Context, code []byte, warnings []string, err error,
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=")
 	cmd.Stdout, cmd.Stderr = diag, diag
 	if errors.Is(cmd.Err, exec.ErrNotFound) {
-		return dir, errors.New("rugaroo needs the go command on PATH to build")
+		return dir, fmt.Errorf("rugaroo needs the %s command on PATH to build", tool)
 	}
 	err = cmd.Run()
 	if err != nil {
-		return dir, fmt.Errorf("go build: %w", err)
+		return dir, fmt.Errorf("%s build: %w", tool, err)
 	}
 	return dir, nil
+}
+
+// checkCompiler refuses the go build flags TinyGo lacks before the compile, not as a build error after it (decision 443).
+func checkCompiler(opts buildOpts) error {
+	if c := os.Getenv("RUGAROO_COMPILER"); c != "" && c != "gc" && c != "tinygo" {
+		return fmt.Errorf("rugaroo: -compiler: %q is not gc or tinygo", c)
+	}
+	if os.Getenv("RUGAROO_COMPILER") != "tinygo" {
+		return nil
+	}
+	switch {
+	case opts.race:
+		return errors.New("rugaroo: -race is a gc flag; -compiler tinygo has no race detector")
+	case opts.gcflags != "":
+		return errors.New("rugaroo: -gcflags is a gc flag; -compiler tinygo has no equivalent")
+	case opts.pgo != "":
+		return errors.New("rugaroo: -pgo is a gc flag; -compiler tinygo has no equivalent")
+	}
+	return nil
 }
 
 // buildFlags drops DWARF unless -debug (decision 437); go build keeps only the last matching -gcflags, so plain user flags join the default.

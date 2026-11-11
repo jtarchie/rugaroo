@@ -4,7 +4,6 @@
 package prelude
 
 import (
-	"hash/maphash"
 	"math"
 	"math/bits"
 	"slices"
@@ -546,15 +545,15 @@ func rbMixHash(u uint64) uint64 {
 	return hi ^ lo
 }
 
-// rbHashOfAny is rbHashOf past Integer: String and Symbol hash their bytes, Float (-0.0 as 0.0) and Boolean mix as an Integer, the rest go through maphash.Comparable.
+// rbHashOfAny is rbHashOf past Integer: String and Symbol hash their bytes, Float (-0.0 as 0.0) and Boolean mix as an Integer, the rest go through rbHashComparable.
 func rbHashOfAny[K comparable](k K) uint64 {
 	switch x := any(k).(type) {
 	case Integer:
 		return rbMixHash(uint64(x)) //nolint:gosec // a bit pattern, not a size
 	case String:
-		return maphash.String(rbHashSeed, string(x))
+		return rbHashString(string(x))
 	case Symbol:
-		return maphash.String(rbHashSeed, string(x))
+		return rbHashString(string(x))
 	case Float:
 		if x == 0 {
 			x = 0 // -0.0 == 0.0
@@ -566,8 +565,8 @@ func rbHashOfAny[K comparable](k K) uint64 {
 		}
 		return rbMixHash(0)
 	}
-	return maphash.Comparable(rbHashSeed, k)
+	return rbHashComparable(k)
 }
 
-// rbIntHashSeed varies rbHashOf's Integer hashes per process, as maphash's seed does strings'.
-var rbIntHashSeed = maphash.Comparable(rbHashSeed, uint64(0))
+// rbIntHashSeed varies rbHashOf's Integer hashes per process, as the hash seed does strings'.
+var rbIntHashSeed = rbHashComparable(uint64(0))

@@ -15,7 +15,7 @@ anything after the file is passed to the program. Tiers are as in
 
 ## Build flags
 
-For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, `-cgo`, `-race`,
+For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, `-cgo`, `-compiler`, `-race`,
 `-gcflags`, `-debug` and `-work`.
 
 | Flag | Tier | What it does |
@@ -26,6 +26,7 @@ For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, 
 | `-int-overflow mode` | stable (`raise`, `wrap`), experimental (`promote`) | What an Integer result past 64 bits does: `raise` a `RangeError` (the default), `wrap` around as two's complement, or `promote` to a Bignum as MRI does. A `# int_overflow: mode` line in a file does the same for the arithmetic written in that file, whatever the flag says (decision 381). |
 | `-nil-check mode` | experimental (`runtime`) | A possibly-nil value (`T?`) where a `T` is expected: `compile` makes it a compile error until you check it (the default), `runtime` compiles it to a check that raises when it is nil, MRI's own `TypeError`/`ArgumentError` at a core operator (`"x" + nil`, `1 + nil`, `1 < nil`). A `# nil_check: mode` line in a file does the same for the code written in that file (decision 393). Under `compile`, a read that only an unannotated `[]`/`{}` rugaroo typed itself makes possibly-nil is still checked at run time, with a warning (decision 440). |
 | `-cgo` | experimental | Fiddle, FFI and sqlite3 call C through cgo instead of purego, so purego is not linked; needs a C compiler at build time. ([decision 426](decisions/426.md)). |
+| `-compiler gc\|tinygo` | experimental (`tinygo`) | The Go compiler that builds the program: `gc` (the default, the `go` command) or [TinyGo](https://tinygo.org), which needs `tinygo` on PATH and makes binaries several times smaller, builds several times slower and runs many-thread programs poorly. Under `tinygo`, `-race`, `-gcflags` and `-pgo` are errors, and so is a `require` of `socket`, `net/*`, `webrick`, `open-uri`, `open3`, `fiddle`, `ffi`, `sqlite3` or `prism`; no Ruby backtraces (`RUGAROO_BACKTRACE`), and backticks/`system` do not run ([decision 443](decisions/443.md)). |
 | `-race` | stable | Build with Go's race detector. |
 | `-gcflags flags` | stable | Passed to `go build`, after the default `-dwarf=false`; `-gcflags=-e` shows every Go error when generated code fails to build (please report those). |
 | `-debug` | stable | Keep Go's debug info (DWARF) for a debugger such as Delve on the generated Go. By default programs are built without it (`-gcflags=-dwarf=false -ldflags=-w`): smaller binaries and a quarter less compile memory; `RUGAROO_BACKTRACE=1` and panic traces do not need it ([decision 437](decisions/437.md)). |
@@ -68,6 +69,7 @@ For the compiler:
 | `RUGAROO_INT_OVERFLOW=mode` | The same as `-int-overflow`. |
 | `RUGAROO_NIL_CHECK=mode` | The same as `-nil-check`. |
 | `RUGAROO_CGO=1` | The same as `-cgo`. |
+| `RUGAROO_COMPILER=tinygo` | The same as `-compiler tinygo`. |
 | `RUGAROO_GEM_WARNINGS=1` | Also print warnings from gem files (hidden by default, since they are not yours to fix). |
 | `RUGAROO_UNTYPED_WHY=1` | Each dynamic-call warning also names where the untyped value came from. |
 | `RUGAROO_INFER_DEBUG=1` | Show what each round of parameter inference typed and what it could not compile. |

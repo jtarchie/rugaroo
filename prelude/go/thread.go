@@ -7,11 +7,9 @@ import (
 	"cmp"
 	"fmt"
 	"os"
-	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 )
 
 var (
@@ -45,16 +43,6 @@ type rbGoTag struct {
 	recDepth, recHashDepth int // Struct comparisons and hashes in progress (decision 407)
 }
 
-// The label slot's accessors: runtime/pprof's, which the runtime keeps for linkname users (go.dev/issue/67401).
-//
-//go:linkname rbGetGoTag runtime/pprof.runtime_getProfLabel
-func rbGetGoTag() unsafe.Pointer
-
-// The setter takes the tag's own pointer type (the same word as unsafe.Pointer), so no conversion is written.
-//
-//go:linkname rbSetGoTag runtime/pprof.runtime_setProfLabel
-func rbSetGoTag(*rbGoTag)
-
 // rbTagGoroutine gives the running goroutine its own tag and returns its id: the next counter value, offset past any
 // id runtime.Stack reports (main's, decision 104), so no stack walk (decision 403). A goroutine that runs Ruby code
 // calls it first: until then it carries the tag of the goroutine that started it.
@@ -76,20 +64,6 @@ func rbTagGoroutineFiber(f *Fiber) int64 {
 }
 
 const rbGoIDBase = 1 << 40
-
-// rbGoIDStack parses runtime.Stack's "goroutine N [" header: Go exposes no other identity. Its cost grows with stack depth (the walk formats every frame before truncating).
-func rbGoIDStack() int64 {
-	var buf [64]byte
-	n := runtime.Stack(buf[:], false)
-	var id int64
-	for _, c := range buf[len("goroutine "):n] {
-		if c < '0' || c > '9' {
-			break
-		}
-		id = id*10 + int64(c-'0')
-	}
-	return id
-}
 
 // rbCurrentThread is Thread.current: the Thread this goroutine runs, else main (a ractor's own goroutine is its main thread, as in MRI).
 func rbCurrentThread() *Thread {
@@ -129,6 +103,7 @@ func rbThreadStart(t *Thread, run func() any) *Thread {
 	rbSpawned.Store(true)
 	go func() {
 		id := rbTagGoroutine()
+		defer rbUntagGoroutine()
 		rbThreadOf.Store(id, t)
 		defer rbThreadOf.Delete(id)
 		defer rbRootFibers.Delete(t) // Fiber.current's root fiber for this thread

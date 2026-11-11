@@ -84,6 +84,7 @@ func (f *Fiber) resume(args []any) any {
 // first resumed it. The block's value or exception is kept for the resume that sees the coroutine end.
 func (f *Fiber) run(parent int64, yield func(any) bool) {
 	id := rbTagGoroutineFiber(f)
+	defer rbUntagGoroutine()
 	rbFiberOf.Store(id, f)
 	defer rbFiberOf.Delete(id)
 	if t, ok := rbThreadOf.Load(parent); ok {

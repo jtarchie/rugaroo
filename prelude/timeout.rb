@@ -31,6 +31,7 @@ module Timeout
     rbSpawned.Store(true)
     go func() {
       rbTagGoroutine()
+      defer rbUntagGoroutine()
       defer func() {
         if r := recover(); r != nil {
           ch <- rbTimeoutResult{err: rbWrapPanic(r)}
