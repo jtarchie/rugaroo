@@ -90,10 +90,12 @@ func (f *fctx) strInvariant(name string, v *local, pred parser.Node, body *parse
 func (f *fctx) mayAppendArg(c *parser.CallNode, a parser.Node) bool {
 	switch r := c.Receiver.(type) {
 	case nil, *parser.SelfNode, *parser.ConstantReadNode, *parser.ConstantPathNode:
-		return f.outCallArg(c, a)
+		out, _ := f.outCallArg(c, a)
+		return out
 	case *parser.LocalVariableReadNode:
 		if f.visibleLocal(r.Name) != nil {
-			return f.outCallArg(c, a)
+			out, _ := f.outCallArg(c, a)
+			return out
 		}
 	}
 	hasOut := func(m *Method) bool {
