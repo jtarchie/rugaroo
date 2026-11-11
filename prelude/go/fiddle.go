@@ -265,6 +265,67 @@ func rbFiddleFast(f Fiddle_FunctionI, a ...any) any {
 	return Fiddle_Meta___Ret(Fiddle_class, x.ret, rbFiddleInvokeArgs(fn, a))
 }
 
+// rbFiddleTyped is nil unless f is still the plain Function the compiler read, so an extern's twin never bypasses an override or a redefinition (decision 442).
+func rbFiddleTyped(f Fiddle_FunctionI, ret Integer, args ...Integer) *rbFiddleCFunc {
+	x, ok := f.(*Fiddle_Function)
+	if !ok || x.ret != ret {
+		return nil
+	}
+	fn, ok := x.fn.(*rbFiddleCFunc)
+	if !ok || fn.variadic || fn.spread || !slices.Equal(fn.args, args) {
+		return nil
+	}
+	return fn
+}
+
+// rbFiddleCallTyped is rbFiddleInvokeArgs's call for arguments a twin placed itself.
+func rbFiddleCallTyped(fn *rbFiddleCFunc, in *[8]uintptr, fl *[8]uint64) (uintptr, float64) {
+	r, f, errno := rbFiddleCall(&fn.slot, fn.addr, in, fl, fn.float)
+	rbFiddleSetErrno(errno)
+	return r, math.Float64frombits(f)
+}
+
+// rbFiddleIntArg is rbFiddleWord64's word for an Integer.
+func rbFiddleIntArg(a Integer) uintptr { return uintptr(a) } //nolint:gosec // C's own wraparound for a negative value
+
+// rbFiddleFloatArg is rbFiddleWord64's register bits for a Float as C type t.
+func rbFiddleFloatArg(t Integer, a Float) uint64 {
+	if t == 7 { // a float sits in the low half of its register
+		return uint64(math.Float32bits(float32(a)))
+	}
+	return math.Float64bits(float64(a))
+}
+
+// rbFiddleIntValue is rbFiddleValue for an integer or pointer type, unboxed.
+func rbFiddleIntValue(t Integer, r uintptr) Integer {
+	switch t {
+	case 2:
+		return Integer(int8(r)) //nolint:gosec // by width: the ABI leaves upper bits unspecified
+	case -2:
+		return Integer(uint8(r)) //nolint:gosec // as above
+	case 3:
+		return Integer(int16(r)) //nolint:gosec // as above
+	case -3:
+		return Integer(uint16(r)) //nolint:gosec // as above
+	case 4:
+		return Integer(int32(r)) //nolint:gosec // as above
+	case -4:
+		return Integer(uint32(r)) //nolint:gosec // as above
+	}
+	return Integer(r) //nolint:gosec // ponytail: an unsigned long above 2**63 wraps (Integer is int64)
+}
+
+// rbFiddleFloatValue is rbFiddleValue for a float or double, unboxed.
+func rbFiddleFloatValue(t Integer, f float64) Float {
+	if t == 7 {
+		return Float(math.Float32frombits(uint32(math.Float64bits(f)))) //nolint:gosec // the float's own low half
+	}
+	return Float(f)
+}
+
+// rbFiddleBoolValue is rbFiddleValue for a bool, unboxed.
+func rbFiddleBoolValue(r uintptr) Boolean { return Boolean(uint8(r) != 0) } //nolint:gosec // C's _Bool is one byte
+
 // rbFiddleInvokeArgs converts args as Fiddle does, calls fn, and sets Fiddle.last_error.
 func rbFiddleInvokeArgs(fn *rbFiddleCFunc, args []any) any {
 	if fn.variadic || fn.spread {
@@ -372,26 +433,12 @@ func rbFiddleValue(t Integer, r uintptr, f float64) any {
 	switch t {
 	case 0:
 		return nil
-	case 7:
-		return Float(math.Float32frombits(uint32(math.Float64bits(f)))) //nolint:gosec // the float's own low half
-	case 8:
-		return Float(f)
+	case 7, 8:
+		return rbFiddleFloatValue(t, f)
 	case 11:
-		return Boolean(uint8(r) != 0) //nolint:gosec // C's _Bool is one byte
-	case 2:
-		return Integer(int8(r)) //nolint:gosec // as above, by width
-	case -2:
-		return Integer(uint8(r)) //nolint:gosec // as above
-	case 3:
-		return Integer(int16(r)) //nolint:gosec // as above
-	case -3:
-		return Integer(uint16(r)) //nolint:gosec // as above
-	case 4:
-		return Integer(int32(r)) //nolint:gosec // as above
-	case -4:
-		return Integer(uint32(r)) //nolint:gosec // as above
+		return rbFiddleBoolValue(r)
 	}
-	return Integer(r) //nolint:gosec // ponytail: an unsigned long above 2**63 wraps (Integer is int64)
+	return rbFiddleIntValue(t, r)
 }
 
 // rbFiddleGetInt reads an integer member of C type t at addr.

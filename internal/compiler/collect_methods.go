@@ -197,7 +197,7 @@ func (c *Compiler) addDef(f *File, cls *Class, n *parser.DefNode, private bool, 
 			m.sig, m.arms = merged, sd.Overloads
 		}
 	}
-	if body, ok := n.Body.(*parser.StatementsNode); ok && f.isPrelude() && len(body.Body) == 1 {
+	if body, ok := n.Body.(*parser.StatementsNode); ok && (f.isPrelude() || f.goBody) && len(body.Body) == 1 {
 		if _, ok := body.Body[0].(*parser.XStringNode); ok {
 			m.Kind = kindPrimitive
 		}

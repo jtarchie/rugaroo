@@ -19,6 +19,12 @@ module FiddleTests
     extern "int strcmp(const char *, const char *)"
     extern "word abs(int)"
     extern "void *memcpy(void *, const void *, size_t)"
+    extern "size_t strlen(const char *)"
+    extern "double fabs(double)"
+    extern "void free(void *)"
+    extern "bool isatty(int)"
+    extern "long time(void *)"
+    bind("int add3(int, int, int)") { |a, b, c| a + b + c }
 
     Pair = struct ["short a", "long b", "unsigned char c[3]", "float f"]
     Bits = union ["unsigned int u", "unsigned char b[4]"]
@@ -39,6 +45,26 @@ module FiddleTests
       assert_equal "lo", Lib.strchr("hello", "l".ord).to_s[1, 2]
       assert_equal [true, Fiddle::Function, "atoi"], [Lib.strchr("abc", "z".ord).null?, Lib["atoi"].class, Lib["atoi"]&.name]
       assert_equal [4, 8, 8], [Lib.sizeof("int"), Lib.sizeof("long"), Lib.sizeof("char*")]
+    end
+
+    # Integer/Float arguments take the extern's typed twin; any other argument, the extern's own path (decision 442).
+    def test_typed_twins
+      x = -1.5
+      hello = Fiddle::Pointer["hello"]
+      assert_equal [7, 7, 1.5, 2.0, 2.5, 6], [Lib.labs(-7), Lib.labs(-7.9), Lib.fabs(x), Lib.fabs(-2), Lib.fabsf(-2.5), Lib.add3(1, 2, 3)]
+      assert_equal [5, 5, 3], [Lib.strlen(hello.to_i), Lib.strlen(hello), Lib.strlen("abc")]
+      assert_equal ["llo", "llo"], [Lib.strchr(hello.to_i, "l".ord).to_s, Lib.strchr(hello, "l".ord).to_s]
+      assert_equal [nil, nil], [Lib.free(0), Lib.free(nil)]
+      assert_equal [false, Errno::EBADF::Errno], [Lib.isatty(99), Fiddle.last_error]
+      t = Lib.time(0)
+      buf = Fiddle::Pointer.malloc(8, Fiddle::RUBY_FREE)
+      assert_equal [true, true], [Lib.time(nil) - t <= 1, Lib.time(buf) == buf[0, 8].unpack1("q")]
+      bad = begin
+        Lib.labs("7")
+      rescue TypeError => e
+        e.class
+      end
+      assert_equal TypeError, bad
     end
 
     def test_function_by_address

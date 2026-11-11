@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -170,7 +171,8 @@ func (c *Compiler) collectFiddleCall(ctx context.Context, f *File, cls *Class, n
 	if c.fiddleSlots == nil {
 		c.fiddleSlots = map[*Class]int{}
 	}
-	fn := fmt.Sprintf("__fiddle_func_at(%d, %q)", c.fiddleSlots[cls], name) // an Array slot, not a hash of the name per call (decision 329)
+	slot := c.fiddleSlots[cls]
+	fn := fmt.Sprintf("__fiddle_func_at(%d, %q)", slot, name) // an Array slot, not a hash of the name per call (decision 329)
 	c.fiddleSlots[cls]++
 	call := fmt.Sprintf("%s.call(%s)", fn, strings.Join(params, ", "))
 	switch n := len(params); { // Fiddle.__call's fixed arity: no *args Array per call (decision 329)
@@ -186,6 +188,106 @@ func (c *Compiler) collectFiddleCall(ctx context.Context, f *File, cls *Class, n
 		strings.Join(types, ", "), fiddleRubyType(ret), name, strings.Join(params, ", "), call)
 	sf, def := c.synthDef(ctx, f, n, "Fiddle function", src, synthOpt{Origin: f.synthOrigin(), NoPath: true})
 	c.addMethod(sf, cls, def, false, scope)
+	if !variadic {
+		c.addFiddleTwin(ctx, f, cls, n, def, slot, name, ret, argTypes, scope)
+	}
+}
+
+// fiddleTwin is an extern's typed twin: its method's name and the C argument types a call's arguments must match.
+type fiddleTwin struct {
+	name string
+	args []int
+}
+
+// addFiddleTwin: `__fiddle_t_<name>` takes typed args so a call skips boxing; `__fiddle_c_<name>` falls back to the extern's path unless the slot is a plain Function of this signature (decision 442).
+func (c *Compiler) addFiddleTwin(ctx context.Context, f *File, cls *Class, n *parser.CallNode, ext *parser.DefNode, slot int, name string, ret int, args []int, scope []*Class) {
+	params := make([]string, 0, len(args))
+	types := make([]string, 0, len(args))
+	codes := []string{strconv.Itoa(ret)}
+	var place strings.Builder
+	ni, nf := 0, 0
+	for i, t := range args {
+		p := fmt.Sprintf("a%d", i)
+		switch t {
+		case 11: // bool: any object, by Ruby truthiness
+			return
+		case 7, 8:
+			types = append(types, "Float")
+			fmt.Fprintf(&place, "\t\tfl[%d] = rbFiddleFloatArg(%d, %s)\n", nf, t, p)
+			nf++
+		default:
+			types = append(types, "Integer")
+			fmt.Fprintf(&place, "\t\tin[%d] = rbFiddleIntArg(%s)\n", ni, p)
+			ni++
+		}
+		params = append(params, p)
+		codes = append(codes, strconv.Itoa(t))
+	}
+	if ni > 8 || nf > 8 {
+		return // stack arguments: the spread call (decision 426)
+	}
+	// The extern's own path in Go, as its synthesized body calls it.
+	slow := fmt.Sprintf("Fiddle_Meta___Call(Fiddle_class, f, %d, %s)", len(args), strings.Join(append(slices.Clone(params), slices.Repeat([]string{"nil"}, 8-len(args))...), ", "))
+	if len(args) >= 1 && len(args) <= 3 {
+		slow = fmt.Sprintf("Fiddle_Meta___Call%d(Fiddle_class, f, %s)", len(args), strings.Join(params, ", "))
+	}
+	var fast string
+	switch ret {
+	case 0:
+		fast = "rbFiddleCallTyped(fn, &in, &fl)\n\t\treturn"
+	case 1:
+		fast = "r, _ := rbFiddleCallTyped(fn, &in, &fl)\n\t\treturn NewFiddle_Pointer(rbFiddleIntValue(1, r), 0, nil)"
+		slow = fmt.Sprintf("return rbAs[Fiddle_PointerI](%s, %q)", slow, "Fiddle::Pointer")
+	case 7, 8:
+		fast = fmt.Sprintf("_, x := rbFiddleCallTyped(fn, &in, &fl)\n\t\treturn rbFiddleFloatValue(%d, x)", ret)
+		slow = fmt.Sprintf("return rbAs[Float](%s, %q)", slow, "Float")
+	case 11:
+		fast = "r, _ := rbFiddleCallTyped(fn, &in, &fl)\n\t\treturn rbFiddleBoolValue(r)"
+		slow = fmt.Sprintf("return Boolean(rbTruthy(%s))", slow)
+	default:
+		fast = fmt.Sprintf("r, _ := rbFiddleCallTyped(fn, &in, &fl)\n\t\treturn rbFiddleIntValue(%d, r)", ret)
+		slow = fmt.Sprintf("return rbAs[Integer](%s, %q)", slow, "Integer")
+	}
+	rt, tname, cname := fiddleRubyType(ret), "__fiddle_t_"+name, "__fiddle_c_"+name
+	lookup := fmt.Sprintf("__fiddle_func_at(%d, %q)", slot, name)
+	src := fmt.Sprintf("#: (%s) -> %s\ndef self.%s(%s) = %s(%s)\n", strings.Join(types, ", "), rt, tname, strings.Join(params, ", "),
+		cname, strings.Join(append([]string{lookup}, params...), ", "))
+	src += fmt.Sprintf("#: (%s) -> %s\ndef self.%s(%s) = %%x{\n\tif fn := rbFiddleTyped(f, %s); fn != nil {\n\t\tvar in [8]uintptr\n\t\tvar fl [8]uint64\n%s\t\t%s\n\t}\n\t%s\n}\n",
+		strings.Join(append([]string{"::Fiddle::Function"}, types...), ", "), rt, cname, strings.Join(append([]string{"f"}, params...), ", "),
+		strings.Join(codes, ", "), place.String(), fast, slow)
+	sf := c.synthFile(ctx, f, n, "Fiddle function", src, synthOpt{Origin: f.synthOrigin(), NoPath: true})
+	sf.goBody = true
+	for _, d := range c.synthDefs(f, n, "Fiddle function", sf) {
+		c.addMethod(sf, cls, d, false, scope)
+	}
+	if c.fiddleTwins == nil {
+		c.fiddleTwins = map[*parser.DefNode]fiddleTwin{}
+	}
+	c.fiddleTwins[ext] = fiddleTwin{name: tname, args: args}
+}
+
+// fiddleTwinCall picks the twin only when every arg is statically the class its C type holds, so no call changes meaning (decision 442).
+func (f *fctx) fiddleTwinCall(e *entry, recv expr, args []parser.Node, block parser.Node) *entry {
+	t, ok := f.c.fiddleTwins[e.M.Node]
+	rc, isCls := recv.typ.(TClass)
+	if !ok || !isCls || block != nil || len(args) != len(t.args) {
+		return nil
+	}
+	for i, a := range args {
+		if isSplat(a) {
+			return nil
+		}
+		var x expr
+		f.probe(func() { x = f.genExpr(a, nil) })
+		want := "Integer"
+		if t.args[i] == 7 || t.args[i] == 8 {
+			want = "Float"
+		}
+		if c, ok := x.typ.(TClass); !ok || c.C.Name != want {
+			return nil
+		}
+	}
+	return rc.C.lookup(t.name)
 }
 
 // fiddleMember is one struct member: name, TYPE_* code and array length (0: a scalar).

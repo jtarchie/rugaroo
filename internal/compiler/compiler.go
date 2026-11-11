@@ -136,6 +136,7 @@ type Compiler struct {
 	privateConsts         map[string]bool                   // private_constant's full names: no `M::X` path reaches them
 	anonErrors            map[*parser.CallNode]compileError // a literal whose body did not collect: raised where it is generated
 	specUses              []specUse                         // Minitest::Spec DSL calls, checked after link
+	fiddleTwins           map[*parser.DefNode]fiddleTwin    // an extern's typed twin, by the extern's def (decision 442)
 
 	// parameter types from use (decision 146)
 	infer       *inference

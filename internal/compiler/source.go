@@ -20,6 +20,7 @@ type File struct {
 	origin    Origin                     // set at construction for the prelude; a source file's gem-or-user answer is gemFile's, once asked
 	lambdaOpt map[*parser.LambdaNode]int // a gem lambda's optional params, made required with nil defaults (optionalLambdaParams)
 	valueGen  bool                       // a Struct/Data's generated members (valueClassSource), which may mark @dynamic
+	goBody    bool                       // generated with a %x{} Go body, as a prelude method's (an extern's typed twin, decision 442)
 	pinLine   int                        // every position reports this line: generated source, whose errors belong to its declaration
 	path      string                     // a user file's real path on disk, which require_relative resolves against
 	data      *string                    // the text after `__END__`, which DATA reads
