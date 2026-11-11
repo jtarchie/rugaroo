@@ -16,7 +16,7 @@ anything after the file is passed to the program. Tiers are as in
 ## Build flags
 
 For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, `-cgo`, `-race`,
-`-gcflags` and `-work`.
+`-gcflags`, `-debug` and `-work`.
 
 | Flag | Tier | What it does |
 |---|---|---|
@@ -27,7 +27,8 @@ For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, 
 | `-nil-check mode` | experimental (`runtime`) | A possibly-nil value (`T?`) where a `T` is expected: `compile` makes it a compile error until you check it (the default), `runtime` compiles it to a check that raises when it is nil, MRI's own `TypeError`/`ArgumentError` at a core operator (`"x" + nil`, `1 + nil`, `1 < nil`). A `# nil_check: mode` line in a file does the same for the code written in that file (decision 393). |
 | `-cgo` | experimental | Fiddle, FFI and sqlite3 call C through cgo instead of purego, so purego is not linked; needs a C compiler at build time. ([decision 426](decisions/426.md)). |
 | `-race` | stable | Build with Go's race detector. |
-| `-gcflags flags` | stable | Passed to `go build`; `-gcflags=-e` shows every Go error when generated code fails to build (please report those). |
+| `-gcflags flags` | stable | Passed to `go build`, after the default `-dwarf=false`; `-gcflags=-e` shows every Go error when generated code fails to build (please report those). |
+| `-debug` | stable | Keep Go's debug info (DWARF) for a debugger such as Delve on the generated Go. By default programs are built without it (`-gcflags=-dwarf=false -ldflags=-w`): smaller binaries and a quarter less compile memory; `RUGAROO_BACKTRACE=1` and panic traces do not need it ([decision 437](decisions/437.md)). |
 | `-work` | stable | Keep the temporary module (`main.go`, `go.mod`) and print its path as `WORK=...`. |
 | `-trace` | experimental | Run the program once under MRI, with the arguments after the file, and compile every file that run loaded. For gems that `require` files by computed name. **The run executes the program.** |
 | `-trace-also "args"` | experimental | With `-trace`: one more traced run with these arguments, merged into the same binary, for a program that serves several commands. Repeatable. |

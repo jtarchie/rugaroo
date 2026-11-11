@@ -212,7 +212,7 @@ at build time, with your environment and no sandbox
 
 | Tool | Tier | Notes |
 |---|---|---|
-| `rugaroo run`, `build`, `gen`, `test` | stable | Shaped like `go run`/`build`/`test`; `-race`, `-gcflags`, `-o`, `-work`, `-I` pass through. |
+| `rugaroo run`, `build`, `gen`, `test` | stable | Shaped like `go run`/`build`/`test`; `-race`, `-gcflags`, `-o`, `-work`, `-I` pass through; no Go debug info unless `-debug` (decision 437). |
 | `--int-overflow=raise` (default), `wrap` | stable | [decision 372](decisions/372.md) |
 | `--int-overflow=promote` | experimental | Bignum where MRI would grow past 64 bits ([126](../examples/126_bignum/main.rb)). |
 | `--nil-check=compile` (default), `runtime` | experimental (`runtime`) | A `T?` where `T` is expected raises on nil when it runs instead of failing the compile ([132](../examples/132_nil_check_runtime/main.rb), [decision 393](decisions/393.md)). |

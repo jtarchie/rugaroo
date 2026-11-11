@@ -49,6 +49,8 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 			opts.race = true
 		case a == "-work":
 			opts.work = true
+		case a == "-debug":
+			opts.debug = true
 		case a == "-cgo", a == "--cgo":
 			err := os.Setenv("RUGAROO_CGO", "1")
 			if err != nil {

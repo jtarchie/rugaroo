@@ -1,6 +1,9 @@
 package main
 
 import (
+	"debug/dwarf"
+	"debug/elf"
+	"debug/macho"
 	"errors"
 	"io"
 	"os"
@@ -327,6 +330,53 @@ func TestUncaughtFullReport(t *testing.T) {
 		_ = cmd.Run()
 		if !strings.HasSuffix(errOut.String(), want) {
 			t.Errorf("%q: stderr %q, want suffix %q", env, errOut.String(), want)
+		}
+	}
+	// the binary above has no DWARF (decision 437): the backtrace came from the pclntab; -debug keeps it
+	debugBin := filepath.Join(dir, "debug")
+	if code := build(t.Context(), src, debugBin, buildOpts{debug: true}); code != 0 {
+		t.Fatalf("build -debug: exit %d", code)
+	}
+	for b, want := range map[string]bool{bin: false, debugBin: true} {
+		if got := hasDWARF(t, b); got != want {
+			t.Errorf("%s: DWARF %v, want %v", filepath.Base(b), got, want)
+		}
+	}
+}
+
+// hasDWARF reads an ELF or Mach-O binary's debug info.
+func hasDWARF(t *testing.T, bin string) bool {
+	t.Helper()
+	var dwarfOf func() (*dwarf.Data, error)
+	ef, err := elf.Open(bin)
+	if err == nil {
+		defer func() { _ = ef.Close() }()
+		dwarfOf = ef.DWARF
+	} else {
+		mf, merr := macho.Open(bin)
+		if merr != nil {
+			t.Fatal(merr)
+		}
+		defer func() { _ = mf.Close() }()
+		dwarfOf = mf.DWARF
+	}
+	_, err = dwarfOf()
+	return err == nil
+}
+
+// A user -gcflags joins the default -dwarf=false (go build keeps only the last matching one); a pattern one stays separate.
+func TestBuildFlags(t *testing.T) {
+	for _, c := range []struct {
+		opts buildOpts
+		want []string
+	}{
+		{buildOpts{}, []string{"-ldflags=-w", "-gcflags=-dwarf=false"}},
+		{buildOpts{gcflags: "-e"}, []string{"-ldflags=-w", "-gcflags=-dwarf=false -e"}},
+		{buildOpts{gcflags: "all=-N -l"}, []string{"-ldflags=-w", "-gcflags=-dwarf=false", "-gcflags=all=-N -l"}},
+		{buildOpts{debug: true, gcflags: "-e"}, []string{"-gcflags=-e"}},
+	} {
+		if got := buildFlags(c.opts); !slices.Equal(got, c.want) {
+			t.Errorf("%+v: %q, want %q", c.opts, got, c.want)
 		}
 	}
 }
