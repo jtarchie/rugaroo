@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
@@ -73,7 +74,7 @@ func (f *fctx) strInvariant(name string, v *local, pred parser.Node, body *parse
 				return true, false // `s << x`, `s.setbyte`, `s.sub!`: each rebinds the local (decisions 58, 382, 395)
 			}
 			for _, a := range callArgs(c) {
-				if r, ok := a.(*parser.LocalVariableReadNode); ok && r.Name == name && f.outCallArg(c, a) {
+				if r, ok := a.(*parser.LocalVariableReadNode); ok && r.Name == name && f.mayAppendArg(c, a) {
 					return true, false
 				}
 			}
@@ -83,6 +84,28 @@ func (f *fctx) strInvariant(name string, v *local, pred parser.Node, body *parse
 		return false, true
 	}
 	return !walkNode(pred, changes) && (body == nil || !walkNode(body, changes))
+}
+
+// mayAppendArg: c may append to its argument a (decision 405); a receiver outCallArg cannot probe yet (a local the loop declares is not in scope before it) is answered by whether any method of c's name has an out parameter.
+func (f *fctx) mayAppendArg(c *parser.CallNode, a parser.Node) bool {
+	switch r := c.Receiver.(type) {
+	case nil, *parser.SelfNode, *parser.ConstantReadNode, *parser.ConstantPathNode:
+		return f.outCallArg(c, a)
+	case *parser.LocalVariableReadNode:
+		if f.visibleLocal(r.Name) != nil {
+			return f.outCallArg(c, a)
+		}
+	}
+	hasOut := func(m *Method) bool { return m != nil && slices.ContainsFunc(m.Params, func(p Param) bool { return p.Out }) }
+	if hasOut(f.c.topDefs[c.Name]) {
+		return true
+	}
+	for _, k := range f.c.classList {
+		if hasOut(k.Methods[c.Name]) {
+			return true
+		}
+	}
+	return false
 }
 
 // isOutParam: name is a String parameter the method appends to through its caller's String (decision 405).
@@ -114,6 +137,9 @@ func (f *fctx) hoistedStrCall(n *parser.CallNode) (expr, bool) {
 	}
 	args := callArgs(n)
 	intT := f.cls("Integer")
+	if n.Name != "[]" && (n.Name != "length" && n.Name != "size" || len(args) != 0) || len(args) > 2 {
+		return expr{}, false
+	}
 	for _, a := range args {
 		if isSplat(a) || !typeEq(f.probeType(a, intT), intT) {
 			return expr{}, false

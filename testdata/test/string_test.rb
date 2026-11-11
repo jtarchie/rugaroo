@@ -2629,6 +2629,8 @@ module StringTests
       keys = [] #: Array[String]
       i = 0
       while i < s.length
+        w = [s]
+        keys << "!" unless w.first.start_with?(s) && s.include?("}") && s.index("{") == 1
         if s[i] == "{"
           j = i + 1
           j += 1 while j < s.length && s[j] != "}"
