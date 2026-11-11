@@ -1,7 +1,9 @@
 package rugaroo
 
 import (
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -67,9 +69,15 @@ func diffCases(t *testing.T, cases, want, got []string, stderr string) {
 			continue
 		}
 		if dump := os.Getenv("RUGAROO_FUZZ_DUMP"); dump != "" { // every mismatch as case<TAB>mri<TAB>got, for bucketing by root cause
-			f, _ := os.OpenFile(dump, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // developer-chosen path
-			fmt.Fprintf(f, "%s\t|\t%s\t|\t%s\n", c, w, g)
-			f.Close()
+			f, err := os.OpenFile(dump, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // developer-chosen path
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = fmt.Fprintf(f, "%s\t|\t%s\t|\t%s\n", c, w, g)
+			err = errors.Join(err, f.Close())
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 		byOp[strings.SplitN(c, "\t", 2)[0]]++
 		if bad++; bad <= 20 {
@@ -88,7 +96,8 @@ func diffCases(t *testing.T, cases, want, got []string, stderr string) {
 func decodeCase(c string) string {
 	parts := strings.Split(c, "\t")
 	for i, p := range parts[1:] {
-		if b, err := hex.DecodeString(p); err == nil && len(p)%2 == 0 {
+		b, err := hex.DecodeString(p)
+		if err == nil && len(p)%2 == 0 {
 			parts[i+1] = strconv.Quote(string(b))
 		}
 	}
@@ -111,7 +120,8 @@ func corpusCases(t *testing.T, area string) []string {
 }
 
 func envInt(k string, def int) int {
-	if n, err := strconv.Atoi(os.Getenv(k)); err == nil {
+	n, err := strconv.Atoi(os.Getenv(k))
+	if err == nil {
 		return n
 	}
 	return def
@@ -145,10 +155,7 @@ func fuzzFloat(r *rand.Rand) string {
 // floatHex is f's big-endian IEEE bits, the driver's float encoding.
 func floatHex(f float64) string {
 	var b [8]byte
-	bits := math.Float64bits(f)
-	for i := range b {
-		b[i] = byte(bits >> (56 - 8*i))
-	}
+	binary.BigEndian.PutUint64(b[:], math.Float64bits(f))
 	return hex.EncodeToString(b[:])
 }
 
@@ -251,7 +258,7 @@ func genFmtCase(r *rand.Rand) string {
 	case 10, 11:
 		raw := make([]byte, r.IntN(12))
 		for i := range raw {
-			raw[i] = byte(r.IntN(256))
+			raw[i] = byte(r.IntN(256)) //nolint:gosec // 0..255
 		}
 		return line("unpack", hx(strings.NewReplacer("J", "j", "Q", "q", "L!", "l!", "L_", "l_", "w", "C").Replace(fuzzPackFmt(r))), hex.EncodeToString(raw)) // unsigned 64-bit past 2^63 is a Bignum (decision 35)
 	case 12:
