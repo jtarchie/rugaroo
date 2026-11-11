@@ -225,6 +225,8 @@ module Enumerable
     false
   end
 
+  alias member? include?
+
   #: () -> Array[E]
   def uniq = to_a.uniq
 
