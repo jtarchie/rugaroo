@@ -24,7 +24,7 @@ func (c *Compiler) emitIvarList(cls *Class) {
 		case TVar:
 			isNilCode = "rbUnbox(any(" + field + ")) == nil"
 		case TClass:
-			if t.C.isStruct() || t.C.mutable() { // an interface or a pointer
+			if t.C.isStruct() && !t.C.byValue || t.C.mutable() { // an interface or a pointer
 				isNilCode = field + " == nil"
 			}
 		case TUnion: // an any, like untyped
@@ -39,9 +39,9 @@ func (c *Compiler) emitIvarList(cls *Class) {
 	}
 	// One name's entry comes from a switch, so instance_variable_get does not build the whole list (decision 332).
 	if len(ivs) == 0 {
-		c.w("func (self *%s) _Ivars(string) []rbIvar { return nil }\n\n", cls.Name)
+		c.w("func (self %s) _Ivars(string) []rbIvar { return nil }\n\n", c.recvType(cls))
 	} else {
-		c.w("func (self *%s) _Ivars(name string) []rbIvar {\n\tswitch name {\n\tcase \"\":\n\t\treturn []rbIvar{%s}\n", cls.Name, strings.Join(ivs, ", "))
+		c.w("func (self %s) _Ivars(name string) []rbIvar {\n\tswitch name {\n\tcase \"\":\n\t\treturn []rbIvar{%s}\n", c.recvType(cls), strings.Join(ivs, ", "))
 		seen := map[string]bool{}
 		for i, iv := range c.ivarOrder(cls) {
 			if !seen[iv.Name] { // the first, as the loop over the whole list finds
@@ -50,6 +50,9 @@ func (c *Compiler) emitIvarList(cls *Class) {
 			}
 		}
 		c.w("\t}\n\treturn nil\n}\n\n")
+	}
+	if cls.byValue { // frozen: instance_variable_set has nothing to write (rbIvarSet raises)
+		return
 	}
 	// Kernel#instance_variable_set: the closed world knows every ivar's type, so a write converts to it
 	c.w("func (self *%s) _IvarSet(name string, v any) bool {\n\tswitch name {\n", cls.Name)
@@ -92,6 +95,14 @@ func (c *Compiler) emitIvarDel(cls *Class) {
 // ivar copied through rbCopyAs, identity kept through seen. Pruned with
 // rbCopyDeep when no Ractor is used.
 func (c *Compiler) emitCopy(cls *Class) {
+	if cls.byValue { // a value has no identity to keep: its fields are copied into the copy Go already made
+		c.w("func (self %s) _Copy(seen map[any]any) any {\n", cls.Name)
+		for _, iv := range c.ivarOrder(cls) {
+			c.w("\t%s = rbCopyAs(%s, seen)\n", ivarPath("self", iv), ivarPath("self", iv))
+		}
+		c.w("\treturn self\n}\n\n")
+		return
+	}
 	c.w("func (self *%s) _Copy(seen map[any]any) any {\n\tif self == nil {\n\t\treturn self\n\t}\n\tdup := *self\n\tseen[self] = &dup\n", cls.Name)
 	for _, iv := range c.ivarOrder(cls) {
 		c.w("\t%s = rbCopyAs(%s, seen)\n", ivarPath("dup", iv), ivarPath("self", iv))
@@ -101,6 +112,10 @@ func (c *Compiler) emitCopy(cls *Class) {
 
 // emitDup is Object#dup for a struct class: a shallow copy, then the class's own initialize_copy (rbDup).
 func (c *Compiler) emitDup(cls *Class) {
+	if cls.byValue { // no initialize_copy: markValueClasses refused one
+		c.w("func (self %s) _Dup() any { return self }\n\n", cls.Name)
+		return
+	}
 	c.w("func (self *%s) _Dup() any {\n\tdup := *self\n", cls.Name)
 	call := func(e *entry) { // `def initialize_copy` without the source (ruby/spec's def_spec): MRI's ArgumentError, as dup passes it (decision 416)
 		if len(e.M.Params) == 0 {

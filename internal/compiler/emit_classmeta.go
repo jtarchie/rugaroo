@@ -404,7 +404,7 @@ func (c *Compiler) emitFrozenFlag() {
 	var cases []string
 	if c.objFreeze() {
 		for _, cls := range c.classList {
-			if cls.isStruct() && !cls.universal && !cls.IsModule && len(cls.TypeParams) == 0 && len(cls.root().TypeParams) == 0 && !cls.hashBase {
+			if cls.isStruct() && !cls.universal && !cls.IsModule && len(cls.TypeParams) == 0 && len(cls.root().TypeParams) == 0 && !cls.hashBase && !cls.byValue {
 				cases = append(cases, fmt.Sprintf("\tcase *%s:\n\t\treturn &v.%s\n", cls.Name, frozenField))
 			}
 		}

@@ -387,6 +387,7 @@ func (c *Compiler) emitStructClass(cls *Class) {
 		c.w("type %s struct {\n", cls.Name)
 	}
 	switch {
+	case cls.byValue: // its fields only: an embedded Data's byte or a frozen flag is a fifth field Go would not keep in registers (decision 441)
 	case cls.Super != nil && !cls.Super.universal:
 		c.w("\t%s\n", superField(cls.Super))
 	case c.objFreeze() && len(cls.TypeParams) == 0:
@@ -398,7 +399,7 @@ func (c *Compiler) emitStructClass(cls *Class) {
 	for _, iv := range cls.IvarList {
 		c.w("\t%s %s\n", goFieldName(iv.Name), c.goType(iv.Type))
 	}
-	if (cls.Super == nil || cls.Super.universal) && c.weakRefs() {
+	if (cls.Super == nil || cls.Super.universal) && c.weakRefs() && !cls.byValue {
 		c.w("\t_ *byte\n") // a WeakRef's referent must not be tiny-allocated (weakRefs); subclasses embed this root
 	}
 	if cls.isPerRun {
@@ -435,7 +436,14 @@ func (c *Compiler) emitStructClass(cls *Class) {
 		c.w("\t_Kind() string\n")
 	}
 	c.w("}\n\n")
-	c.w("func (self *%s) _%s() *%s { return self }\n\n", cls.Name, cls.Name, cls.Name)
+	if cls.byValue { // a copy's address: reads only, initialize writes the fields themselves (ivarPath)
+		c.w("func (self %s) _%s() *%s { return &self }\n\n", cls.Name, cls.Name, cls.Name)
+		for _, k := range cls.structChain()[1:] { // Data's marker, which the dropped embed carried
+			c.w("func (%s) _%s() *%s { return new(%s) }\n\n", cls.Name, k.Name, k.Name, k.Name)
+		}
+	} else {
+		c.w("func (self *%s) _%s() *%s { return self }\n\n", cls.Name, cls.Name, cls.Name)
+	}
 	if t := cls.template; t != nil { // the family marker an untyped is_a?/case/rescue asserts (decision 308)
 		c.w("func (*%s) _%s() {}\n\n", cls.Name, t.anyName())
 	}
@@ -446,7 +454,7 @@ func (c *Compiler) emitStructClass(cls *Class) {
 	case cls.isPerRun:
 		c.w("func (self *%s) _ClassOf() %s {\n\tif self.rbCls_ != nil {\n\t\treturn self.rbCls_\n\t}\n\treturn %s\n}\n\n", cls.Name, c.goType(TClass{C: cls.root().meta}), classVar(cls))
 	case cls.meta != nil:
-		c.w("func (self *%s) _ClassOf() %s { return %s }\n\n", cls.Name, c.goType(TClass{C: cls.root().meta}), classVar(cls))
+		c.w("func (self %s) _ClassOf() %s { return %s }\n\n", c.recvType(cls), c.goType(TClass{C: cls.root().meta}), classVar(cls))
 	}
 	if isModule {
 		c.emitConstTable(cls)
@@ -476,6 +484,11 @@ func (c *Compiler) emitCtor(cls *Class) {
 		env["Self"] = TClass{C: cls}
 		ps, _ := c.sig(init.M, env)
 		c.labels[cls.ctorName()] = "Class#new"
+		if cls.byValue {
+			c.w("func %s(%s) %s {\n\tvar self %s\n\t%s(&self, %s)\n\treturn self\n}\n\n",
+				cls.ctorName(), ps, cls.Name, cls.Name, freeFuncName(init.M), c.argNames(init.M))
+			return
+		}
 		c.w("func %s(%s) *%s {\n\tself := &%s{}\n\t%s(self, %s)\n\treturn self\n}\n\n",
 			cls.ctorName(), ps, cls.Name, cls.Name, freeFuncName(init.M), c.argNames(init.M))
 		if cls.isPerRun { // its class object's new: initialize already sees self.class (decision 259)
@@ -483,6 +496,10 @@ func (c *Compiler) emitCtor(cls *Class) {
 				cls.Name, cls.meta.Name, ps, cls.Name, cls.Name, freeFuncName(init.M), c.argNames(init.M))
 		}
 	} else {
+		if cls.byValue {
+			c.w("func %s() %s { return %s{} }\n\n", cls.ctorName(), cls.Name, cls.Name)
+			return
+		}
 		c.w("func %s() *%s { return &%s{} }\n\n", cls.ctorName(), cls.Name, cls.Name)
 		if cls.isPerRun {
 			c.w("func New%sIn(k *%s) *%s { return &%s{rbCls_: k} }\n\n", cls.Name, cls.meta.Name, cls.Name, cls.Name)

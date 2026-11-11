@@ -203,6 +203,9 @@ func (c *Compiler) declare(f *File, name string, line int, isModule, named bool)
 			cls.bounds = sd.Bounds
 		}
 	}
+	if _, ok := ann["value"]; ok {
+		cls.valueAnn = true
+	}
 	if _, ok := ann["hidden"]; ok && f.isPrelude() {
 		cls.hidden = true
 	}

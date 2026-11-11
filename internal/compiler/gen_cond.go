@@ -605,7 +605,7 @@ func (f *fctx) truthy(n parser.Node, e expr) string {
 	if f.lenient() {
 		// a gem's object may hold nil its type does not say (Homebrew's `if (inheritance = @sandbox_inheritance)`, an IO
 		// attr_writer's ivar never set): tested at run time, where Go can compare it to nil (decision 257)
-		if c, ok := e.typ.(TClass); ok && (c.C.isStruct() && c.C.metaOf == nil && !c.C.universal || strings.HasPrefix(f.c.goType(e.typ), "*")) {
+		if c, ok := e.typ.(TClass); ok && (c.C.isStruct() && c.C.metaOf == nil && !c.C.universal && !c.C.byValue || strings.HasPrefix(f.c.goType(e.typ), "*")) {
 			return "(" + e.code + ") != nil"
 		}
 	}

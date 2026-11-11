@@ -156,6 +156,10 @@ func (c *Compiler) emitBoxes() {
 		}
 	}
 	c.w("\tcase rbOpt[Integer]:\n\t\treturn v.rbAny()\n\tcase rbOpt[Float]:\n\t\treturn v.rbAny()\n") // Integer?/Float? held by value (decision 396)
+	vals := c.valueClassNames()
+	for _, k := range vals { // a value class's C? too (decision 441)
+		c.w("\tcase rbOpt[%s]:\n\t\treturn v.rbAny()\n", k)
+	}
 	c.w("\t}\n\treturn a\n}\n\n")
 	// rbKeyUnbox opens one level of a box used as a Hash key or in uniq/tally, which match by what it holds
 	c.w("func rbKeyUnbox(k any) (any, bool) {\n\tswitch v := k.(type) {\n")
@@ -166,6 +170,9 @@ func (c *Compiler) emitBoxes() {
 		c.w("\tcase %s:\n\t\treturn Opt(v), true\n", b)
 	}
 	c.w("\tcase rbOpt[Integer]:\n\t\treturn v.rbAny(), true\n\tcase rbOpt[Float]:\n\t\treturn v.rbAny(), true\n")
+	for _, k := range vals {
+		c.w("\tcase rbOpt[%s]:\n\t\treturn v.rbAny(), true\n", k)
+	}
 	c.w("\t}\n\treturn nil, false\n}\n\n")
 	c.w("func rbCmpBox(a, b any) Integer {\n\tswitch v := a.(type) {\n")
 	for _, b := range boxes {

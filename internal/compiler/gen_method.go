@@ -146,6 +146,9 @@ func (c *Compiler) newFctx(f *File, owner *Class, m *Method) *fctx {
 	if m != nil && m.SelfType != nil {
 		fc.selfType = m.SelfType
 	}
+	if m != nil && valueInit(m) {
+		fc.selfCode = "(*self)" // its fields are written in place; anything else sees the value
+	}
 	if m != nil {
 		fc.ret = m.Ret
 		fc.iterator = m.Iterator
@@ -196,10 +199,10 @@ func (c *Compiler) emitMethod0(m *Method) {
 		if m.Ret != nil && c.goType(m.Ret) != c.goType(iv.Type) { // a gem reader typed apart from its inherited ivar (`Exception` over @cause's `Exception?`)
 			f := c.newFctx(m.File, cls, m)
 			code := f.coerce(nil, expr{code: ivarPath("self", iv), typ: iv.Type}, m.Ret)
-			c.w("func (self *%s) %s() %s { return %s }\n\n", cls.Name, m.GoName, c.goType(m.Ret), code)
+			c.w("func (self %s) %s() %s { return %s }\n\n", c.recvType(cls), m.GoName, c.goType(m.Ret), code)
 			return
 		}
-		c.w("func (self *%s) %s() %s { return %s }\n\n", cls.Name, m.GoName, c.goType(iv.Type), ivarPath("self", iv)) // a module's ivar too (decision 291)
+		c.w("func (self %s) %s() %s { return %s }\n\n", c.recvType(cls), m.GoName, c.goType(iv.Type), ivarPath("self", iv)) // a module's ivar too (decision 291)
 		return
 	}
 	if m.Kind == kindAttrWriter {
@@ -254,6 +257,8 @@ func (c *Compiler) emitMethod0(m *Method) {
 			self = "self " + c.goType(m.SelfType)
 		case cls.GoType != "":
 			self = "self " + c.recvType(cls)
+		case valueInit(m):
+			self = "self *" + cls.Name // the one method that writes a value's fields (decision 441)
 		case c.plainSelf(m):
 			self = "self " + c.plainSelfType(cls)
 		}
@@ -274,6 +279,11 @@ func (c *Compiler) emitMethod0(m *Method) {
 		c.emitBody(m, namedRet)
 	}
 	c.w("}\n\n")
+}
+
+// valueInit is a value class's initialize: it takes *C and writes the fields NewC returns (decision 441).
+func valueInit(m *Method) bool {
+	return m.Owner != nil && m.Owner.byValue && m.Name == "initialize" && m.Owner.metaOf == nil
 }
 
 func (c *Compiler) emitTopDef(m *Method) {

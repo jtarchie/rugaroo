@@ -113,7 +113,7 @@ func (c *Compiler) recvType(cls *Class) string {
 	if len(cls.TypeParams) > 0 {
 		name += "[" + strings.Join(cls.TypeParams, ", ") + "]"
 	}
-	if cls.isStruct() || cls.mutable() {
+	if cls.isStruct() && !cls.byValue || cls.mutable() {
 		return "*" + name
 	}
 	return name
@@ -354,7 +354,7 @@ func leafOpt(t Type) bool {
 // nilObj reports a class whose Go value can be nil: a leaf's *C or another struct class's interface (decision 378).
 func nilObj(t Type) bool {
 	c, ok := t.(TClass)
-	return ok && (c.C.leaf() || ifaceObj(c.C))
+	return ok && !c.C.byValue && (c.C.leaf() || ifaceObj(c.C))
 }
 
 // ifaceObj is a user or gem struct class whose values are its interface CI: not a leaf, not Object or Kernel (any). The
@@ -390,7 +390,7 @@ func valOpt(t Type) bool {
 
 func valScalar(t Type) bool {
 	c, ok := t.(TClass)
-	return ok && len(c.Args) == 0 && (c.C.Name == "Integer" || c.C.Name == "Float") && c.C.GoType != ""
+	return ok && len(c.Args) == 0 && ((c.C.Name == "Integer" || c.C.Name == "Float") && c.C.GoType != "" || c.C.byValue) // a value class's C? too (decision 441)
 }
 
 // optIsNil is the Go test that T? code is nil.

@@ -119,7 +119,7 @@ func (c *Compiler) emitMarshalClasses(reached func(string) bool) {
 			fmt.Fprintf(&dump, "\tcase *%s:\n\t\tw.record('c', %q)\n", cls.meta.Name, tag)
 			fmt.Fprintf(&load, "\tcase rbKeyed[*%s](%q):\n\t\treturn %s, true\n", cls.meta.Name, "c"+tag, classVar(cls))
 		}
-		if !cls.isStruct() || cls.universal || len(cls.TypeParams) > 0 || cls.lookup("marshal_dump") != nil || !use(cls.Name) {
+		if !cls.isStruct() || cls.universal || cls.byValue || len(cls.TypeParams) > 0 || cls.lookup("marshal_dump") != nil || !use(cls.Name) { // ponytail: a value class does not Marshal; load it by value when one must
 			continue
 		}
 		fmt.Fprintf(&dump, "\tcase *%s:\n\t\trbMDumpObj(w, %q, x)\n", cls.Name, tag)

@@ -56,6 +56,9 @@ func ivarPath(recv string, iv *Ivar) string {
 	if iv.scratch {
 		return scratchIvar(iv.Name)
 	}
+	if iv.Owner.byValue { // the field itself: a value's _C() is a copy, so initialize's writes go through its *C (decision 441)
+		return recv + "." + goFieldName(iv.Name)
+	}
 	return fmt.Sprintf("%s._%s().%s", recv, iv.Owner.Name, goFieldName(iv.Name))
 }
 

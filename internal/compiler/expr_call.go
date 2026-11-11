@@ -315,6 +315,9 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 	if name == "__getobj__" && len(args) == 0 && block == nil {
 		return f.getobjCall(n, recv)
 	}
+	if k := f.valueAnnRecv(recv); k != nil && slices.Contains(valueOps, name) {
+		f.errorf(n, "%s on %s, a # @value class: its copies have no identity and cannot be changed (decision 441)", name, k.RubyName)
+	}
 	if e, ok := f.lenientLookup(n, recv, name, args, block); ok {
 		return e
 	}

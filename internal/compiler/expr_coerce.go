@@ -157,7 +157,7 @@ func (f *fctx) coerceToAny(e expr) string {
 	if _, ok := e.typ.(TTuple); ok {
 		return e.code + "._ToAny()" // untyped code sees an Array (decision 22)
 	}
-	if leafRecv(e.typ) && e.code != "self" { // self is never nil
+	if leafRecv(e.typ) && e.code != "self" && !e.typ.(TClass).C.byValue { // self is never nil; a value is never nil (decision 441)
 		return "rbPtrAny[" + e.typ.(TClass).C.Name + "](" + e.code + ")"
 	}
 	return e.code

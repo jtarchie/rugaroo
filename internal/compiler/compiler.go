@@ -649,6 +649,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	}
 	c.refineIvars()
 	c.markIvarBits() // ivars are final; inference below sees defined?(@x)'s String?
+	c.markValueClasses()
 	if opts.skipTests {
 		opts.skipped = c.skipFailingTests()
 	}

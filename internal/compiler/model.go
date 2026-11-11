@@ -72,6 +72,8 @@ type Class struct {
 	tmpl              bool              // a template: markTemplates decided before link
 	bounds            map[string]string // a template's `generic P < Comparable` bounds, by parameter (decision 312)
 	helperOf          *Class            // a helper template: the generic class it is nested in, whose arguments it takes (decision 311)
+	valueAnn          bool              // `# @value`: the program asserts value semantics (decision 441)
+	byValue           bool              // held as a Go value struct C, not *C (markValueClasses, decision 441)
 }
 
 // displayName is the class's name as Ruby shows it.
@@ -654,8 +656,11 @@ func mixesUserModule(c *Class) bool {
 	return false
 }
 
-// objType is the Go type of a value of struct class c: *C for a leaf, else its interface.
+// objType is the Go type of a value of struct class c: C for a value class, *C for a leaf, else its interface.
 func (c *Class) objType() string {
+	if c.byValue {
+		return c.Name
+	}
 	if c.leaf() {
 		return "*" + c.Name
 	}
