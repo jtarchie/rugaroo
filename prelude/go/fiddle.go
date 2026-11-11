@@ -286,7 +286,9 @@ func rbFiddleCallTyped(fn *rbFiddleCFunc, in *[8]uintptr, fl *[8]uint64) (uintpt
 }
 
 // rbFiddleIntArg is rbFiddleWord64's word for an Integer.
-func rbFiddleIntArg(a Integer) uintptr { return uintptr(a) } //nolint:gosec // C's own wraparound for a negative value
+func rbFiddleIntArg(a Integer) uintptr {
+	return uintptr(a) //nolint:gosec // C's own wraparound for a negative value
+}
 
 // rbFiddleFloatArg is rbFiddleWord64's register bits for a Float as C type t.
 func rbFiddleFloatArg(t Integer, a Float) uint64 {
@@ -324,7 +326,9 @@ func rbFiddleFloatValue(t Integer, f float64) Float {
 }
 
 // rbFiddleBoolValue is rbFiddleValue for a bool, unboxed.
-func rbFiddleBoolValue(r uintptr) Boolean { return Boolean(uint8(r) != 0) } //nolint:gosec // C's _Bool is one byte
+func rbFiddleBoolValue(r uintptr) Boolean {
+	return Boolean(uint8(r) != 0) //nolint:gosec // C's _Bool is one byte
+}
 
 // rbFiddleInvokeArgs converts args as Fiddle does, calls fn, and sets Fiddle.last_error.
 func rbFiddleInvokeArgs(fn *rbFiddleCFunc, args []any) any {
