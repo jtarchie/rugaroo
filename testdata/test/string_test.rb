@@ -72,6 +72,17 @@ def string_bin_lm_offsets
   [$~&.begin(0), $~&.end(0)]
 end
 
+# Unannotated: inference types buf, and outer is an out parameter only through inner (#128).
+def string_out_inner(buf, i)
+  buf << i.to_s
+  nil
+end
+
+def string_out_outer(buf, items)
+  items.each { |it| string_out_inner(buf, it) }
+  nil
+end
+
 module StringTests
   # Helpers for the checks that were testdata/run/string_literals.rb.
   class Pt
@@ -2675,6 +2686,37 @@ module StringTests
       io << "partial"
       raise ArgumentError, "stop"
     end
+
+    # Returns its out parameter: the caller's use of the value is a use of its local (#128).
+    #: (String) -> String
+    def self.grow(io) = io << "+"
+
+    #: (String, String, bool) -> String
+    def self.field_into(line, value, first)
+      line << "," unless first
+      return line if value.empty?
+
+      line << value
+    end
+
+    # Only passes io on: an out parameter too (#128).
+    #: (String, Array[String]) -> nil
+    def self.rows_into(io, names)
+      names.each { |n| Page.row_into(io, n) }
+      nil
+    end
+
+    #: (String, Hash[Symbol, String | Integer]) -> nil
+    def self.cell_into(io, h)
+      io << h[:a].to_s << "|"
+      nil
+    end
+
+    #: (String, Array[Hash[Symbol, String | Integer]]) -> nil
+    def self.cells_into(io, rows)
+      rows.each { |h| Page.cell_into(io, h) }
+      nil
+    end
   end
 
   class OutParamTest < Minitest::Test
@@ -2693,6 +2735,37 @@ module StringTests
         nil
       end
       assert_equal "partial", out
+    end
+
+    def test_a_returned_out_parameter
+      s = +"a"
+      Page.grow(s)
+      assert_equal "a+", s.dup
+      assert Page.grow(s) == "a++"
+      t = Page.grow(s)
+      assert_equal "a+++", t
+      assert_equal "a+++", s
+    end
+
+    def test_a_field_builder_returning_its_line
+      line = +""
+      %w[x y z].each_with_index { |v, i| Page.field_into(line, v, i.zero?) }
+      Page.field_into(line, "", false)
+      assert_equal "x,y,z,", line
+    end
+
+    def test_a_pass_through_out_parameter
+      out = +"<"
+      Page.rows_into(out, %w[a b])
+      assert_equal "<<li>a</li><li>b</li>", out.dup
+      string_out_outer(out, [1, 2])
+      assert_equal "<<li>a</li><li>b</li>12", out
+    end
+
+    def test_mixed_value_hash_elements
+      out = +""
+      Page.cells_into(out, [{ a: 1, b: "x" }, { a: "two" }])
+      assert_equal "1|two|", out
     end
   end
 

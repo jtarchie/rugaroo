@@ -20,6 +20,7 @@ require "rexish"
 require "registryish_sub"
 require "registryish_sub2"
 require "arityish"
+require "strapish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -94,3 +95,21 @@ p Rexish.new(":abc (12) word").tokens
 rc = RegistryishSub.new
 p rc.compile([:int, 1]), rc.compile([:str, "x"]), rc.compile([:sym, :y]), RegistryishSub.registry.keys.sort, Registryish.registry, RegistryishSub2.registry.keys, RegistryishSub2.new.compile([:float, 15])
 p [Arityish.new, Arityish::Rest.new, Arityish::Pair.new].map { |n| n.arity_range.minmax }
+st = Strapish.new
+buf = +"s"
+st.into(buf, "x")
+p buf, st.build(%w[a b])
+# an append through an element block reaches the element, as in MRI, or raises: never a silent copy
+rows = [+"a", +"b"]
+p(begin
+  st.newlines(rows) == ["a\n", "b\n"] && rows == ["a\n", "b\n"]
+rescue NotImplementedError
+  true
+end)
+mixed = [["x"], +"b"] #: Array[untyped]
+p(begin
+  st.tails(mixed) == [["x", "!"], "b!"] && mixed[1] == "b!"
+rescue NotImplementedError
+  true
+end)
+p st.tails([["y"]])

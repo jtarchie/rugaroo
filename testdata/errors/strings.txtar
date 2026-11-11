@@ -58,11 +58,38 @@ t = s
 s << "d"
 puts t
 -- shovel_param.rb --
-# error: main.rb:3: undefined method << for String: Strings are immutable in rugaroo, and the value of `s <<` (the String itself) is stored or passed on line 3, while the caller's String it appends to is still in use (decision 405)
+# error: main.rb:5: grow appends to `s`: Strings are immutable in rugaroo, and the value of grow (`s` itself) is stored or passed on line 5 before its last append (decision 405)
 # rbs_inline: enabled
 def grow(s) = s << "xyz"
 s = +"abc"
-grow(s)
+t = grow(s)
+s << "1"
+puts t
+-- out_param_returned_kept.rb --
+# error: main.rb:5: undefined method << for String: Strings are immutable in rugaroo, and the value of grow (`s` itself) is stored or passed on line 6, while the caller's String it appends to is still in use (decision 405)
+# rbs_inline: enabled
+def grow(s) = s << "xyz"
+def keep(s)
+  s << "<"
+  $kept = grow(s) #: String
+  nil
+end
+s = +"abc"
+keep(s)
+-- out_param_untyped_callee.rb --
+# error: `buf` is passed to inner (whose `buf` parameter it appends to is untyped, not String: annotate it `# @rbs buf: String`) on line 9
+def inner(buf, h)
+  buf << h[:a].to_s
+  nil
+end
+
+def outer(buf, items)
+  buf << "["
+  items.each { |h| inner(buf, h) }
+  nil
+end
+s = +""
+outer(s, [{ a: 1, b: "x" }])
 puts s
 -- shovel_passed.rb --
 # error: `s` is passed to keep on line 8 before its last append
@@ -133,6 +160,12 @@ s = +"a"
 t = (s << "b")
 s << "c"
 puts t
+-- shovel_element.rb --
+# error: main.rb:4: undefined method << for String: Strings are immutable in rugaroo, and `r` is a block parameter, so the String it was given (an Array element, say) would not see the append
+# rbs_inline: enabled
+rows = [+"a", +"b"]
+rows.each { |r| r << "\n" }
+print rows.join
 -- setbyte_shared.rb --
 # error: main.rb:5: undefined method setbyte for String: Strings are immutable in rugaroo, and `s.[]` may share the String's bytes on line 4 before its last change (decision 395)
 # rbs_inline: enabled

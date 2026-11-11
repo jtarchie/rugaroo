@@ -81,7 +81,54 @@ func (f *fctx) genStringBang(n *parser.CallNode) (expr, bool) {
 		}
 		return expr{}, false
 	}
+	if it := f.heldBlockParam(lv); it != "" && strAppendNames[n.Name] && !f.noStrIndexSet { // noStrIndexSet: the non-String arm's own `<<`
+		return f.heldParamAppend(n, lv, it, write)
+	}
 	return f.stringBangOn(n, lv, write)
+}
+
+// freshPieceIters yield Strings (or numbers) nothing else holds: a rebinding append on their block parameter loses nothing.
+var freshPieceIters = setOf("each_char", "each_line", "each_byte", "each_grapheme_cluster", "each_codepoint", "times",
+	"upto", "downto", "step", "loop")
+
+// heldBlockParam is the iterator lv is a block parameter of, when the receiver still holds what it binds (an element, a memo).
+func (f *fctx) heldBlockParam(lv parser.Node) string {
+	r, ok := lv.(*parser.LocalVariableReadNode)
+	if !ok || f.scopeRoot == nil {
+		return ""
+	}
+	key := f.localKey(r.Name)
+	if li := f.locals[key]; key.scope == methodScope || li == nil || !li.noHoist || li.param {
+		return ""
+	}
+	var it string
+	walkNode(f.scopeRoot, func(n parser.Node) (bool, bool) {
+		if c, ok := n.(*parser.CallNode); ok && c.Block != nil && c.Block.GetLocation().StartOffset == key.scope {
+			it = c.Name
+			return true, false
+		}
+		return false, !opensScope(n)
+	})
+	if !discardBlocks[it] || freshPieceIters[it] {
+		return ""
+	}
+	return it
+}
+
+// heldParamAppend raises NotImplementedError where a rebinding would silently leave the element unchanged (decision 405).
+func (f *fctx) heldParamAppend(n *parser.CallNode, lv parser.Node, it string, write func(expr)) (expr, bool) {
+	msg := fmt.Sprintf("rugaroo: %s:%d appends to a block parameter of %s, whose String the receiver still holds (an Array element, say), and Strings are values in rugaroo (decision 405)",
+		f.f.Name, f.f.line(n.Location.StartOffset), it)
+	t := stripOpt(f.probeType(lv, nil))
+	if u, ok := t.(TUnion); !isAny(t) && !mayHoldStr(t) || ok && !slices.ContainsFunc(u.Members, func(m Type) bool { return isClass(m, "String") }) {
+		return f.stringBangOn(n, lv, write) // `v << nil` on a v narrowed to an Array: no String edit
+	}
+	if !isAny(t) {
+		f.errorf(n, "undefined method %s for String: `%s` is a block parameter of %s, whose String the receiver still holds, and Strings are values in rugaroo (decision 405)", n.Name, lv.(*parser.LocalVariableReadNode).Name, it)
+	}
+	return f.untypedStringEdit(n, lv, func(string) (expr, bool) {
+		return expr{code: fmt.Sprintf("panic(NewNotImplementedError(Ref(String(%q))))", msg), typ: TVoid{}, stmt: true, noreturn: true}, true
+	}), true
 }
 
 // ternaryAppend is a gem's `(c ? a : b) << x` as `c ? a << x : b << x`, so each branch's receiver gets its own rule:
@@ -254,9 +301,12 @@ func (f *fctx) untypedStringEdit(n *parser.CallNode, lv parser.Node, onString fu
 	if err != nil { // `@tree.children << el`: no String takes an Element
 		ok = false
 	}
-	if ok {
+	switch {
+	case ok && r.noreturn:
+		f.emit("%s", r.code)
+	case ok:
 		f.emit("%s = %s", res, f.coerce(n, r, TAny{}))
-	} else {
+	default:
 		f.emit("panic(rbNoMethod(%q, %s, false))", n.Name, sv)
 	}
 	f.leaveBlock(saved)

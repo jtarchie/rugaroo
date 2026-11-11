@@ -129,6 +129,9 @@ func (f *fctx) cachedAppendWhy(key localKey, plus bool) string {
 func (f *fctx) proveAppend(key localKey, plus bool) string {
 	out := key.scope == methodScope && f.m != nil && slices.ContainsFunc(f.m.Params, func(p Param) bool { return p.Out && p.Name == key.name })
 	if li := f.locals[key]; li != nil && (li.param || li.noHoist) && !out {
+		if key.scope != methodScope && !li.param { // option B of #128, a design limit (decision 58)
+			return fmt.Sprintf("`%s` is a block parameter, so the String it was given (an Array element, say) would not see the append; build new Strings instead (`map! { |%s| %s + x }`) or write into a StringIO", key.name, key.name, key.name)
+		}
 		return fmt.Sprintf("`%s` is a parameter, so the caller's String would see the append", key.name)
 	}
 	if out && plus { // `s += x` rebinds the callee's local in MRI; the caller's String must not grow
@@ -600,7 +603,7 @@ func (p *appendProof) useAsArgument(n parser.Node, up []parser.Node, held string
 	}
 	switch g := up[len(up)-1].(type) {
 	case *parser.ReturnNode:
-		if p.depth == 0 && !p.out {
+		if p.depth == 0 { // an out parameter's caller counts the call's value as a use of its local (#128)
 			return ""
 		}
 	case *parser.NextNode:
@@ -613,14 +616,25 @@ func (p *appendProof) useAsArgument(n parser.Node, up []parser.Node, held string
 		if p.argSafe(g) {
 			return ""
 		}
-		if p.f.outCallArg(g, n) { // the callee appends through it: an append here (decision 405)
+		if out, ret := p.f.outCallArg(g, n); out { // the callee appends through it: an append here (decision 405)
 			if p.later > 0 {
 				return fmt.Sprintf("`%s` is passed to %s inside a block that may run after its call returns", p.name, g.Name)
 			}
 			p.sealAt(g)
+			if !ret {
+				return ""
+			}
+			if len(up) > 1 { // `grow(s).size`, `grow(s) == x`: a read-only method on the value
+				if r, ok := up[len(up)-2].(*parser.CallNode); ok && r.Receiver == g && r.Block == nil && readOnlyStrMethods[r.Name] {
+					return ""
+				}
+			}
+			if why := p.use(g, up[:len(up)-1]); why != "" { // it may return the String: its value is a read, after the call's append
+				p.leaks = append(p.leaks, appendLeak{off: endOf(g), why: fmt.Sprintf("the value of %s (`%s` itself)%s on line %d", g.Name, p.name, why[len("`"+p.name+"`"):], p.line(g))})
+			}
 			return ""
 		}
-		return fmt.Sprintf("`%s` is passed to %s", p.name, g.Name)
+		return fmt.Sprintf("`%s` is passed to %s", p.name, g.Name) + p.f.untypedOutParam(g, n)
 	}
 	return held
 }
@@ -628,8 +642,8 @@ func (p *appendProof) useAsArgument(n parser.Node, up []parser.Node, held string
 // use is why n's value (the local's String) may end up held elsewhere, or "" (stack ends at n's parent).
 func (p *appendProof) use(n parser.Node, stack []parser.Node) string {
 	held := "`" + p.name + "` is stored or passed"
-	if n == p.root && !p.out {
-		return "" // the method's value: returned when nothing can append any more
+	if n == p.root {
+		return "" // the method's value: returned when nothing here appends any more (an out parameter's caller checks its own use)
 	}
 	if len(stack) == 0 {
 		return held
@@ -711,7 +725,7 @@ func (f *fctx) userAppend(n *parser.CallNode) (expr, bool) {
 		return expr{code: v.code, typ: v.typ}, true
 	}
 	if why := f.appendWhy(lv.Name); why != "" {
-		f.errorf(n, "undefined method %s for String: Strings are immutable in rugaroo, and %s (decision 382)", n.Name, why)
+		f.proofErrorf(n, "undefined method %s for String: Strings are immutable in rugaroo, and %s (decision 382)", n.Name, why)
 	}
 	_, write, _ := f.stringBangTarget(n, lv)
 	if li := f.localInfo(lv.Name); li != nil {
@@ -785,7 +799,7 @@ func (f *fctx) userSetbyte(n *parser.CallNode) (expr, bool) {
 		return expr{}, false
 	}
 	if why != "" {
-		f.errorf(n, "undefined method setbyte for String: Strings are immutable in rugaroo, and %s (decision 395)", why)
+		f.proofErrorf(n, "undefined method setbyte for String: Strings are immutable in rugaroo, and %s (decision 395)", why)
 	}
 	args := callArgs(n)
 	if len(args) != 2 || isSplat(args[0]) || isSplat(args[1]) {
@@ -818,6 +832,14 @@ func (f *fctx) appendBufRef(name string) string {
 		}
 	}
 	return "&" + appendBuf(name)
+}
+
+// proofErrorf is errorf for an edit the alias proof refused: marked, so a retry that leaves the receiver untyped, whose
+// dynamic `<<` raises NoMethodError on a String at run time, does not turn it into a compile with a warning.
+func (f *fctx) proofErrorf(n parser.Node, format string, args ...any) {
+	ce := catchCompileError(func() { f.errorf(n, format, args...) })
+	ce.proof = true
+	panic(*ce)
 }
 
 func endOf(n parser.Node) int { l := n.GetLocation(); return l.StartOffset + l.Length }

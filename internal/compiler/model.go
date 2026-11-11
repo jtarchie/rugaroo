@@ -244,6 +244,8 @@ type Param struct {
 	Pending pendingKey
 	// Out: a String parameter the method appends to, passed as *String: copied in, and back out on return (decision 405).
 	Out bool
+	// OutRet: an Out parameter the method may return, so a caller's use of the call's value is a use of its local (#128).
+	OutRet bool
 }
 
 // BlockSig is the block a method takes.

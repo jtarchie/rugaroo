@@ -151,22 +151,36 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 		fresh()
 		_ = catchCompileError(func() { run(1) }) // discovery only: try() decides
 	}
+	var proofErr *compileError // a typing the String alias proof refused: leaving it untyped only moves the error to run time
 	try := func(set map[localKey]Type) bool {
 		f.c.dropWarnings(nw) // the untyped run's, e.g. dynamic calls on elements
 		restore()
 		f.refined, f.convs = set, map[int]bool{}
 		fresh()
-		return catchCompileError(func() { run(1) }) == nil && !f.newConv(before) &&
-			catchCompileError(func() { run(2) }) == nil
+		err := catchCompileError(func() { run(1) })
+		if err == nil && !f.newConv(before) {
+			err = catchCompileError(func() { run(2) })
+			if err == nil {
+				return true
+			}
+		}
+		if err != nil && err.proof && proofErr == nil {
+			proofErr = err
+		}
+		return false
 	}
 	if len(order) > 0 {
-		if salvage(order, func(set map[localKey]bool) bool {
+		ok := salvage(order, func(set map[localKey]bool) bool {
 			sub := map[localKey]Type{}
 			for k := range set {
 				sub[k] = refined[k]
 			}
 			return len(sub) > 0 && try(sub)
-		}) {
+		})
+		if proofErr != nil { // `rows = ["a"]; rows.each { |r| r << "x" }`: Array[untyped] compiled a `<<` that raised NoMethodError
+			panic(*proofErr)
+		}
+		if ok {
 			return
 		}
 		f.c.dropWarnings(nw)

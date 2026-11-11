@@ -288,6 +288,7 @@ type compileError struct {
 	pos     srcPos // where; zero for an error with no location, or one whose text names it
 	msg     string // without the location
 	untyped bool   // a parameter inference left untyped (decision 146): a failed round's own error explains it better
+	proof   bool   // an in-place String edit the alias proof refused (decisions 382, 395, 405): no untyped retry may hide it
 }
 
 // Error is `file:line: msg`, or msg alone when there is no position.
