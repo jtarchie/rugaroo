@@ -145,6 +145,7 @@ type Ivar struct {
 	open    bool      // first assigned an unannotated `[]`/`{}` (refineIvars)
 	elems   [2][]Type // what the class's methods put in it
 	scratch bool      // a value-included gem module's: a local of each method (declareGemModuleIvars)
+	joins   bool      // a user ivar declared by its first write, unannotated: later writes join in (joinIvar)
 }
 
 type methodKind int

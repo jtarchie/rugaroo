@@ -65,8 +65,11 @@ func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
 	if !fitsValue(val, iv.Type) && f.lenient() && sameButUntyped(val.typ, stripOpt(iv.Type)) { // so does a gem's Array[untyped] (Homebrew's `@deps = graph.tsort_with_cycles { ... } - [@cask]`, decision 374)
 		val = expr{code: f.coerce(n, val, stripOpt(iv.Type)), typ: stripOpt(iv.Type)}
 	}
+	if ann == nil {
+		f.joinIvar(iv, val)
+	}
 	if !fitsValue(val, iv.Type) && (!f.lenient() || !isAny(val.typ)) { // a gem's `@v = T.let(v, T.untyped)` converts where it lands (decision 225)
-		f.errorf(n, "cannot assign %s to %s, which is %s", val.typ, n.Name, iv.Type)
+		f.errorf(n, "cannot assign %s to %s, which is %s%s", val.typ, n.Name, iv.Type, noJoinReason(iv, val.typ))
 	}
 	code := f.ivarCode(iv)
 	f.storing++
@@ -74,6 +77,30 @@ func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
 	f.storing--
 	f.markIvar(iv)
 	return f.ivarWritten(n, iv, val, code)
+}
+
+// joinIvar widens a user ivar its first write declared to the join of its writes, as a local is (decisions 15, 150);
+// an open `[]`/`{}` one is typed by refineIvars instead.
+func (f *fctx) joinIvar(iv *Ivar, val expr) {
+	if !f.discover || f.lenient() || !iv.joins || iv.open || val.provisional || isAny(val.typ) || isVoid(val.typ) || fitsValue(val, iv.Type) {
+		return
+	}
+	if j, ok := join(iv.Type, val.typ); ok && !isAny(j) { // else the write's own error says why (noJoinReason)
+		iv.Type = j
+	}
+}
+
+// noJoinReason is why a user ivar cannot be the union of two of its writes (decision 150).
+func noJoinReason(iv *Ivar, t Type) string {
+	switch {
+	case !iv.joins:
+		return ""
+	case isModuleType(stripOpt(t)) || isModuleType(stripOpt(iv.Type)):
+		return ": a module is no union member (decision 385)"
+	case classOf(stripOpt(t)) != nil && classOf(stripOpt(t)) == classOf(stripOpt(iv.Type)):
+		return ": two instantiations of one generic class are one Go type, so no union holds both (decision 150)"
+	}
+	return ""
 }
 
 // isClassObj is an instance of a class (not a value class, module or container): an object an ivar may be replaced by.
@@ -197,6 +224,7 @@ func (f *fctx) genIvarExpr(n parser.Node) expr {
 		}
 		val := f.genOp(n, cur, n.BinaryOperator, n.Value)
 		f.unnarrow(ivarNarrowKey(n.Name))
+		f.joinIvar(iv, val)
 		f.emit("%s = %s", code, f.coerce(n, val, iv.Type))
 		f.markIvar(iv)
 		if isOpt(iv.Type) && !isAny(stripOpt(iv.Type)) && !isOpt(val.typ) && !isNil(val.typ) && !isAny(val.typ) {
@@ -349,7 +377,9 @@ func (f *fctx) ivar(n parser.Node, name string, assigned Type) *Ivar {
 			if f.c.ivarReadFirst[ivarKey{f.owner, name}] {
 				assigned = optOf(assigned)
 			}
-			return f.c.declareIvar(f.owner, name, assigned, f.f, f.f.line(n.GetLocation().StartOffset))
+			iv := f.c.declareIvar(f.owner, name, assigned, f.f, f.f.line(n.GetLocation().StartOffset))
+			iv.joins = !f.lenient()
+			return iv
 		}
 		f.errorf(n, "instance variable %s has no known type; assign it in initialize or add `# @rbs %s: T`", name, name)
 	}

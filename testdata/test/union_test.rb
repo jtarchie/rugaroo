@@ -643,6 +643,14 @@ def union_choose(v, c)
   v
 end
 
+def union_cell_text(v)
+  return v if v.is_a?(String)
+  return v.to_s if v.is_a?(Integer)
+  return "[#{v.length} items]" if v.is_a?(Array)
+
+  "?"
+end
+
 module UnionTests
   class UnionWriterBox
     # @rbs @v: Integer | String
@@ -650,6 +658,76 @@ module UnionTests
 
     def initialize = @v = 1
     def show = @v.to_s
+  end
+
+  # an unannotated ivar is the join of its writes (decision 15): spinel's bm_poly_cells
+  class UnionCell
+    def initialize = @value = ""
+    def set(v) = @value = v
+    def get = @value
+  end
+
+  class UnionNilCell
+    def initialize = @value = nil
+    def set(v) = @value = v
+    def get = @value
+  end
+
+  class UnionLeaf
+    attr_reader :n
+
+    def initialize(n) = @n = n
+  end
+
+  class UnionBase
+    def name = "base"
+  end
+
+  class UnionDerived < UnionBase
+    def name = "derived"
+  end
+
+  class UnionHolder
+    def initialize
+      @leaf = UnionLeaf.new(1)
+      @obj = UnionBase.new
+      @flag = false
+      @total = 0
+    end
+
+    def leaf=(x)
+      @leaf = x
+    end
+
+    def obj=(x)
+      @obj = x
+    end
+
+    def bump
+      @flag = 1
+      @total += 1.5
+    end
+
+    def leaf
+      v = @leaf
+      if v.is_a?(UnionLeaf)
+        "leaf #{v.n}"
+      elsif v.is_a?(String)
+        "str #{v}"
+      else
+        "nil"
+      end
+    end
+
+    def obj
+      case @obj
+      when UnionBase then @obj.name
+      else @obj.to_s
+      end
+    end
+
+    def flag = @flag ? "truthy #{@flag}" : "falsy"
+    def total = @total
   end
 
   class UnionIvarTest < Minitest::Test
@@ -665,6 +743,40 @@ module UnionTests
     def test_union_argument_types_an_inferred_param
       assert_equal "42", union_render(union_choose(42, false))
       assert_equal "s", union_render(union_choose(7, true))
+    end
+
+    def test_ivar_joins_its_writes
+      a = UnionCell.new
+      a.set("hello")
+      b = UnionCell.new
+      b.set(42)
+      c = UnionCell.new
+      c.set([1, 2, 3])
+      assert_equal ["hello", "42", "[3 items]"], [a, b, c].map { |x| union_cell_text(x.get) }
+      assert_equal "", UnionCell.new.get
+      n = UnionNilCell.new
+      assert_nil n.get
+      n.set(7)
+      assert_equal 7, n.get
+      n.set("s")
+      assert_equal "s", n.get
+    end
+
+    #: (Integer) -> UnionLeaf?
+    def leaf_or_nil(i) = i > 1 ? UnionLeaf.new(i) : nil
+
+    def test_ivar_join_members
+      h = UnionHolder.new
+      assert_equal ["leaf 1", "base", "falsy", 0], [h.leaf, h.obj, h.flag, h.total]
+      h.leaf = "s"
+      h.obj = "o"
+      h.bump
+      assert_equal ["str s", "o", "truthy 1", 1.5], [h.leaf, h.obj, h.flag, h.total]
+      h.leaf = leaf_or_nil(0)
+      h.obj = UnionDerived.new
+      assert_equal ["nil", "derived"], [h.leaf, h.obj]
+      h.leaf = leaf_or_nil(5)
+      assert_equal "leaf 5", h.leaf
     end
   end
 end

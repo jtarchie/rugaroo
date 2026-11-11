@@ -648,20 +648,42 @@ class BasicObject
   #: () -> String
   def self.hi = "hi"
 end
--- ivar_reassigned_other_type.rb --
-# error: main.rb:11:
-# error: @id
+-- ivar_reassigned_other_instantiation.rb --
+# error: main.rb:10: cannot assign Array[String] to @a, which is Array[Integer]: two instantiations of one generic class are one Go type, so no union holds both (decision 150)
+#: () -> Array[String]
+def strs = ["x"]
+
 class Box
   #: () -> void
-  def initialize
-    @id = 1
-  end
+  def initialize = @a = [1]
 
   #: () -> void
-  def reset
-    @id = "x"
-  end
+  def reset = @a = strs
 end
+Box.new.reset
+-- ivar_reassigned_other_literal.rb --
+# error: main.rb:7: String where Integer is expected
+class Box
+  #: () -> void
+  def initialize = @a = [1]
+
+  #: () -> void
+  def reset = @a = ["x"]
+end
+Box.new.reset
+-- ivar_reassigned_module.rb --
+# error: main.rb:10: cannot assign Comparable to @v, which is Integer | String: a module is no union member (decision 385)
+#: () -> Comparable
+def cmp = 3
+
+class Box
+  #: () -> void
+  def initialize = @v = 1
+  def str = @v = "s"
+  #: () -> void
+  def set = @v = cmp
+end
+Box.new.set
 -- const_via_class_object.rb --
 # warning: main.rb:6: uninitialized constant self.class::SCALE: raises NameError if this line runs
 class Base
