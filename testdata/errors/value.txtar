@@ -154,3 +154,24 @@ p P.new(1)
 # @value
 P = Struct.new(:x) #: [Integer]
 p P.new(1)
+-- data_annotated_equal.rb --
+# error: main.rb:5: equal? on P, a # @value class
+# @value
+P = Data.define(:x) #: [Integer]
+a = P.new(1)
+p a.equal?(a)
+-- initialize_copy.rb --
+# error: main.rb:3: P is marked # @value but it defines initialize_copy
+# @value
+class P
+  #: (Integer x) -> void
+  def initialize(x)
+    @x = x
+  end
+
+  #: (P other) -> void
+  def initialize_copy(other)
+    puts "copied"
+  end
+end
+p P.new(1).dup

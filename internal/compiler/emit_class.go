@@ -386,21 +386,10 @@ func (c *Compiler) emitStructClass(cls *Class) {
 	} else {
 		c.w("type %s struct {\n", cls.Name)
 	}
-	switch {
-	case cls.byValue: // its fields only: an embedded Data's byte or a frozen flag is a fifth field Go would not keep in registers (decision 441)
-	case cls.Super != nil && !cls.Super.universal:
-		c.w("\t%s\n", superField(cls.Super))
-	case c.objFreeze() && len(cls.TypeParams) == 0:
-		c.w("\t%s bool\n", frozenField) // Kernel#freeze's flag, on the root: every subclass embeds it (decision 221)
-	case len(cls.IvarList) == 0:
-		// zero-size allocations may share an address, merging distinct instances' identity
-		c.w("\t_ byte\n")
-	}
-	for _, iv := range cls.IvarList {
-		c.w("\t%s %s\n", goFieldName(iv.Name), c.goType(iv.Type))
-	}
-	if (cls.Super == nil || cls.Super.universal) && c.weakRefs() && !cls.byValue {
-		c.w("\t_ *byte\n") // a WeakRef's referent must not be tiny-allocated (weakRefs); subclasses embed this root
+	if cls.byValue { // its fields only: an embedded Data's byte, a frozen flag or a WeakRef pointer is a fifth field Go would not keep in registers (decision 441)
+		c.emitIvarFields(cls)
+	} else {
+		c.emitRootFields(cls)
 	}
 	if cls.isPerRun {
 		c.w("\trbCls_ *%s\n", cls.meta.Name) // the class object whose new made it (decision 259)
@@ -436,14 +425,7 @@ func (c *Compiler) emitStructClass(cls *Class) {
 		c.w("\t_Kind() string\n")
 	}
 	c.w("}\n\n")
-	if cls.byValue { // a copy's address: reads only, initialize writes the fields themselves (ivarPath)
-		c.w("func (self %s) _%s() *%s { return &self }\n\n", cls.Name, cls.Name, cls.Name)
-		for _, k := range cls.structChain()[1:] { // Data's marker, which the dropped embed carried
-			c.w("func (%s) _%s() *%s { return new(%s) }\n\n", cls.Name, k.Name, k.Name, k.Name)
-		}
-	} else {
-		c.w("func (self *%s) _%s() *%s { return self }\n\n", cls.Name, cls.Name, cls.Name)
-	}
+	c.emitSelfAccessor(cls)
 	if t := cls.template; t != nil { // the family marker an untyped is_a?/case/rescue asserts (decision 308)
 		c.w("func (*%s) _%s() {}\n\n", cls.Name, t.anyName())
 	}
@@ -471,6 +453,41 @@ func (c *Compiler) emitStructClass(cls *Class) {
 	c.emitCopy(cls)
 	c.emitDup(cls)
 	c.emitCtor(cls)
+}
+
+// emitRootFields writes a pointer class's own ivars and what its root carries for the whole program.
+func (c *Compiler) emitRootFields(cls *Class) {
+	switch {
+	case cls.Super != nil && !cls.Super.universal:
+		c.w("\t%s\n", superField(cls.Super))
+	case c.objFreeze() && len(cls.TypeParams) == 0:
+		c.w("\t%s bool\n", frozenField) // Kernel#freeze's flag, on the root: every subclass embeds it (decision 221)
+	case len(cls.IvarList) == 0:
+		// zero-size allocations may share an address, merging distinct instances' identity
+		c.w("\t_ byte\n")
+	}
+	c.emitIvarFields(cls)
+	if (cls.Super == nil || cls.Super.universal) && c.weakRefs() {
+		c.w("\t_ *byte\n") // a WeakRef's referent must not be tiny-allocated (weakRefs); subclasses embed this root
+	}
+}
+
+func (c *Compiler) emitIvarFields(cls *Class) {
+	for _, iv := range cls.IvarList {
+		c.w("\t%s %s\n", goFieldName(iv.Name), c.goType(iv.Type))
+	}
+}
+
+// emitSelfAccessor writes _C(), which every struct constraint has.
+func (c *Compiler) emitSelfAccessor(cls *Class) {
+	if !cls.byValue {
+		c.w("func (self *%s) _%s() *%s { return self }\n\n", cls.Name, cls.Name, cls.Name)
+		return
+	}
+	c.w("func (self %s) _%s() *%s { return &self }\n\n", cls.Name, cls.Name, cls.Name) // a copy's address: reads only, initialize writes the fields themselves (ivarPath)
+	for _, k := range cls.structChain()[1:] {                                          // Data's marker, which the dropped embed carried
+		c.w("func (%s) _%s() *%s { return new(%s) }\n\n", cls.Name, k.Name, k.Name, k.Name)
+	}
 }
 
 // emitCtor writes cls's NewX, and NewXIn for a per-run Class.new class (decision 259).

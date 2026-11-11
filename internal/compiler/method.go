@@ -292,7 +292,7 @@ func (c *Compiler) emitAliasKeys() {
 		for _, cls := range c.aliasKeyClasses(name) {
 			m := cls.lookup(name).M
 			owner := m.Owner.RubyName
-			c.w("\tcase *%s:\n\t\treturn %q\n", cls.Name, owner+"#@"+m.File.Name+":"+strconv.Itoa(m.Node.Location.StartOffset))
+			c.w("\tcase %s:\n\t\treturn %q\n", cls.concreteType(), owner+"#@"+m.File.Name+":"+strconv.Itoa(m.Node.Location.StartOffset))
 		}
 		c.w("\tdefault: // gocritic rejects the one-case switch pruning can leave\n\t}\n\treturn %q\n}\n\n", "?#"+name)
 	}
@@ -361,7 +361,7 @@ func (f *fctx) genUnboundMethod(n parser.Node, recv expr, name string, public bo
 			if sub.meta == nil {
 				return ""
 			}
-			return sub.meta.Name
+			return "*" + sub.meta.Name
 		})
 	}
 	code := fmt.Sprintf("&%s{fn: Ref(%s), dyn: %s, info: %s}", strings.TrimPrefix(f.c.goType(t), "*"), fn, dyn, info)
@@ -380,7 +380,7 @@ func (f *fctx) boundInfo(n parser.Node, e *entry, r expr, name string) string {
 		}
 	case TAny, TFunc, TNil, TOpt, TTuple, TUnion, TVoid: // no subclasses to switch over
 	}
-	return f.switchInfo(n, e, r.code, cls, name, func(sub *Class) string { return sub.Name })
+	return f.switchInfo(n, e, r.code, cls, name, func(sub *Class) string { return sub.concreteType() })
 }
 
 // switchInfo is methodInfo for the definition the run-time class answers: a type switch on code over cls's
@@ -399,7 +399,7 @@ func (f *fctx) switchInfo(n parser.Node, e *entry, code string, cls *Class, name
 			}
 			if se := sub.lookup(name); se != nil && se.M != e.M && goName(sub) != "" {
 				info := f.methodInfo(n, se)
-				cases = append(cases, fmt.Sprintf("\tcase *%s:\n\t\treturn %s\n", goName(sub), info))
+				cases = append(cases, fmt.Sprintf("\tcase %s:\n\t\treturn %s\n", goName(sub), info))
 				if first == nil {
 					first = []string{goName(sub), info}
 				}
@@ -412,7 +412,7 @@ func (f *fctx) switchInfo(n parser.Node, e *entry, code string, cls *Class, name
 	case 0:
 		return base
 	case 1: // a one-case type switch fails gocritic's singleCaseSwitch
-		return "func() *rbMethodInfo {\n\tif _, ok := any(" + code + ").(*" + first[0] + "); ok {\n\t\treturn " + first[1] + "\n\t}\n\treturn " + base + "\n}()"
+		return "func() *rbMethodInfo {\n\tif _, ok := any(" + code + ").(" + first[0] + "); ok {\n\t\treturn " + first[1] + "\n\t}\n\treturn " + base + "\n}()"
 	}
 	return "func() *rbMethodInfo {\n\tswitch any(" + code + ").(type) {\n" + strings.Join(cases, "") + "\t}\n\treturn " + base + "\n}()"
 }

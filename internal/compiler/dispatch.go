@@ -381,7 +381,7 @@ func (c *Compiler) sendArmType(owner *Class) func(k *Class) string {
 	}
 	return func(k *Class) string {
 		if k.isStruct() {
-			return c.recvType(k)
+			return k.concreteType()
 		}
 		return c.goType(TClass{C: k})
 	}

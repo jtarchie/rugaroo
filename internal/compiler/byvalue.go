@@ -24,6 +24,7 @@ func (f *fctx) valueAnnRecv(recv expr) *Class {
 		if t.Name == "Self" {
 			k = f.owner
 		}
+	case TAny, TFunc, TNil, TOpt, TTuple, TUnion, TVoid:
 	}
 	if k == nil || !k.valueAnn || !k.byValue {
 		return nil
@@ -125,6 +126,8 @@ func (c *Compiler) valueBlocker(cls *Class) string {
 		case m.Kind == kindAttrWriter:
 			return "it has a writer, " + m.Name
 		case m.Node == nil || m.valueGen:
+		case m.Name == "initialize_copy" || m.Name == "initialize_dup" || m.Name == "initialize_clone":
+			return "it defines " + m.Name + " (a value's dup is the value itself)"
 		case m.Name == "initialize" && data:
 			return "its Data block defines initialize"
 		case m.Name == "initialize":

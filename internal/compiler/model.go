@@ -656,6 +656,14 @@ func mixesUserModule(c *Class) bool {
 	return false
 }
 
+// concreteType is the Go type a type switch matches cls's own objects by: *C, or C for a value class (decision 441).
+func (c *Class) concreteType() string {
+	if c.byValue {
+		return c.Name
+	}
+	return "*" + c.Name
+}
+
 // objType is the Go type of a value of struct class c: C for a value class, *C for a leaf, else its interface.
 func (c *Class) objType() string {
 	if c.byValue {
