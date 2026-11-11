@@ -25,6 +25,11 @@ module FiddleTests
     extern "bool isatty(int)"
     extern "long time(void *)"
     bind("int add3(int, int, int)") { |a, b, c| a + b + c }
+    bind("long mix9(int, int, int, int, int, int, double, double, double)") { |a, b, c, d, e, f, x, y, z| (a + b + c + d + e + f + x * y * z).to_i }
+    extern "int getpid(void)"
+    extern "int open(const char *, int)"
+    extern "long pread(int, void *, size_t, long)"
+    extern "int close(int)"
 
     Pair = struct ["short a", "long b", "unsigned char c[3]", "float f"]
     Bits = union ["unsigned int u", "unsigned char b[4]"]
@@ -65,6 +70,11 @@ module FiddleTests
         e.class
       end
       assert_equal TypeError, bad
+      fd = Lib.open("/dev/zero", 0)
+      zeros = Fiddle::Pointer.malloc(4, Fiddle::RUBY_FREE)
+      zeros[0, 4] = "abcd"
+      assert_equal [true, 4, [0, 0, 0, 0], 0], [Lib.getpid == Process.pid, Lib.pread(fd, zeros.to_i, 4, 0), zeros[0, 4].bytes, Lib.close(fd)]
+      assert_equal 27, Lib.mix9(1, 2, 3, 4, 5, 6, 1.5, 2.0, 2.0)
     end
 
     def test_function_by_address

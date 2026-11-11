@@ -223,8 +223,8 @@ func (c *Compiler) addFiddleTwin(ctx context.Context, f *File, cls *Class, n *pa
 		params = append(params, p)
 		codes = append(codes, strconv.Itoa(t))
 	}
-	if ni > 8 || nf > 8 {
-		return // stack arguments: the spread call (decision 426)
+	if ni > 8 || nf > 8 || len(args) > 8 {
+		return // stack arguments (the spread call, decision 426), or past Fiddle.__call's 8 slots: the extern calls Function#call
 	}
 	// The extern's own path in Go, as its synthesized body calls it.
 	slow := fmt.Sprintf("Fiddle_Meta___Call(Fiddle_class, f, %d, %s)", len(args), strings.Join(append(slices.Clone(params), slices.Repeat([]string{"nil"}, 8-len(args))...), ", "))
