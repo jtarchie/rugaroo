@@ -51,8 +51,6 @@ func (c *Compiler) refineIvars() {
 		snap = c.takeRefineSnap()
 	}
 	base, _ := c.dryRunIvarUsers(cands)
-	var pre map[nilSite]bool // the untyped run's nil sites: not a typing's (decision 440)
-	preDone := false
 	attempt := func(d *nilDeferral) (*compileError, bool) {
 		c.nilDefer = d
 		convs, err := c.dryRunIvarUsers(cands)
@@ -62,44 +60,25 @@ func (c *Compiler) refineIvars() {
 		}
 		return err, ok
 	}
-	try := func(set map[*Ivar]bool) bool {
-		for _, iv := range cands {
-			iv.Type = orig[iv]
-			if set[iv] {
-				iv.Type = typed[iv]
-			}
-		}
+	var retry nilRetry
+	var set map[*Ivar]bool
+	baseline := func(d *nilDeferral) bool { // the candidates untyped
+		setIvarTypes(cands, orig, typed, nil)
+		err, _ := attempt(d)
+		setIvarTypes(cands, orig, typed, set)
+		return err == nil
+	}
+	try := func(s map[*Ivar]bool) bool {
+		set = s
+		setIvarTypes(cands, orig, typed, set)
 		err, ok := attempt(nil)
-		if ok || err == nil || !err.nilVeto || c.noNilDefer {
-			return ok
-		}
-		if !preDone {
-			preDone = true
-			types := map[*Ivar]Type{}
-			for _, iv := range cands {
-				types[iv], iv.Type = iv.Type, orig[iv]
-			}
-			rec := &nilDeferral{rec: map[nilSite]bool{}}
-			if err, _ := attempt(rec); err == nil {
-				pre = rec.rec
-			}
-			for _, iv := range cands {
-				iv.Type = types[iv]
-			}
-		}
-		if pre == nil {
-			c.nilDefer = nil
-			return false
-		}
-		d := &nilDeferral{pre: pre, sites: map[nilSite]bool{}}
-		if _, ok = attempt(d); !ok {
+		ok = c.retryNil(&retry, ok, err, baseline, func(d *nilDeferral) bool { _, ok := attempt(d); return ok })
+		if !ok {
 			c.nilDefer = nil
 		}
-		d.pre = nil // the emission's other sites are not the typing's
 		return ok
 	}
 	salvage(cands, try) // a failed last try leaves the original types
-	c.nilDeferUsed = c.nilDeferUsed || c.nilDefer != nil && len(c.nilDefer.sites) > 0
 	if c.round || c.refineOut == nil {
 		return
 	}
@@ -109,6 +88,16 @@ func (c *Compiler) refineIvars() {
 	}
 	if rec := c.recordRefine(snap, sig, accepted); rec != nil {
 		c.refineOut[kind] = rec
+	}
+}
+
+// setIvarTypes gives each candidate its typed type when set has it, else its original.
+func setIvarTypes(cands []*Ivar, orig, typed map[*Ivar]Type, set map[*Ivar]bool) {
+	for _, iv := range cands {
+		iv.Type = orig[iv]
+		if set[iv] {
+			iv.Type = typed[iv]
+		}
 	}
 }
 

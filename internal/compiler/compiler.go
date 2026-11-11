@@ -257,7 +257,7 @@ type refineState struct {
 	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
 	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
 	noNilDefer          bool                     // options.noNilDefer
-	nilDeferUsed        bool                     // a typing kept by decision 440 (options.nilDeferred)
+	nilDeferUsed        *bool                    // options.nilDeferred: a typing kept by decision 440
 }
 
 type tableState struct {
@@ -534,7 +534,6 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		if c != nil && c.instMissing { // whatever failed may be the template standing in for a missing instance
 			out, err = nil, errNeedInstances
 		}
-		opts.nilDeferred = c != nil && c.nilDeferUsed
 	}()
 	if opts.testHook != nil {
 		opts.testHook()
@@ -559,7 +558,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.methodRequiresRuntime = opts.mainLast
 	c.env = compileEnv(opts)
 	c.genCount, c.genLimit = opts.genCount, opts.genLimit
-	c.noNilDefer = opts.noNilDefer
+	c.noNilDefer, c.nilDeferUsed, opts.nilDeferred = opts.noNilDefer, &opts.nilDeferred, false
 	c.loadPreludeGo()
 	libs, parsed, perr := c.scanRequires(ctx, sources)
 	if perr != nil {

@@ -169,31 +169,16 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 		}
 		return err, false
 	}
-	var pre map[nilSite]bool // the untyped run's nil sites: not a typing's (decision 440)
-	preDone := false
+	var retry nilRetry
+	baseline := func(d *nilDeferral) bool { // the locals untyped
+		restore()
+		f.convs, f.nilDefer = map[int]bool{}, d
+		fresh()
+		return catchCompileError(func() { run(1) }) == nil
+	}
 	try := func(set map[localKey]Type) bool {
 		err, ok := attempt(set, nil)
-		if ok || err == nil || !err.nilVeto || f.c.noNilDefer {
-			return ok
-		}
-		if !preDone {
-			preDone = true
-			rec := &nilDeferral{rec: map[nilSite]bool{}}
-			restore()
-			f.convs, f.nilDefer = map[int]bool{}, rec
-			fresh()
-			if catchCompileError(func() { run(1) }) == nil {
-				pre = rec.rec
-			}
-		}
-		if pre == nil {
-			return false
-		}
-		d := &nilDeferral{pre: pre, sites: map[nilSite]bool{}}
-		_, ok = attempt(set, d)
-		d.pre = nil // later sites are not the typing's
-		f.c.nilDeferUsed = f.c.nilDeferUsed || ok && len(d.sites) > 0
-		return ok
+		return f.c.retryNil(&retry, ok, err, baseline, func(d *nilDeferral) bool { _, ok := attempt(set, d); return ok })
 	}
 	if len(order) > 0 {
 		ok := salvage(order, func(set map[localKey]bool) bool {

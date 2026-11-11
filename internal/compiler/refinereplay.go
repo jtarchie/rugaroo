@@ -168,7 +168,7 @@ func (c *Compiler) replayRefine(r *refineRecord, cands []*Ivar, typed, orig map[
 		}
 	}
 	if r.NilSites != nil {
-		c.nilDeferUsed = true
+		c.noteNilDefer()
 		c.nilDefer = &nilDeferral{sites: map[nilSite]bool{}}
 		for _, file := range c.files {
 			for _, off := range r.NilSites[file.Name] {

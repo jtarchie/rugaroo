@@ -247,7 +247,7 @@ func (c *Compiler) skipFailingTests() []SkippedTest {
 			if err == nil {
 				continue
 			}
-			if err.nilVeto && c.nilDeferUsed {
+			if err.nilVeto && c.nilDeferUsed != nil && *c.nilDeferUsed {
 				panic(*err) // the recompile without decision 440 decides (compileOnce)
 			}
 			reason := err.Error()

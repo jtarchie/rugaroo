@@ -76,6 +76,48 @@ func (f *fctx) nilAt(n parser.Node) bool {
 	return ok
 }
 
+// nilRetry is decision 440's second try of a container typing a nil error alone vetoed.
+type nilRetry struct {
+	pre  map[nilSite]bool // the untyped baseline's nil sites, which stay errors
+	done bool
+}
+
+// try: a failed baseline gives no retry, since the sites it missed could be anyone's.
+func (r *nilRetry) try(baseline, attempt func(*nilDeferral) bool) (ok, used bool) {
+	if !r.done {
+		r.done = true
+		if rec := (&nilDeferral{rec: map[nilSite]bool{}}); baseline(rec) {
+			r.pre = rec.rec
+		}
+	}
+	if r.pre == nil {
+		return false, false
+	}
+	d := &nilDeferral{pre: r.pre, sites: map[nilSite]bool{}}
+	ok = attempt(d)
+	d.pre = nil // later sites are not the typing's
+	return ok, ok && len(d.sites) > 0
+}
+
+// retryNil is ok, else r's retry of a typing err vetoed when err is a nil veto (decision 440).
+func (c *Compiler) retryNil(r *nilRetry, ok bool, err *compileError, baseline, attempt func(*nilDeferral) bool) bool {
+	if ok || err == nil || !err.nilVeto || c.noNilDefer {
+		return ok
+	}
+	retried, used := r.try(baseline, attempt)
+	if used {
+		c.noteNilDefer()
+	}
+	return retried
+}
+
+// noteNilDefer records that this compile kept a decision 440 typing (options.nilDeferred).
+func (c *Compiler) noteNilDefer() {
+	if c.nilDeferUsed != nil {
+		*c.nilDeferUsed = true
+	}
+}
+
 // nilErrorf marks decision 20's error a nil veto: a typing it alone vetoes is retried with the sites deferred (decision 440).
 func (f *fctx) nilErrorf(n parser.Node, format string, args ...any) {
 	err := catchCompileError(func() { f.errorf(n, format, args...) })
