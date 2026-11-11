@@ -88,7 +88,7 @@ ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-10-30 (commit f393057d; 
 | `Fiber` | stable | 25 of 68 (37%) | 121 |  |
 | `Signal`, `Process` | stable | 35 of 81 (43%) | 236 | `trap`, `Process.kill`, `spawn`, `wait`. |
 | `Marshal` | stable | 30 of 255 (12%) | 97 | Round-trips its own bytes, not MRI's, so specs that compare bytes fail; `load` also reads an MRI stream of core values (a gem's data file). |
-| `Encoding` | stable | 73 of 125 (58%) | 13 | 60 encodings ([list](#encodings)), no per-String tag ([decisions 136](decisions/136.md), [442](decisions/442.md)). |
+| `Encoding` | stable | 73 of 125 (58%) | 13 | 60 encodings ([list](#encodings)), no per-String tag ([decisions 136](decisions/136.md), [439](decisions/439.md)). |
 | `Warning`, `GC`, `ObjectSpace` | stable | 15 of 22 (68%) | 93 | The parts a program can observe; no heap walking. |
 | `Encoding::Converter` | not supported | 0 of 142 (0%) | 1 | Use `String#encode`. |
 | `Binding`, `TracePoint`, refinements | not supported | 0 of 58 (0%) | 104 | Need an interpreter at run time. |
@@ -122,7 +122,7 @@ compiler sees it, binary ([decision 352](decisions/352.md)). `force_encoding`
 with any other name (`"ISO-8859-1"`, `"Shift_JIS"`) keeps the bytes and reads
 them as UTF-8 (a compile-time warning when the name is a literal), and US-ASCII reports as UTF-8; convert text in another encoding
 where it enters, with `s.encode("UTF-8", "ISO-8859-1")`
-([decision 442](decisions/442.md)).
+([decision 439](decisions/439.md)).
 
 Not supported, though MRI converts them: naming one in a literal is a compile
 error, and a name built at run time raises `Encoding::ConverterNotFoundError`.

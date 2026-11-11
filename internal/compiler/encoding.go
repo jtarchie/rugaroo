@@ -108,7 +108,7 @@ func (f *fctx) checkEncodingNames(n parser.Node, recv expr, name string, args []
 }
 
 // textTag are the encodings force_encoding can name without a warning, upper-cased without `-`/`_`: UTF-8 and binary,
-// which a String is, and US-ASCII and the default-encoding names, which read as UTF-8 (decision 442).
+// which a String is, and US-ASCII and the default-encoding names, which read as UTF-8 (decision 439).
 var textTag = map[string]bool{
 	"UTF8": true, "CP65001": true, "UTF8MAC": true, "UTF8HFS": true, "ASCII8BIT": true, "BINARY": true, "USASCII": true,
 	"ASCII": true, "ANSIX3.41968": true, "646": true, "LOCALE": true, "EXTERNAL": true, "FILESYSTEM": true, "INTERNAL": true,
@@ -128,7 +128,7 @@ func encodingKey(name string) string {
 }
 
 // warnTextEncoding warns at `s.force_encoding(lit)` whose literal names a text encoding but UTF-8: the String keeps its
-// bytes and reads them as UTF-8, where MRI retags them (decision 442).
+// bytes and reads them as UTF-8, where MRI retags them (decision 439).
 func (f *fctx) warnTextEncoding(a parser.Node) {
 	var enc string
 	switch a := a.(type) {
@@ -148,7 +148,7 @@ func (f *fctx) warnTextEncoding(a parser.Node) {
 	}
 	if k := encodingKey(enc); mriEncodingKeys[k] && !textTag[k] {
 		src := f.f.text(a.GetLocation())
-		f.warn(a, "force_encoding(%s) keeps the bytes and reads them as UTF-8: a String carries no encoding tag (decision 442); convert the text with encode(\"UTF-8\", %s)", src, src)
+		f.warn(a, "force_encoding(%s) keeps the bytes and reads them as UTF-8: a String carries no encoding tag (decision 439); convert the text with encode(\"UTF-8\", %s)", src, src)
 	}
 }
 

@@ -45,7 +45,7 @@ puts s
 # error: main.rb:2: invalid multibyte escape: /a\xff/
 p(/a\xff/ =~ "a")
 -- force_encoding_latin1.rb --
-# warning: main.rb:2: force_encoding("ISO-8859-1") keeps the bytes and reads them as UTF-8: a String carries no encoding tag (decision 442); convert the text with encode("UTF-8", "ISO-8859-1")
+# warning: main.rb:2: force_encoding("ISO-8859-1") keeps the bytes and reads them as UTF-8: a String carries no encoding tag (decision 439); convert the text with encode("UTF-8", "ISO-8859-1")
 puts "caf\xE9".b.force_encoding("ISO-8859-1").bytesize
 -- force_encoding_sjis_const.rb --
 # warning: Shift_JIS) keeps the bytes and reads them as UTF-8: a String carries no encoding tag

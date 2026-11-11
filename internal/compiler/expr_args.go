@@ -793,7 +793,7 @@ func (f *fctx) literalOverload(m *Method, owner *Class, args []parser.Node) *ent
 }
 
 // stringLiteralOverload: String#scan with a pattern that has groups yields each match's groups, and force_encoding of a
-// literal BINARY and unpack1 of a literal a/A/Z/m/u/M first directive make a binary String (decisions 352, 442).
+// literal BINARY and unpack1 of a literal a/A/Z/m/u/M first directive make a binary String (decisions 352, 439).
 func (f *fctx) stringLiteralOverload(m *Method, owner *Class, args []parser.Node) *entry {
 	arg := args[0]
 	if m.Name == "unpack1" {
