@@ -567,7 +567,10 @@ func (c *Compiler) dynArityOverloads(f *fctx, e *entry, recv expr, env map[strin
 		}
 		n, err := strconv.Atoi(k)
 		tw := x.M
-		if err != nil || n >= req && (maxArgs < 0 || n <= maxArgs) || tw.generic() || tw.Block != nil || len(tw.Params) != n || tw.hasKeywords() {
+		// a count the method itself takes is the twin's only when the method needs a block and the call brought none
+		// (`enum.none?` where a dynamic `none? { }` made the block form the wrapper's: Enumerable#__none_q_0; decision 444)
+		blockless := err == nil && m.Block != nil && !m.Block.Optional && n >= req && (maxArgs < 0 || n <= maxArgs)
+		if err != nil || !blockless && n >= req && (maxArgs < 0 || n <= maxArgs) || tw.generic() || tw.Block != nil || len(tw.Params) != n || tw.hasKeywords() {
 			continue
 		}
 		c.resolveMethod(tw)
@@ -583,7 +586,11 @@ func (c *Compiler) dynArityOverloads(f *fctx, e *entry, recv expr, env map[strin
 			t := subst(tw.Params[i].Type, envT)
 			nodes[i] = &exprNode{e: expr{code: c.dynArg(t, i), typ: t}}
 		}
-		f.emit("if len(args) == %d {", n)
+		if blockless {
+			f.emit("if len(args) == %d && blk_ == nil {", n)
+		} else {
+			f.emit("if len(args) == %d {", n)
+		}
 		f.indent++
 		f.emitDynReturn(f.callEntry(&parser.NilNode{}, cls.lookup(tw.Name), recv, nodes, nil))
 		f.indent--

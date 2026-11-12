@@ -220,7 +220,7 @@ func inferCachePath(sources []Source, opts *options) string {
 	}
 	env := opts.env // what changes the output, not the diagnostics
 	env.NoWasmCache, env.InferDebug, env.Timing, env.ErrStack, env.GemWarnings, env.PruneDebug, env.PruneWhy, env.UntypedWhy = false, false, false, false, false, false, false, false
-	env.DispatchDebug, env.GopoisonDump = "", ""
+	env.DispatchDebug, env.GopoisonDump, env.ArmDebug = "", "", false
 	_, _ = fmt.Fprintf(h, "lp %q\ngems %q\n%v %v %v %v %v\n%#v\n", opts.loadPath, opts.gemDirs, opts.mainLast, opts.allLibs, opts.skipTests, opts.noPrune, opts.purego, env)
 	return filepath.Join(base, "rugaroo", "infer", hex.EncodeToString(h.Sum(nil))[:32]+".json")
 }

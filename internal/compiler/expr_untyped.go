@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -300,6 +301,9 @@ func (f *fctx) dynEnumBlock(n parser.Node, recv expr, name string, args []parser
 		var err *compileError
 		f.probe(func() { err = catchCompileError(func() { f.genMethodCall(n, on, name, args, block) }) })
 		f.indent++
+		if err != nil && f.c.env.ArmDebug && !f.probing() { // RUGAROO_ARM_DEBUG: why a receiver class of an untyped call raises NoMethodError
+			fmt.Fprintf(os.Stderr, "rugaroo: arm %s of %s does not compile: %s\n", strings.TrimSuffix(strings.TrimPrefix(head, "case "), ":"), name, err.Error())
+		}
 		if err != nil {
 			f.emit("panic(rbNoMethod(%q, %s, false))", name, r)
 		} else if e := f.genMethodCall(n, on, name, args, block); isVoid(e.typ) || e.stmt {

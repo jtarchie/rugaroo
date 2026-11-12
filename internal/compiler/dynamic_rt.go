@@ -150,9 +150,12 @@ func (c *Compiler) emitDynEach() {
 			c.dynBlockNames = map[string]bool{}
 		}
 		c.dynBlockNames["each"] = true
-		c.w("\tcase interface{ DynEach(...any) any }:\n\t\tr.DynEach(rbBlockArg{fn: func(xs ...any) any { yield(xs...); return nil }})\n")
+		// through the dispatcher, not a DynEach method: classes whose wrappers are one shared arm have none (rubocop-ast's
+		// collection nodes, all CollectionNode's each); it raises NoMethodError for a class with no each
+		c.w("\tdefault:\n\t\trbDynEach(rbCall, recv, rbBlockArg{fn: func(xs ...any) any { yield(xs...); return nil }})\n\t}\n\treturn recv\n}\n\n")
+	} else {
+		c.w("\tdefault:\n\t\tpanic(rbNoMethod(\"each\", recv, false))\n\t}\n\treturn recv\n}\n\n")
 	}
-	c.w("\tdefault:\n\t\tpanic(rbNoMethod(\"each\", recv, false))\n\t}\n\treturn recv\n}\n\n")
 	c.emitDynEachV()
 	// rbElemsAny is an untyped receiver's elements as an Array[untyped] (decision 224): an Array's own, else what its each yields
 	c.w("func rbElemsAny(recv any) *Array[any] {\n")
