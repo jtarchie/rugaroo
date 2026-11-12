@@ -100,7 +100,11 @@ func (f *fctx) lenientMember(n parser.Node, recv expr, name string, args []parse
 	tmp := f.newTmp()
 	f.emit("%s := %s", tmp, f.genExpr(args[0], nil).code)
 	call := f.genMethodCall(n, recv, name, []parser.Node{&exprNode{Node: args[0], e: expr{code: "*" + tmp, typ: o.Elem}}}, nil)
-	return expr{code: fmt.Sprintf("Boolean(%s != nil && bool(%s))", tmp, call.code), typ: f.cls("Boolean")}, true
+	test := "bool(" + call.code + ")"
+	if !isClass(call.typ, "Boolean") { // an untyped receiver's include? answers untyped (rubocop's Badge#match_name?)
+		test = "rbTruthy(" + f.coerce(n, call, TAny{}) + ")"
+	}
+	return expr{code: fmt.Sprintf("Boolean(%s != nil && %s)", tmp, test), typ: f.cls("Boolean")}, true
 }
 
 // missMode is what a lookup answers on a miss (lookupMiss); missNone is "leave the call alone", missFetch is fetch before its shape picks block, arg or keyerror.

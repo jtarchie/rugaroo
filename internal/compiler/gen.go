@@ -41,9 +41,9 @@ type fctx struct {
 	lex              []*Class // lexical scope for constant lookup
 	selfType         Type
 	selfCode         string
-	selfClassObj     bool // self is exactly a class constant (a class body)
+	selfClassObj     bool   // self is exactly a class constant (a class body)
 	argcPass         string // set while an adapter forwards its slot's arguments: the rbArgc to pass on
-	missingCalls     int  // receiverless calls compiled to self's method_missing, so far: a DSL block that needs them is rebound (blockArg)
+	missingCalls     int    // receiverless calls compiled to self's method_missing, so far: a DSL block that needs them is rebound (blockArg)
 	ret              Type
 	iterator         bool
 	lastMatch        string // the Go variable of the frame's last match, when the body reads $~ or $1..$9 (decision 171)

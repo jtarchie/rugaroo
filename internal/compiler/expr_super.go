@@ -83,6 +83,11 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 			sym := f.coerce(name, f.genExpr(name, f.cls("Symbol")), f.cls("Symbol"))
 			return expr{code: "panic(rbNoMethod(string(" + sym + "), " + f.selfCode + ", false))", typ: TVoid{}, stmt: true, noreturn: true}
 		}
+		if f.m.Name == "new" && f.owner != nil && f.owner.metaOf != nil && len(f.owner.metaOf.Subclasses) == 0 {
+			// a class's own `def self.new(...)` ending in super (rubocop's Team.new): Class#new, the object through
+			// initialize. ponytail: a class with subclasses still errors, since self may be one of them (decision 444)
+			return f.genNew(n, f.owner.metaOf, f.superArgs(n, args, forwarding), nil, nil, nil)
+		}
 		f.errorf(n, "super: no parent method %s", f.m.Name)
 	}
 	if e.Owner.GoType != "" {
