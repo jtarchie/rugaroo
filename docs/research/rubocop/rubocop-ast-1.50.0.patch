@@ -1,6 +1,6 @@
-diff -ru a b
---- a/lib/rubocop/ast/node/casgn_node.rb	2026-10-27 18:22:55
-+++ b/lib/rubocop/ast/node/casgn_node.rb	2026-10-31 20:49:33
+diff -ru a/lib/rubocop/ast/node/casgn_node.rb b/lib/rubocop/ast/node/casgn_node.rb
+--- a/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 08:34:18
 @@ -8,8 +8,8 @@
      class CasgnNode < Node
        include ConstantNode
@@ -12,9 +12,9 @@ diff -ru a b
  
        # The expression being assigned to the variable.
        #
-diff -ru a b
---- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-10-27 18:22:55
-+++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-10-31 20:49:33
+diff -ru a/lib/rubocop/ast/node/mixin/collection_node.rb b/lib/rubocop/ast/node/mixin/collection_node.rb
+--- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 08:34:18
 @@ -10,7 +10,9 @@
          (Array.instance_methods - Object.instance_methods - [:to_a]).freeze
        private_constant :ARRAY_METHODS
@@ -26,3 +26,28 @@ diff -ru a b
      end
    end
  end
+diff -ru a/lib/rubocop/ast/node_pattern.rb b/lib/rubocop/ast/node_pattern.rb
+--- a/lib/rubocop/ast/node_pattern.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/ast/node_pattern.rb	2026-11-12 08:34:18
+@@ -36,6 +36,10 @@
+         # If the node matches, and no block is provided, the new method will
+         # return the captures, or `true` if there were none.
+         def def_node_matcher(method_name, pattern_str, **keyword_defaults)
++          # Already defined here (a precompiled build): nothing to compile.
++          return method_name if keyword_defaults.empty? &&
++                                (method_defined?(method_name, false) || private_method_defined?(method_name, false))
++
+           NodePattern.new(pattern_str).def_node_matcher(self, method_name, **keyword_defaults)
+         end
+ 
+@@ -46,6 +50,10 @@
+         # as soon as it finds a descendant which matches. Otherwise, it will
+         # yield all descendants which match.
+         def def_node_search(method_name, pattern_str, **keyword_defaults)
++          # Already defined here (a precompiled build): nothing to compile.
++          return method_name if keyword_defaults.empty? &&
++                                (method_defined?(method_name, false) || private_method_defined?(method_name, false))
++
+           NodePattern.new(pattern_str).def_node_search(self, method_name, **keyword_defaults)
+         end
+       end

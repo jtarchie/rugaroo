@@ -1,20 +1,63 @@
-diff -ru a b
---- a/lib/rubocop/config_loader.rb	2026-10-27 18:22:56
-+++ b/lib/rubocop/config_loader.rb	2026-10-31 20:54:13
-@@ -79,8 +79,8 @@
+diff -ru a/lib/rubocop/cache_config.rb b/lib/rubocop/cache_config.rb
+--- a/lib/rubocop/cache_config.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/cache_config.rb	2026-11-12 08:34:18
+@@ -31,6 +31,13 @@
+     # the full ConfigStore/ConfigLoader. This method can be used, for example,
+     # before loading configuration files. Please note that this method doesn't
+     # take into account any `inherit_from` dependencies.
++    # A precompiled build has no `eval`, so ERB in a configuration file cannot be run: such a file is an error.
++    def self.without_erb(contents, path)
++      return contents unless contents.include?('<%')
++
++      raise RuboCop::Error, "ERB in #{path} is not supported by this build of RuboCop."
++    end
++
+     def self.root_dir_from_toplevel_config(cache_root_override = nil)
+       root_dir do
+         next cache_root_override if cache_root_override
+@@ -41,9 +48,8 @@
+         # Returns early if `CacheRootDirectory` is not used before requiring `erb` or `yaml`.
+         next unless file_contents.include?('CacheRootDirectory')
+ 
+-        require 'erb'
+         require 'yaml'
+-        yaml_code = ERB.new(file_contents).result
++        yaml_code = RuboCop::CacheConfig.without_erb(file_contents, config_path)
+         config_yaml = YAML.safe_load(yaml_code, permitted_classes: [Regexp, Symbol], aliases: true)
+ 
+         # For compatibility with Ruby 3.0 or lower.
+diff -ru a/lib/rubocop/config_loader.rb b/lib/rubocop/config_loader.rb
+--- a/lib/rubocop/config_loader.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/config_loader.rb	2026-11-12 08:34:19
+@@ -78,9 +78,9 @@
+ 
        def load_yaml_configuration(absolute_path)
          file_contents = read_file(absolute_path)
-         yaml_code = Dir.chdir(File.dirname(absolute_path)) { ERB.new(file_contents).result }
+-        yaml_code = Dir.chdir(File.dirname(absolute_path)) { ERB.new(file_contents).result }
 -        yaml_tree = check_duplication(yaml_code, absolute_path)
 -        hash = yaml_tree_to_hash(yaml_tree) || {}
++        yaml_code = CacheConfig.without_erb(file_contents, absolute_path)
 +        # rugaroo research: Psych's tree API is not built; same restricted load via the public API (no duplicate-key warnings)
 +        hash = YAML.safe_load(yaml_code, permitted_classes: [Regexp, Symbol], aliases: true, filename: absolute_path) || {}
  
          puts "configuration from #{absolute_path}" if debug?
  
-diff -ru a b
---- a/lib/rubocop/cop/variable_force/branch.rb	2026-10-27 18:22:56
-+++ b/lib/rubocop/cop/variable_force/branch.rb	2026-10-31 20:52:58
+diff -ru a/lib/rubocop/cop/base.rb b/lib/rubocop/cop/base.rb
+--- a/lib/rubocop/cop/base.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/cop/base.rb	2026-11-12 08:34:19
+@@ -356,7 +356,8 @@
+           # is faster in this specific case.
+           m.start_with?('on_', 'after_') &&
+             # exclude standard "callbacks" like 'on_new_investigation' unless refined
+-            instance_method(m).owner != Base
++            # The owner, found without an UnboundMethod: a precompiled build has no method objects for computed names.
++            ancestors.find { |mod| mod.instance_methods(false).include?(m) } != Base
+         end
+       end
+       # rubocop:enable Layout/ClassStructure
+diff -ru a/lib/rubocop/cop/variable_force/branch.rb b/lib/rubocop/cop/variable_force/branch.rb
+--- a/lib/rubocop/cop/variable_force/branch.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/cop/variable_force/branch.rb	2026-11-12 08:34:19
 @@ -218,7 +218,9 @@
          # end
          class Case < Base
@@ -48,9 +91,33 @@ diff -ru a b
            define_predicate :else_body?,     child_index: -1
  
            def always_run?
-diff -ru a b
---- a/lib/rubocop/yaml_duplication_checker.rb	2026-10-27 18:22:56
-+++ b/lib/rubocop/yaml_duplication_checker.rb	2026-10-31 20:53:24
+diff -ru a/lib/rubocop/options.rb b/lib/rubocop/options.rb
+--- a/lib/rubocop/options.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/options.rb	2026-11-12 08:34:19
+@@ -31,7 +31,7 @@
+       args_from_env = ArgumentsEnv.read_as_arguments
+       args = args_from_file.concat(args_from_env).concat(command_line_args)
+ 
+-      define_options.parse!(args)
++      args = define_options.parse!(args)
+ 
+       return_path_given_to_changed(args)
+       imply_autocorrect_for_diff
+diff -ru a/lib/rubocop/server/cache.rb b/lib/rubocop/server/cache.rb
+--- a/lib/rubocop/server/cache.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/server/cache.rb	2026-11-12 08:34:18
+@@ -178,7 +178,7 @@
+ 
+         def load_erb_templated_yaml(content)
+           require 'erb'
+-          yaml_code = ERB.new(content).result
++          yaml_code = CacheConfig.without_erb(content, 'the configuration file')
+ 
+           require 'yaml'
+           YAML.safe_load(yaml_code, permitted_classes: [Regexp, Symbol], aliases: true) || {}
+diff -ru a/lib/rubocop/yaml_duplication_checker.rb b/lib/rubocop/yaml_duplication_checker.rb
+--- a/lib/rubocop/yaml_duplication_checker.rb	2026-11-12 08:34:18
++++ b/lib/rubocop/yaml_duplication_checker.rb	2026-11-12 08:34:18
 @@ -2,33 +2,10 @@
  
  module RuboCop
