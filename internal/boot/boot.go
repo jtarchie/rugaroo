@@ -41,6 +41,7 @@ type Manifest struct {
 	ConstClasses   map[string]string       `json:"const_classes"` // a constant naming a class under another name (decision 203)
 	Delegators     map[string][]string     `json:"delegators"`    // def_delegators' method names by "path:line" (decision 204)
 	Structs        map[string][]StructProp `json:"structs"`       // each T::Struct's props after load (decision 241)
+	LoadOrder      []string                `json:"load_order"`    // every loaded file in the order its load finished, the unresolved autoloads boot loaded afterwards last (decision 444)
 	Lazy           map[string]bool         `json:"-"`             // real paths of autoload files boot registered but never loaded, offered to the compiler (decision 444)
 }
 
@@ -137,9 +138,10 @@ type MethodInfo struct {
 type EvalInfo struct {
 	Loc
 	Source string `json:"source"`
-	Caller string `json:"caller"` // "path:line" of the eval call's caller (ParseLoc)
-	Kind   string `json:"kind"`   // eval, class_eval (module_eval) or instance_eval
-	Self   string `json:"self"`   // the named module it ran on, "" for eval or an object
+	Caller string `json:"caller"`         // "path:line" of the eval call's caller (ParseLoc)
+	Kind   string `json:"kind"`           // eval, class_eval (module_eval) or instance_eval
+	Self   string `json:"self"`           // the named module it ran on, "" for eval or an object
+	Lazy   bool   `json:"lazy,omitempty"` // recorded while boot loaded an autoload the program never touched (decision 444)
 }
 
 // AutoloadInfo is an autoload registration and whether boot resolved it.

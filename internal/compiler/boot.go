@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -114,6 +115,20 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 		seen[realPath(sourceName(s))] = true
 	}
 	out := sources
+	order := map[string]int{} // a file an autoload loaded is placed by when MRI finished loading it: one may read another's constant at load (rubocop's AbcSizeCalculator reads CyclomaticComplexity::COUNTED_NODES; decision 444)
+	for i, f := range m.LoadOrder {
+		order[realPath(f)] = i + 1
+	}
+	base := len(sources)
+	defer func() {
+		slices.SortStableFunc(out[base:], func(a, b Source) int {
+			x, y := order[realPath(a.Path)], order[realPath(b.Path)]
+			if x == 0 || y == 0 {
+				return 0
+			}
+			return cmp.Compare(x, y)
+		})
+	}()
 	for _, a := range m.Autoloads {
 		if !a.Resolved && a.Loaded == "" {
 			// registered and never loaded by this run: offered, and compiled only when a compiled file names its constant

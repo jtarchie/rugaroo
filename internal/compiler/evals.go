@@ -64,6 +64,9 @@ func (c *Compiler) collectBootEval(ctx context.Context, e boot.EvalInfo) {
 		}
 		return
 	}
+	if e.Lazy && e.Self != "" && c.classes[e.Self] == nil {
+		return // evaluated on a class whose file the program does not hold (an autoload boot loaded only to see it; decision 444)
+	}
 	site := boot.Loc{File: f.path, Line: ln}
 	c.evalSites[site] = true
 	e.Source = wrapBigLiterals(e.Source)

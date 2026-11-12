@@ -455,6 +455,7 @@ module RugarooBoot
     # first, so the manifest still says which autoloads it resolved.
     def load_unresolved_autoloads(resolved)
       std = [RbConfig::CONFIG["rubylibdir"], RbConfig::CONFIG["archdir"]]
+      before = @evals.size
       resolved.each do |a|
         next if a["resolved"] || a["owner"].nil?
 
@@ -472,6 +473,8 @@ module RugarooBoot
           nil
         end
       end
+      @evals[before..].each { |e| e["lazy"] = true }
+      @lazy_features = $LOADED_FEATURES - @features
     end
 
     def dump(path)
@@ -490,6 +493,7 @@ module RugarooBoot
       end
       manifest = {
         "loaded_features" => loaded_features,
+        "load_order" => (@lazy_features || loaded_features), # every file in the order its load finished, the lazy phase's last
         "load_path" => $LOAD_PATH.map(&:to_s),
         "std_dirs" => [RbConfig::CONFIG["rubylibdir"], RbConfig::CONFIG["archdir"]], # MRI's own library: a file there is never a source (decision 404)
         "classes" => classes,
