@@ -829,7 +829,8 @@ func (c *Compiler) updateInference(inf *inference) {
 	if c.env.Timing {
 		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
 	}
-	if !inf.changed || diff*50 <= len(next) {
+	settled := !inf.changed || diff*50 <= len(next)
+	if settled {
 		// settled (a large gem program's last few parameters flip between rounds until the cap): an untyped argument is
 		// now untyped for good, not a parameter still waiting for its type. A typed
 		// parameter would assert the value's class at the call, and raise where MRI runs (parser's
@@ -852,7 +853,7 @@ func (c *Compiler) updateInference(inf *inference) {
 			inf.none[k] = true
 		}
 	}
-	c.stopUnjustifiedDrops(inf)
+	c.stopUnjustifiedDrops(inf, settled)
 	if c.env.InferDebug {
 		for _, k := range slices.Sorted(maps.Keys(next)) {
 			fmt.Fprintf(os.Stderr, "rugaroo: inferred %s: %s\n", k, next[k])
@@ -865,8 +866,11 @@ func realType(t Type) bool { return t != nil && !isVoid(t) && !isNil(t) && !isAn
 
 // stopUnjustifiedDrops: rounds that converged with a parameter still untyped whose method's untyped returns a round
 // dropped never justified the drop, so the next rounds join that method's returns honestly (decision 383).
-func (c *Compiler) stopUnjustifiedDrops(inf *inference) {
-	if inf.changed {
+//
+// settled stands for converged on a large gem program, whose rounds never do (decision 444): rubocop's
+// `split_comment(comment)` answers false or an untyped `match.captures`, and stayed Boolean.
+func (c *Compiler) stopUnjustifiedDrops(inf *inference, settled bool) {
+	if !settled {
 		return
 	}
 	for k := range c.roundDrops {

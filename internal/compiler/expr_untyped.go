@@ -127,6 +127,15 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 	}
 	if ba, ok := block.(*parser.BlockArgumentNode); ok && f.lenient() && ba.Expression != nil {
 		if pb := f.procBlock(ba); pb != nil { // `&order`, a callable or a Symbol decided when it runs (decision 444)
+			if ps, ok := pb.Parameters.(*parser.BlockParametersNode); ok && ps.Parameters != nil && ps.Parameters.Rest != nil && len(pb.Locals) == 1 {
+				// a dynamic block takes named parameters: `{ |x| xs = [x]; ... }`, the one value an iterator yields
+				loc, x, xs := pb.Location, "x1_", pb.Locals[0]
+				st, _ := pb.Body.(*parser.StatementsNode)
+				one := &parser.LocalVariableWriteNode{Location: loc, Name: xs, Value: &parser.ArrayNode{Location: loc, Elements: []parser.Node{&parser.LocalVariableReadNode{Location: loc, Name: x}}}}
+				pb = &parser.BlockNode{Location: loc, Locals: []string{x, xs},
+					Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: x}}}},
+					Body:       &parser.StatementsNode{Location: loc, Body: append([]parser.Node{one}, st.Body...)}}
+			}
 			return f.genDynBlockCall(n, recv, name, args, pb)
 		}
 	}

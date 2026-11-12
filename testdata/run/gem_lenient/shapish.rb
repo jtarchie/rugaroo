@@ -75,6 +75,11 @@ module Shapish
       list.sort_by!(&order)
     end
 
+    def targets_any(store)
+      list = store[:files]
+      list.sort_by!(&order)
+    end
+
     def order
       if @fast
         ->(path) { -path.size }

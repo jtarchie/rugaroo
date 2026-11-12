@@ -23,6 +23,7 @@ require "arityish"
 require "strapish"
 require "prepish"
 require "shapish"
+require "redish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -127,3 +128,9 @@ p sh_f.offense?(1), sh_f.offense?(2), sh_f.offense?(3)
 p Shapish::Finder.new(true).targets(%w[bbb a cc dddd]), Shapish::Finder.new(false).targets(%w[bbb a cc])
 sh_a = Shapish::Al.new
 p sh_a.for_args(Shapish::Nd.new("n", 0)), sh_a.for_args(Shapish::Nd.new("n", 0)) { |r| "!#{r.pos}" }
+sh_st = { files: %w[bbb a cc dddd], n: 1 } #: Hash[Symbol, untyped]
+p Shapish::Finder.new(true).targets_any(sh_st), Shapish::Finder.new(false).targets_any(sh_st)
+# reduce(&:join) over untyped elements: the Hash arm, where a String is no pair, raises instead of failing in Go
+rd_a = Redish::Al.new
+rd_nodes = [Redish::Nd.new([Redish::Leaf.new("a"), Redish::Nd.new([])]), Redish::Nd.new([Redish::Leaf.new("q"), Redish::Leaf.new("r")])]
+rd_nodes.each { |n| p rd_a.for_args(n), rd_a.for_args(n) { |r| "!#{r.src}" } }

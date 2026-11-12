@@ -547,6 +547,11 @@ func (f *fctx) genClosure(n parser.Node, block parser.Node, sig *BlockSig, env m
 	gen := func(t tail) {
 		if symbolCall != "" {
 			e := f.symbolBlockCall(n, block, symbolCall, names)
+			if _, want := t.typ.(TTuple); want && !f.heldAsAny(e.typ) {
+				if _, got := stripOpt(e.typ).(TTuple); !got { // `pairs.reduce(&:join)`: a String is no pair (the Hash arm of an untyped receiver)
+					f.errorf(n, "&:%s answers %s where the block must answer %s", symbolCall, e.typ, t.typ)
+				}
+			}
 			f.applyTail(n, e, t)
 			return
 		}
