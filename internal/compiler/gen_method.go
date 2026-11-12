@@ -82,6 +82,12 @@ func (f *fctx) genBody(body parser.Node, params []*local, t tail, prologue func(
 		f.poisonedBody(t, prologue)
 	case whole:
 		err := catchCompileError(func() { f.analyze(fresh, run) })
+		if err != nil && f.c.dryTry {
+			// refineIvars is trying an ivar typing: a gem method it stops compiling vetoes the typing, as a user method's
+			// error does, instead of being poisoned for good (rubocop's `@options = {}` typed Hash[Symbol, Boolean] by its
+			// one typed store; decision 444)
+			panic(*err)
+		}
 		if err != nil && f.c.ivarsDiscovered { // again with each branch that does not compile raising if reached (decision 251)
 			nw := len(f.c.Warnings)
 			f.branchLenient = true

@@ -2,8 +2,11 @@ package compiler
 
 import (
 	"cmp"
+	"fmt"
 	"maps"
+	"os"
 	"slices"
+	"time"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
 )
@@ -53,7 +56,9 @@ func (c *Compiler) refineIvars() {
 	base, _ := c.dryRunIvarUsers(cands)
 	attempt := func(d *nilDeferral) (*compileError, bool) {
 		c.nilDefer = d
+		c.dryTry = true
 		convs, err := c.dryRunIvarUsers(cands)
+		c.dryTry = false
 		ok := err == nil
 		for k := range convs {
 			ok = ok && base[k]
@@ -69,6 +74,10 @@ func (c *Compiler) refineIvars() {
 		return err == nil
 	}
 	try := func(s map[*Ivar]bool) bool {
+		if os.Getenv("RUGAROO_REFINE_DEBUG") != "" {
+			t0 := time.Now()
+			defer func() { fmt.Fprintf(os.Stderr, "refine try: %d of %d cands, %v\n", len(s), len(cands), time.Since(t0)) }()
+		}
 		set = s
 		setIvarTypes(cands, orig, typed, set)
 		err, ok := attempt(nil)
@@ -160,6 +169,8 @@ func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, *compileError)
 		m.Ret = nil // provisional: may depend on the ivar types being tried
 	}
 	c.convs = map[string]bool{}
+	c.inDryRun = true
+	defer func() { c.inDryRun = false }()
 	err := catchCompileError(func() {
 		for _, cls := range c.classList {
 			if !slices.ContainsFunc(ivs, func(iv *Ivar) bool { return cls.isSubclassOf(iv.Owner) }) {
@@ -167,6 +178,17 @@ func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, *compileError)
 			}
 			for _, m := range cls.MethodList {
 				if m.Kind == kindDef {
+					if os.Getenv("RUGAROO_REFINE_DEBUG") != "" {
+						t0 := time.Now()
+						name := cls.RubyName + "#" + m.Name
+						tm := time.AfterFunc(5*time.Second, func() { fmt.Fprintf(os.Stderr, "refine slow: %s\n", name) })
+						defer func() {
+							if d := time.Since(t0); d > time.Second {
+								fmt.Fprintf(os.Stderr, "refine method: %s %v\n", name, d)
+							}
+						}()
+						_ = tm
+					}
 					c.inferRet(m)
 					c.emitMethod(m)
 				}

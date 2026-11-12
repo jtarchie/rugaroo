@@ -54,7 +54,7 @@ func (f *fctx) optKind(args []parser.Node) string {
 			}
 		case *parser.ArrayNode, *parser.HashNode, *parser.KeywordHashNode, *parser.RegularExpressionNode:
 			f.errorf(a, "OptionParser#on: completion lists and patterns are not supported")
-		case *parser.InterpolatedStringNode, *parser.LocalVariableReadNode, *parser.CallNode, *parser.InstanceVariableReadNode:
+		case *parser.InterpolatedStringNode, *parser.LocalVariableReadNode, *parser.CallNode, *parser.InstanceVariableReadNode, *parser.SplatNode: // `on(*args)` (rubocop's option helper): the switch strings are not here to read
 			return "" // maybe a switch: decided at run time
 		}
 	}

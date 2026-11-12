@@ -2,9 +2,12 @@ package compiler
 
 import (
 	"cmp"
+	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
 )
@@ -181,13 +184,25 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 		return f.c.retryNil(&retry, ok, err, baseline, func(d *nilDeferral) bool { _, ok := attempt(set, d); return ok })
 	}
 	if len(order) > 0 {
-		ok := salvage(order, func(set map[localKey]bool) bool {
+		var kept map[localKey]bool // the set the last passing try typed
+		trySet := func(set map[localKey]bool) bool {
 			sub := map[localKey]Type{}
 			for k := range set {
 				sub[k] = refined[k]
 			}
-			return len(sub) > 0 && try(sub)
-		})
+			if len(sub) == 0 || !try(sub) {
+				return false
+			}
+			kept = maps.Clone(set)
+			return true
+		}
+		t0 := time.Now()
+		seeded := f.seededLocals(order, trySet)
+		ok := seeded || salvage(order, trySet)
+		if d := time.Since(t0); d > 2*time.Second && os.Getenv("RUGAROO_REFINE_DEBUG") != "" && f.m != nil {
+			fmt.Fprintf(os.Stderr, "analyze slow: %s#%s %d locals seeded=%t ok=%t %v\n", f.m.Owner.RubyName, f.m.Name, len(order), seeded, ok, d)
+		}
+		f.noteLocalSeed(order, ok, kept)
 		if proofErr != nil { // `rows = ["a"]; rows.each { |r| r << "x" }`: Array[untyped] compiled a `<<` that raised NoMethodError
 			panic(*proofErr)
 		}
@@ -378,4 +393,48 @@ func refineContainer(t Type, open bool, elems [2][]Type) Type {
 		return TOpt{Elem: TClass{C: c.C, Args: args}}
 	}
 	return TClass{C: c.C, Args: args}
+}
+
+// localSeed is what one of refineIvars' dry-runs kept of a method's local typings (decision 444): the next dry-run of
+// the same method tries every typing, then that set, and searches only when both fail. An ivar search is 2n+2 dry-runs
+// and each one's local search 2m+2 emissions of the method, which for the parser gem's 5,000-line lexer never ended.
+// The real emission always searches.
+type localSeed struct {
+	order []localKey
+	kept  map[localKey]bool // nil: the search kept nothing
+}
+
+func (f *fctx) localSeedKey() *Method {
+	if !f.c.inDryRun || f.block != "" {
+		return nil
+	}
+	return f.m
+}
+
+func (f *fctx) seededLocals(order []localKey, try func(map[localKey]bool) bool) bool {
+	m := f.localSeedKey()
+	seed, ok := f.c.localSeeds[m]
+	if m == nil || !ok || !slices.Equal(seed.order, order) {
+		return false
+	}
+	all := map[localKey]bool{}
+	for _, k := range order {
+		all[k] = true
+	}
+	if try(all) {
+		return true
+	}
+	return len(seed.kept) > 0 && len(seed.kept) < len(order) && try(seed.kept)
+}
+
+func (f *fctx) noteLocalSeed(order []localKey, ok bool, kept map[localKey]bool) {
+	if m := f.localSeedKey(); m != nil {
+		if !ok {
+			kept = nil
+		}
+		if f.c.localSeeds == nil {
+			f.c.localSeeds = map[*Method]localSeed{}
+		}
+		f.c.localSeeds[m] = localSeed{order: slices.Clone(order), kept: kept}
+	}
 }

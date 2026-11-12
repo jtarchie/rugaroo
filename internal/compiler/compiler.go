@@ -257,6 +257,9 @@ type pathCache struct {
 type refineState struct {
 	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
 	roundRefine         map[string]*refineRecord // options.roundRefine (decision 444)
+	inDryRun            bool                     // inside dryRunIvarUsers
+	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
+	localSeeds          map[*Method]localSeed    // decision 444
 	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
 	noNilDefer          bool                     // options.noNilDefer
 	nilDeferUsed        *bool                    // options.nilDeferred: a typing kept by decision 440
