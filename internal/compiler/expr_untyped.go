@@ -42,6 +42,12 @@ func (f *fctx) gemDynShortcut(n parser.Node, recv expr, name string, args []pars
 		return expr{code: "rbEachEnumAny(" + f.coerce(n, recv, TAny{}) + ")", typ: TAny{}}, true
 	case name == "scan" && len(args) == 1 && f.c.classes["String"].lookup("__scan_any") != nil:
 		return f.dynStringScan(n, recv, args), true
+	case (name == "with_index" || name == "each_with_index") && len(args) == 0:
+		// `x.each.with_index` with no block on an untyped Enumerator (or anything with an each): the pairs, as an
+		// Array's each_with_index enumerator gives them (decision 444)
+		f.c.dynEach = true
+		elems := expr{code: "rbElemsAny(" + f.coerce(n, recv, TAny{}) + ")", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+		return f.genMethodCall(n, f.genMethodCall(n, elems, "each", nil, nil), "__with_index_enum", nil, nil), true
 	}
 	return expr{}, false
 }
@@ -92,6 +98,11 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 	}
 	if e, ok := f.forwardedEnum(n, recv, name, args, block); ok {
 		return e
+	}
+	if f.lenient() && f.heldAsAny(recv.typ) && name == "with_object" && len(args) == 1 {
+		// an untyped Enumerator's with_object is each_with_object over what it yields (rubocop's
+		// `lines.each.with_index.with_object({}) do |(line, i), acc|`; decision 444)
+		name = "each_with_object"
 	}
 	if f.lenient() && f.heldAsAny(recv.typ) && dynEnumNames[name] {
 		return f.dynEnumBlock(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
@@ -177,8 +188,8 @@ func autoSplat(params int, args string) string {
 // self): the block goes last, as an rbBlockArg each wrapper of a block-taking method of that name adapts (decision 243).
 func (f *fctx) genDynBlockCall(n parser.Node, recv expr, name string, args []parser.Node, b *parser.BlockNode) expr {
 	names := f.blockParamList(b.Parameters)
-	if names.special() {
-		f.errorf(n, "a block with a rest or destructuring parameter on an untyped receiver is not supported")
+	if slices.ContainsFunc(names, func(p blockParam) bool { return p.Rest }) { // a destructuring one binds as any closure's does (rubocop's `with_object({}) do |(line, i), acc|`; decision 444)
+		f.errorf(n, "a block with a rest parameter on an untyped receiver is not supported")
 	}
 	if f.c.dynBlockNames == nil {
 		f.c.dynBlockNames = map[string]bool{}
