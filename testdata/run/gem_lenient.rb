@@ -26,6 +26,7 @@ require "shapish"
 require "redish"
 require "nodish"
 require "srcish"
+require "slotish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -141,3 +142,5 @@ rd_nodes.each { |n| p rd_a.for_args(n), rd_a.for_args(n) { |r| "!#{r.src}" } }
 Nodish.demo.each { |v| p v }
 # a Range through `lines[*args]`, Set.new of an untyped list, to_enum(:scan, re).map { Regexp.last_match }, Module#<=>
 Srcish.demo.each { |v| p v }
+# a class's own method of another arity under one of a module its module includes (decision 444)
+p Slotish::Line.new.run("abc"), Slotish::Other.new.run

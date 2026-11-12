@@ -282,6 +282,25 @@ func (c *Compiler) parentSlots(cls *Class, m *Method) []slot {
 		}
 		out = append(out, slot{e: entry{M: mod.Methods[m.Name], Owner: mod, Env: env, Entry: cls}, in: cls})
 	}
+	// and each module those include (rubocop's LineLength#register_offense under Alignment's, which LineLengthHelp
+	// includes): the constraint of the module between declares the name too (decision 444)
+	seen := map[*Class]bool{}
+	var nested func(k *Class, top bool)
+	nested = func(k *Class, top bool) {
+		for _, inc := range k.Includes {
+			mod := inc.Mod
+			if mod == nil || seen[mod] {
+				continue
+			}
+			seen[mod] = true
+			if pm := mod.Methods[m.Name]; !top && pm != nil && pm.Kind == kindDef && len(mod.TypeParams) == 0 &&
+				!slices.ContainsFunc(out, func(x slot) bool { return x.e.M == pm || x.e.M.GoName == pm.GoName }) {
+				out = append(out, slot{e: entry{M: pm, Owner: mod, Env: map[string]Type{}, Entry: cls}, in: cls})
+			}
+			nested(mod, false)
+		}
+	}
+	nested(cls, true)
 	return out
 }
 

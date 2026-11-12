@@ -56,9 +56,14 @@ func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (s
 		return nil
 	}
 	bad := map[*ast.FuncDecl]string{} // the first error in each
+	var impossible []token.Pos        // a dispatcher's arm for a class that cannot be the value (see dropArms)
 	conf := types.Config{Importer: stdImporter(ctx, fset, f), Error: func(err error) {
 		var te types.Error
 		if errors.As(err, &te) {
+			if fd := at(te.Pos); fd != nil && strings.HasPrefix(fd.Name.Name, "rbSend_") && strings.HasPrefix(te.Msg, "impossible type switch case") {
+				impossible = append(impossible, te.Pos)
+				return
+			}
 			if fd := at(te.Pos); fd != nil && bad[fd] == "" {
 				bad[fd] = te.Msg
 			}
@@ -80,6 +85,19 @@ func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (s
 					fmt.Sprintf("\n\tpanic(NewNotImplementedError(Ref(String(%q))))\n", text)})
 			}
 		}
+	}
+	// dropArms: an rbSend_ type switch names each class under the owner that overrides the method. A class whose own
+	// method of another name has a different shape than a mixin's cannot be the mixin's Self at all (rubocop's LineLength
+	// #register_offense under Alignment's), so Go calls its arm impossible: the arm goes, the dispatcher stays (decision 444)
+	for _, pos := range impossible {
+		fd := at(pos)
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			if cc, ok := n.(*ast.CaseClause); ok && cc.Pos() <= pos && pos < cc.End() && len(cc.List) == 1 {
+				cuts = append(cuts, cut{fset.Position(cc.Pos()).Offset, fset.Position(cc.End()).Offset, ""})
+				return false
+			}
+			return true
+		})
 	}
 	if len(cuts) == 0 {
 		return code
