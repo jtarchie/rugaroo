@@ -168,6 +168,11 @@ class Module < Object
   #: (untyped, ?bool) -> String?
   def autoload?(name, inherit = true) = nil
 
+  # An autoload with run-time arguments (rubocop's `register_cop` calls `autoload constant_name, path`): the files the
+  # program loads are compiled in already, so there is nothing to register (decisions 324, 444).
+  #: (untyped, untyped) -> nil
+  def autoload(name, path) = nil
+
   # The transpiler narrows the result type: a literal name gets that
   # constant's type, any other name the join of the module's constants.
   #: (untyped, ?bool) -> untyped

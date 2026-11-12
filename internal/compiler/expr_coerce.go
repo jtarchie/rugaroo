@@ -289,6 +289,9 @@ func (f *fctx) coerceFromUnion(n parser.Node, e expr, u TUnion, to Type) (string
 			if f.c.goType(to) == "any" {
 				return e.code, true
 			}
+			if code, ok := f.unionToValueBase(e, u, to); ok {
+				return code, true
+			}
 			return e.code + ".(" + f.c.goType(to) + ")", true
 		}
 	case TOpt:
@@ -307,6 +310,30 @@ func (f *fctx) coerceFromUnion(n parser.Node, e expr, u TUnion, to Type) (string
 	}
 	f.errorf(n, "%s where %s is expected; narrow it first (`is_a?`, `case`/`when`, `if x`)", u, to)
 	return "", true
+}
+
+// unionToValueBase is a union with subclasses of a core value class where that class is wanted (rainbow's
+// `Presenter | NullPresenter` as a String, decision 444): each subclass member gives its embedded base value, which a
+// plain assertion to the base's Go type would not find.
+func (f *fctx) unionToValueBase(e expr, u TUnion, to TClass) (string, bool) {
+	if to.C.GoType == "" || !slices.ContainsFunc(u.Members, func(m Type) bool { mc, ok := m.(TClass); return ok && mc.C != to.C && mc.C.Super == to.C }) {
+		return "", false
+	}
+	gt := f.c.goType(to)
+	var b strings.Builder
+	fmt.Fprintf(&b, "func() %s {\n\tswitch v_ := %s.(type) {\n", gt, e.code)
+	for _, m := range u.Members {
+		mc, ok := m.(TClass)
+		if !ok || mc.C == to.C {
+			continue
+		}
+		if mc.C.Super != to.C {
+			return "", false
+		}
+		fmt.Fprintf(&b, "\tcase %s:\n\t\treturn %s\n", f.c.goType(m), embeddedSuper(mc.C, "v_"))
+	}
+	fmt.Fprintf(&b, "\tdefault:\n\t\treturn v_.(%s)\n\t}\n}()", gt)
+	return b.String(), true
 }
 
 // truthiness is a value where a Boolean is expected that is not one: Ruby tests truthiness.

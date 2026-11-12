@@ -479,6 +479,9 @@ func joinClasses(a, b Type) (Type, bool) {
 		// nearest common superclass, if it is more than Object
 		if len(a.(TClass).Args) == 0 && len(b.(TClass).Args) == 0 {
 			for k := ca.Super; k != nil && !k.universal; k = k.Super {
+				if k.GoType != "" {
+					break // two subclasses of a core value class (rainbow's Presenter and NullPresenter < String) stay a union: String has no slot for what they define (decision 444)
+				}
 				if cb.isSubclassOf(k) {
 					return TClass{C: k}, true
 				}

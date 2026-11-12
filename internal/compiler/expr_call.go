@@ -902,6 +902,11 @@ func (f *fctx) classObjCall(n parser.Node, recv expr, name string, args []parser
 		f.emit("_ = %s", recv.code)
 		return f.genNew(n, meta.metaOf, nil, nil, nil, block), true
 	}
+	if meta := f.metaOfType(recv.typ); name == "new" && meta != nil && !recv.classObj && len(meta.metaOf.Subclasses) == 0 && meta.metaOf.Super == f.c.classes["String"] {
+		// `self.class.new(text)` in a leaf String subclass (rainbow's Presenter#wrap_with_sgr) is its own constructor, not String's (decision 444)
+		f.emit("_ = %s", recv.code)
+		return f.genNew(n, meta.metaOf, args, nil, nil, block), true
+	}
 	return f.genAllocate(n, recv, name, args, block)
 }
 
