@@ -45,6 +45,25 @@ func (c *Compiler) collectBootEval(ctx context.Context, e boot.EvalInfo) {
 		c.collectBlockEval(ctx, f, ln, e)
 		return
 	}
+	if e.Kind == "const_set" {
+		// a load-time `Mod.const_set(name, plain_value)` (rubocop-ast's NodePattern::Sets): the constant its module would
+		// have assigned, declared there and set once the file that made it has loaded (decision 444)
+		target := c.classes[e.Self]
+		if target == nil {
+			return
+		}
+		sf, err := parseFile(ctx, c.parser, f.Name, []byte(e.Source), originSource)
+		if err != nil {
+			return
+		}
+		sf.path, sf.pinLine = f.path, ln
+		before := len(c.constList)
+		c.collectBody(ctx, sf, target, sf.Root.Statements, c.lexicalOf(target), true)
+		for _, k := range c.constList[before:] {
+			c.addMainStmt(f, &constInit{k: k})
+		}
+		return
+	}
 	site := boot.Loc{File: f.path, Line: ln}
 	c.evalSites[site] = true
 	e.Source = wrapBigLiterals(e.Source)

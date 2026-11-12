@@ -33,6 +33,7 @@ module RugarooBoot
       install_alias_method
       install_include
       install_evals
+      install_const_set
       install_autoload
       install_private_constant
       @delegators = {}
@@ -216,6 +217,9 @@ module RugarooBoot
       when Hash
         parts = x.map { |k, e| (kl = literal(k, depth + 1)) && (el = literal(e, depth + 1)) && "#{kl} => #{el}" }
         parts.all? ? "{#{parts.join(", ")}}" : nil
+      when ::Set
+        parts = x.map { |e| literal(e, depth + 1) }
+        parts.all? ? "::Set[#{parts.join(", ")}]" : nil
       end
     end
 
@@ -248,6 +252,37 @@ module RugarooBoot
           super(*args, **kw, &blk)
         end
       end)
+    end
+
+    # `Sets.const_set(name, set)` at load time (rubocop-ast names each NodePattern set as it compiles a pattern): a
+    # constant no source line writes. One whose value is a plain literal is recorded as the `NAME = value` its module
+    # would have evaluated, so the compiler declares it there (decisions 204, 444). A name the module already has is
+    # left alone: its source assigns it.
+    def install_const_set
+      Module.prepend(Module.new do
+        def const_set(name, value)
+          fresh = begin
+            !const_defined?(name, false)
+          rescue ::StandardError
+            false
+          end
+          ::RugarooBoot.record_const_set(self, name, value) if fresh
+          super
+        end
+      end)
+    end
+
+    def record_const_set(mod, name, value)
+      named = safe_name(mod)
+      lit = literal(value)
+      return unless named && lit && name.to_s.match?(/\A[A-Z][A-Za-z0-9_]*\z/)
+
+      lit = "#{lit}.freeze" if value.frozen? && (value.is_a?(::Array) || value.is_a?(::Hash) || value.is_a?(::Set) || value.is_a?(::String))
+      loc = caller_locations(2, 1).first
+      return unless loc
+
+      @evals << { "file" => loc.path, "line" => loc.lineno, "source" => "#{name} = #{lit}\n", "kind" => "const_set", "self" => named,
+                  "caller" => "#{loc.path}:#{loc.lineno}" }
     end
 
     def install_autoload
