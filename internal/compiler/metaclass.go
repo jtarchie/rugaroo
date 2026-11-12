@@ -146,6 +146,14 @@ func (c *Class) descendantDefines(name string, private bool) bool {
 		if m := sub.Methods[name]; m != nil && (private || !m.Private) {
 			return true
 		}
+		for _, inc := range sub.Includes { // a module the subclass includes overrides it too (rubocop-ast's BuilderExtensions#n over Parser::Builders::Default's private n; decision 444)
+			if inc.Mod == nil || inc.Mod.universal {
+				continue
+			}
+			if e := inc.Mod.lookup(name); e != nil && e.M.Owner != nil && !e.M.Owner.universal && (private || !e.M.Private) {
+				return true
+			}
+		}
 		if sub.descendantDefines(name, private) {
 			return true
 		}
