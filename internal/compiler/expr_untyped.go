@@ -42,6 +42,12 @@ func (f *fctx) gemDynShortcut(n parser.Node, recv expr, name string, args []pars
 		return expr{code: "rbEachEnumAny(" + f.coerce(n, recv, TAny{}) + ")", typ: TAny{}}, true
 	case name == "scan" && len(args) == 1 && f.c.classes["String"].lookup("__scan_any") != nil:
 		return f.dynStringScan(n, recv, args), true
+	case (name == "each_cons" || name == "each_slice") && len(args) == 1 && !isSplat(args[0]):
+		// `tokens.each_cons(2).all? { |a, b| ... }` with no block on an untyped list (rubocop-ast's tokens_sorted?): the
+		// Array's own blockless form over its elements (decision 444)
+		f.c.dynEach = true
+		elems := expr{code: "rbElemsAny(" + f.coerce(n, recv, TAny{}) + ")", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+		return f.genMethodCall(n, elems, name, args, nil), true
 	case (name == "with_index" || name == "each_with_index") && len(args) == 0:
 		// `x.each.with_index` with no block on an untyped Enumerator (or anything with an each): the pairs, as an
 		// Array's each_with_index enumerator gives them (decision 444)
@@ -215,7 +221,7 @@ var dynEnumNames = map[string]bool{
 	"partition": true, "each_with_index": true, "each_with_object": true, "inject": true, "reduce": true, "to_h": true,
 	"fetch": true, "uniq": true, "sort": true, "min": true, "max": true, "each_slice": true, "each_cons": true,
 	"sum_by": true, "tally_by": true, "chunk_while": true, "slice_when": true, "zip": true, "each_key": true,
-	"each_value": true, "each_pair": true, "transform_values": true, "transform_keys": true, "index_by": true,
+	"each_value": true, "each_pair": true, "transform_values": true, "transform_keys": true, "index_by": true, "to_set": true,
 }
 
 // dynEnumBlock is a gem's `x.select { }` on an untyped x (decision 224): a Hash takes Hash[untyped, untyped]'s method,

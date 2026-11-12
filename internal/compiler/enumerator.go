@@ -206,6 +206,14 @@ func (f *fctx) enumRest(n parser.Node, p Param, args []parser.Node, own bool) (s
 	if len(args) == 0 {
 		return "", true
 	}
+	if sp, ok := args[0].(*parser.SplatNode); ok && len(args) == 1 && sp.Expression != nil && f.c.goType(p.Type) != "any" {
+		// `to_enum(__method__, *types)` passing a typed rest on (rubocop-ast's each_ancestor): the Array's own elements
+		// (decision 444)
+		if e := f.genExpr(sp.Expression, nil); isClass(e.typ, "Array") && typeEq(e.typ.(TClass).Args[0], p.Type) {
+			return "(" + f.materialize(e) + ").s...", true
+		}
+		return "", false
+	}
 	var lits, parts []string
 	for _, a := range args {
 		if sp, ok := a.(*parser.SplatNode); ok {
