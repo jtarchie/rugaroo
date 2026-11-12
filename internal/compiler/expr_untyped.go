@@ -591,7 +591,7 @@ func (f *fctx) anySpread(args []parser.Node) (string, bool) {
 			}
 			continue
 		}
-		parts = append(parts, "rbSplatAny("+f.coerce(sp, e, TAny{})+")")
+		parts = append(parts, "rbSplatObj("+f.coerce(sp, e, TAny{})+")")
 	}
 	flush()
 	if len(parts) == 1 {

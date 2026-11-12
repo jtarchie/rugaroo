@@ -180,7 +180,7 @@ func (f *fctx) splatOverRest(m *Method, args []parser.Node) []parser.Node {
 	a := f.genExpr(sp.Expression, nil)
 	tc, ok := a.typ.(TClass)
 	if !ok || tc.C.RubyName != "Array" || len(tc.Args) != 1 {
-		a = expr{code: "&Array[any]{s: rbSplatAny(" + f.coerce(sp, a, TAny{}) + ")}", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+		a = expr{code: "&Array[any]{s: rbSplatObj(" + f.coerce(sp, a, TAny{}) + ")}", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
 		tc = a.typ.(TClass) //nolint:forcetypeassert // built just above
 	}
 	tmp := f.newTmp()
@@ -208,7 +208,7 @@ func (f *fctx) splatArgs(m *Method, args []parser.Node, skip bool, npos int) (st
 	var elem Type
 	switch t := a.typ.(type) {
 	case TAny: // MRI's splat: an Array spreads, nil is nothing, anything else is one argument (bindata's `*args` of a Symbol)
-		code, elem = "&Array[any]{s: rbSplatAny("+a.code+")}", TAny{}
+		code, elem = "&Array[any]{s: rbSplatObj("+a.code+")}", TAny{}
 	case TClass:
 		if t.C.RubyName != "Array" || len(t.Args) != 1 {
 			f.errorf(sp, "splat of %s into a non-rest parameter: only an Array is supported", a.typ)
@@ -940,7 +940,7 @@ func (f *fctx) restArgs(n parser.Node, args []parser.Node, params []Type) string
 			case isArr && t.C.RubyName == "Array" && isAny(elem):
 				acc = "append(" + acc + ", rbAnySlice(" + e.code + ")...)"
 			case isAny(e.typ) && isAny(elem): // MRI's splat of an untyped value: an Array spreads, nil is nothing, else one value
-				acc = "append(" + acc + ", rbSplatAny(" + e.code + ")...)"
+				acc = "append(" + acc + ", rbSplatObj(" + e.code + ")...)"
 			default:
 				f.errorf(sp, "cannot splat %s into a block's *rest of %s", e.typ, elem)
 			}

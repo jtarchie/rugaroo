@@ -311,5 +311,5 @@ func (f *fctx) lenientSplat(a expr) expr {
 	if !isAny(a.typ) || !f.lenient() {
 		return a
 	}
-	return expr{code: "(&Array[any]{s: rbSplatAny(" + a.code + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+	return expr{code: "(&Array[any]{s: rbSplatObj(" + a.code + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
 }

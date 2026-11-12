@@ -62,16 +62,19 @@ func (f *fctx) genSplatArray(n *parser.ArrayNode, elemT, hint Type) expr {
 // to_a (a tuple, MatchData, Hash, Range), nothing for nil, and x itself otherwise (`[*"a"]` is `["a"]`).
 func (f *fctx) splatToArray(el parser.Node, sp *parser.SplatNode, e expr) expr {
 	if isAny(e.typ) && f.lenient() { // `tags = [*tags]` of an untyped tags: spread as MRI would at run time
-		return expr{code: "(&Array[any]{s: rbSplatAny(" + e.code + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+		return expr{code: "(&Array[any]{s: rbSplatObj(" + e.code + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
 	}
 	spread := func(v expr) expr {
 		if c, ok := v.typ.(TClass); ok && f.c.isDelegator(c.C) { // its object's to_a, at run time (Homebrew's LazyObject)
-			return expr{code: "(&Array[any]{s: rbSplatAny(" + f.coerce(sp, v, TAny{}) + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+			return expr{code: "(&Array[any]{s: rbSplatObj(" + f.coerce(sp, v, TAny{}) + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
 		}
 		if c, ok := v.typ.(TClass); ok && c.C.lookup("to_a") == nil {
 			return expr{code: "(&Array[" + f.c.goType(v.typ) + "]{s: []" + f.c.goType(v.typ) + "{" + v.code + "}})", typ: TClass{C: f.c.classes["Array"], Args: []Type{v.typ}}}
 		}
 		a := f.genMethodCall(el, v, "to_a", nil, nil)
+		if !isClass(a.typ, "Array") && f.lenient() && !isVoid(a.typ) { // a gem to_a that answers an Array or a tuple (a union): spread at run time
+			return expr{code: "(&Array[any]{s: rbSplatAny(" + f.coerce(sp, a, TAny{}) + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
+		}
 		if !isClass(a.typ, "Array") {
 			f.errorf(el, "*%s inside an array literal: %s#to_a is %s, not an Array", f.f.text(sp.Expression.GetLocation()), v.typ, a.typ)
 		}

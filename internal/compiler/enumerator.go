@@ -216,7 +216,7 @@ func (f *fctx) enumRest(n parser.Node, p Param, args []parser.Node, own bool) (s
 				parts = append(parts, "[]any{"+strings.Join(lits, ", ")+"}")
 				lits = nil
 			}
-			parts = append(parts, "rbSplatAny("+f.coerce(sp, f.genExpr(sp.Expression, nil), TAny{})+")")
+			parts = append(parts, "rbSplatObj("+f.coerce(sp, f.genExpr(sp.Expression, nil), TAny{})+")")
 			continue
 		}
 		lits = append(lits, f.coerce(n, f.genExpr(a, p.Type), p.Type))

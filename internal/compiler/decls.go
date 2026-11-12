@@ -179,6 +179,7 @@ func (c *Compiler) emitTables() {
 	c.emitFrozenFlag()
 	c.emitDynEach()
 	c.emitLoadedFeatures()
+	c.emitSplatObj()
 	c.emitDelegateObj()
 	c.emitOptClassFrom()
 	c.emitTuples()
@@ -240,4 +241,26 @@ func (c *Compiler) emitLoadedFeatures() {
 		}
 	}
 	c.w("func rbLoadedFeatures() *Array[String] {\n\treturn %s\n}\n\n", arrayLit("String", elems))
+}
+
+// emitSplatObj emits rbSplatObj, `*x` of an untyped x (decision 444): a gem or user object with its own to_a spreads
+// what it answers (parser's `name, = *node`: AST::Node#to_a is its children), one case per Go shape of such a to_a;
+// anything else is rbSplatAny's (an Array's elements, a Hash's pairs, nothing for nil, else x itself).
+func (c *Compiler) emitSplatObj() {
+	c.w("func rbSplatObj(x any) []any {\n\tswitch r := x.(type) {\n")
+	seen := map[string]bool{}
+	for _, cls := range c.classList {
+		m := cls.Methods["to_a"]
+		if m == nil || m.File == nil || m.File.isPrelude() || len(m.Params) > 0 || m.Block != nil || m.generic() || len(cls.TypeParams) > 0 || cls.metaOf != nil || cls.hashBase || !cls.isStruct() {
+			continue
+		}
+		params, ret := c.sig(m, nil)
+		shape := "interface{ " + m.GoName + "(" + params + ") " + ret + " }"
+		if seen[shape] || !strings.HasPrefix(ret, "*Array[") && ret != "any" {
+			continue
+		}
+		seen[shape] = true
+		c.w("\tcase %s:\n\t\treturn rbSplatAny(any(r.%s()))\n", shape, m.GoName)
+	}
+	c.w("\t}\n\treturn rbSplatAny(x)\n}\n\n")
 }
