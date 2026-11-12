@@ -268,7 +268,7 @@ func (f *fctx) dynEnumBlock(n parser.Node, recv expr, name string, args []parser
 		f.emit("%s", head)
 		if call, ok := n.(*parser.CallNode); ok {
 			if e := classOf(on.typ).lookup(name); e != nil && e.M.Iterator && e.M.Block != nil {
-				if _, isBlock := call.Block.(*parser.BlockNode); isBlock && len(args) == 0 { // `each_key do ... end`: a range loop, valued its receiver as MRI's
+				if _, isBlock := call.Block.(*parser.BlockNode); isBlock { // `each_key do ... end`, `each_cons(2) do |a, b| ... end` (rubocop's token pairs): a range loop, valued its receiver as MRI's
 					var err *compileError
 					f.probe(func() { err = catchCompileError(func() { f.genIterLoop(call, e, on) }) })
 					f.indent++
