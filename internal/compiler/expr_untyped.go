@@ -252,6 +252,18 @@ func (f *fctx) dynEnumBlock(n parser.Node, recv expr, name string, args []parser
 	if env := f.c.classes["ENVClass"]; env != nil && env.lookup("to_h") != nil { // ENV is Hash-like: its pairs, as a Hash (decision 229)
 		branch("case *ENVClass:", expr{code: r + ".ToH()._ToAny()", typ: hashT})
 	}
+	seenOwner := map[*Class]bool{}
+	for _, m := range f.c.gemMethodsNamed(name) {
+		// a gem class with its own method of the name (rubocop's Config#transform_values, a forwarder to its Hash) is
+		// neither a Hash nor a list of elements: its method (decision 444)
+		o := m.Owner
+		if o == nil || seenOwner[o] || o.IsModule || o.metaOf != nil || len(o.TypeParams) > 0 || !o.isStruct() || o.hashBase || m.Block == nil {
+			continue
+		}
+		seenOwner[o] = true
+		t := TClass{C: o}
+		branch("case "+f.c.goType(t)+":", expr{code: r, typ: t})
+	}
 	branch("default:", expr{code: "rbElemsAny(" + r + ")", typ: arrT})
 	f.emit("}")
 	return expr{code: tmp, typ: TAny{}}

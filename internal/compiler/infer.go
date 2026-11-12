@@ -49,6 +49,7 @@ type inference struct {
 	noUnion map[pendingKey]bool   // parameters whose union type broke their method's body: joined without unions from then on (decision 150)
 	none    map[pendingKey]bool   // pending in the last round and typed by no call: a seeded compile reports them without rounds
 	noDrop  map[pendingKey]bool   // still untyped when rounds converged with its method's untyped returns dropped: no longer dropped (decision 383)
+	anyUse  map[pendingKey]bool   // a gem parameter typed by some calls while a gem call passes an untyped value: untyped once the rounds converged (decision 444)
 	from    map[pendingKey]string // the first call each type came from, file:line, for a mismatch's message
 	changed bool
 }
@@ -765,6 +766,7 @@ func (c *Compiler) updateInference(inf *inference) {
 		order[f] = i
 	}
 	next, from := map[pendingKey]Type{}, map[pendingKey]string{}
+	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		seen := map[[2]int]int{}
 		var uses []paramUse
@@ -790,6 +792,13 @@ func (c *Compiler) updateInference(inf *inference) {
 			// NodePattern#initialize, which is untyped this round
 			continue
 		}
+		if inf.anyUse[key] {
+			next[key] = TAny{}
+			continue
+		}
+		if c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
+			bets = append(bets, key)
+		}
 		if t, at, ok := c.gemUseType(key, uses); ok {
 			next[key], from[key] = t, at
 			continue
@@ -805,9 +814,33 @@ func (c *Compiler) updateInference(inf *inference) {
 		}
 	}
 	inf.changed = len(next) != len(inf.types)
+	diff := 0
 	for k, t := range next {
 		if old, ok := inf.types[k]; !ok || fmt.Sprint(old) != fmt.Sprint(t) {
 			inf.changed = true
+			diff++
+			if c.env.Timing && diff <= 3 {
+				fmt.Fprintf(os.Stderr, "rugaroo: round changed %v: %v -> %v\n", k, old, t)
+			}
+		}
+	}
+	if c.env.Timing {
+		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
+	}
+	if !inf.changed || diff*50 <= len(next) {
+		// settled (a large gem program's last few parameters flip between rounds until the cap): an untyped argument is
+		// now untyped for good, not a parameter still waiting for its type. A typed
+		// parameter would assert the value's class at the call, and raise where MRI runs (parser's
+		// StaticEnvironment#declared?(name) typed Symbol by the parser, called by the lexer with an untyped String it
+		// calls to_sym on). Such parameters become untyped and the rounds go on (decision 444).
+		for _, key := range bets {
+			if t := next[key]; t != nil && !isAny(t) && c.goType(t) != "any" {
+				if inf.anyUse == nil {
+					inf.anyUse = map[pendingKey]bool{}
+				}
+				inf.anyUse[key], next[key], inf.changed = true, TAny{}, true
+				delete(from, key)
+			}
 		}
 	}
 	inf.types, inf.from = next, from

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -622,6 +623,9 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 	c := f.c
 	if c.round || c.infer == nil || c.inDryRun || f.discover || f.probeDepth > 0 || !f.lenient() {
 		return
+	}
+	if os.Getenv("RUGAROO_BET_DEBUG") != "" && isAny(a.typ) && !isAny(p.Type) && f.c.goType(p.Type) != "any" {
+		fmt.Fprintf(os.Stderr, "bet %v %s\n", p.Pending, p.Type)
 	}
 	pc, ok := stripOpt(p.Type).(TClass)
 	ac, ok2 := stripOpt(a.typ).(TClass)

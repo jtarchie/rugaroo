@@ -493,6 +493,13 @@ class String
   #: (Regexp) -> MatchData?
   def match(re) = re.match(self)
 
+  # match with a block: the block's value on a match, else nil (decision 444).
+  #: [U] (Regexp) { (MatchData) -> U } -> U?
+  def __match_block(re)
+    md = re.match(self)
+    md.nil? ? nil : yield(md)
+  end
+
   #: (Regexp) -> bool
   def match?(re) = re.match?(self)
 
