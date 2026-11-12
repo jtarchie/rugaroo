@@ -681,6 +681,11 @@ func (c *Compiler) collectUses() {
 						t = TClass{C: hc.C, Args: []Type{hc.Args[0], TAny{}}}
 					}
 				}
+				if k := classOf(stripOpt(t)); k != nil && k.constSingleton && c.gemFile(m.File) {
+					// a sentinel object with its own methods (rubocop's `named: ANY`, whose `==` answers true): callers pass
+					// values of other classes, so it types nothing (decision 444)
+					t = TAny{}
+				}
 				c.uses[p.Pending] = append(c.uses[p.Pending], paramUse{typ: t, file: m.File, off: p.Default.GetLocation().StartOffset, deflt: true})
 			}
 		}

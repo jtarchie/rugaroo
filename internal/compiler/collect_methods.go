@@ -502,6 +502,7 @@ func (c *Compiler) addConstSingletonDef(f *File, n *parser.DefNode, r *parser.Co
 	if sub == nil {
 		sub = c.declareClass(f, qualify(scope, subName), f.line(n.Location.StartOffset), false)
 		sub.superRef = &constRef{node: call.Receiver, scope: k.Scope, file: k.File}
+		sub.constSingleton = true
 		built := *call
 		built.Receiver = &parser.ConstantReadNode{Name: subName, Location: call.Receiver.GetLocation()}
 		k.Value = &built

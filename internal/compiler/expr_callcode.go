@@ -1075,6 +1075,9 @@ func (f *fctx) untypedTwinArg(e *entry, recvT Type, args []parser.Node, block pa
 	if !twin {
 		return false
 	}
+	if f.c.resolveMethod(m); len(m.Params) > 0 && isAny(m.Params[0].Type) {
+		return false // the method itself takes anything (`Set.new(untyped)`, whose twins are for typed arguments; decision 444)
+	}
 	var a expr
 	f.probe(func() { a = f.genExpr(args[0], nil) })
 	return isAny(a.typ)

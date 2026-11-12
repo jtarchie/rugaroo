@@ -12,22 +12,23 @@ import (
 
 // Class is a Ruby class or module.
 type Class struct {
-	Name       string // Go identifier: "Resty_Actions_Show"
-	RubyName   string // constant path: "Resty::Actions::Show"
-	IsModule   bool
-	GoType     string    // `@go_type` underlying Go type; "" for struct classes
-	hashBase   bool      // a user class extending Hash or Array: embeds a Hash[any, V] or an Array[E] (decisions 165, 202)
-	prunedDefs []*Method // gem methods nothing reaches (decision 169): not compiled, still listed by reflection (decision 444)
-	selfDefs   bool      // some method has `# @self` (selfOverload)
-	TypeParams []string
-	superRef   *constRef   // superclass expression, resolved in link
-	reSupers   []*constRef // superclasses named when reopening; must resolve to Super
-	Super      *Class
-	Includes   []Include
-	Methods    map[string]*Method
-	MethodList []*Method
-	Ivars      map[string]*Ivar
-	IvarList   []*Ivar
+	Name           string // Go identifier: "Resty_Actions_Show"
+	RubyName       string // constant path: "Resty::Actions::Show"
+	IsModule       bool
+	GoType         string    // `@go_type` underlying Go type; "" for struct classes
+	hashBase       bool      // a user class extending Hash or Array: embeds a Hash[any, V] or an Array[E] (decisions 165, 202)
+	constSingleton bool      // the hidden class of `X = K.new` with `def X.m`: live whenever the program is (no code names it)
+	prunedDefs     []*Method // gem methods nothing reaches (decision 169): not compiled, still listed by reflection (decision 444)
+	selfDefs       bool      // some method has `# @self` (selfOverload)
+	TypeParams     []string
+	superRef       *constRef   // superclass expression, resolved in link
+	reSupers       []*constRef // superclasses named when reopening; must resolve to Super
+	Super          *Class
+	Includes       []Include
+	Methods        map[string]*Method
+	MethodList     []*Method
+	Ivars          map[string]*Ivar
+	IvarList       []*Ivar
 	srcPos
 	Subclasses []*Class
 	// universal classes (BasicObject, Object, Kernel) are ancestors of the

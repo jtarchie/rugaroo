@@ -308,7 +308,7 @@ func (r *reach) computeLive() {
 		if i := strings.LastIndex(name, "::"); i >= 0 {
 			name = name[i+2:]
 		}
-		if !r.gemClass(cls) || r.named[cls] || r.byName[name] {
+		if !r.gemClass(cls) || r.named[cls] || r.byName[name] || cls.constSingleton {
 			mark(cls)
 		}
 	}
