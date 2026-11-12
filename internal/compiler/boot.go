@@ -320,7 +320,7 @@ func compileTraced(ctx context.Context, preludeFS, gemSigs fs.FS, sources []Sour
 		if ok {
 			warnings = append(warnings, fmt.Sprintf("%s does not type-check in Go, so calling it raises NotImplementedError: %s (decision 205)", g.key, msg))
 		}
-		if !ok && strings.HasPrefix(msg, "cannot use self (") && strings.Contains(msg, "does not implement") {
+		if !ok && strings.Contains(fn, ".") && (strings.HasPrefix(msg, "cannot use self (") && strings.Contains(msg, "does not implement") || strings.Contains(msg, " does not satisfy ")) {
 			// a class's forwarder to a mixin's method whose constraint the class cannot meet (rubocop's RedundantLineBreak
 			// has its own register_offense(node) under Alignment's (node, message_node)): MRI raises ArgumentError inside
 			// that call; here the forwarder raises (decision 444)

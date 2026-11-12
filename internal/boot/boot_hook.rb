@@ -448,7 +448,37 @@ module RugarooBoot
       out
     end
 
+    # After the program ran: load each autoload it registered and never touched, so the class bodies in those files run
+    # under the hooks (their `class_eval` strings, `const_set`s, aliases). The compiler offers such a file only when
+    # compiled code names its constant (decision 444), and it needs what the body evaluated to compile it at all
+    # (rubocop's helper mixins define their NodePattern matchers at load). What the program itself loaded is taken
+    # first, so the manifest still says which autoloads it resolved.
+    def load_unresolved_autoloads(resolved)
+      std = [RbConfig::CONFIG["rubylibdir"], RbConfig::CONFIG["archdir"]]
+      resolved.each do |a|
+        next if a["resolved"] || a["owner"].nil?
+
+        path = a["path"].to_s
+        path += ".rb" unless path.end_with?(".rb")
+        file = File.absolute_path?(path) ? path : $LOAD_PATH.map { |d| File.join(d.to_s, path) }.find { |f| File.file?(f) }
+        next unless file && File.file?(file) && std.none? { |d| file.start_with?("#{d}/") }
+
+        owner = RugarooBoot.const_at(a["owner"])
+        next unless owner.is_a?(Module)
+
+        begin
+          owner.const_get(a["const"])
+        rescue ::Exception # rubocop:disable Lint/RescueException -- a file that cannot load here is simply not offered
+          nil
+        end
+      end
+    end
+
     def dump(path)
+      autoloads = resolve_autoloads
+      loaded_features = $LOADED_FEATURES - @features
+      state = class_state
+      load_unresolved_autoloads(autoloads)
       @class_tp&.disable
       @line_tp&.disable
       @alias_tp&.disable
@@ -459,7 +489,7 @@ module RugarooBoot
         info.merge("ancestors" => anc)
       end
       manifest = {
-        "loaded_features" => ($LOADED_FEATURES - @features),
+        "loaded_features" => loaded_features,
         "load_path" => $LOAD_PATH.map(&:to_s),
         "std_dirs" => [RbConfig::CONFIG["rubylibdir"], RbConfig::CONFIG["archdir"]], # MRI's own library: a file there is never a source (decision 404)
         "classes" => classes,
@@ -467,8 +497,8 @@ module RugarooBoot
         "aliases" => @aliases,
         "includes" => @includes,
         "evals" => @evals.uniq { |e| [e["source"], e["kind"], e["self"], e["caller"]] },
-        "autoloads" => resolve_autoloads,
-        "class_state" => class_state,
+        "autoloads" => autoloads,
+        "class_state" => state,
         "branches" => branches,
         "const_classes" => const_classes,
         "delegators" => @delegators,
