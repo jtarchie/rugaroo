@@ -210,6 +210,13 @@ class String < Object
   #: (String, String, String) -> bool
   def __end_with_q_3(a, b, c) = end_with?(a) || end_with?(b) || end_with?(c)
 
+  # `end_with?(*suffixes)`: any number of them, none is false (decision 444).
+  #: (Array[String]) -> bool
+  def __end_with_any(list) = list.any? { |s| end_with?(s) }
+
+  #: (Array[String]) -> bool
+  def __start_with_any(list) = list.any? { |s| start_with?(s) }
+
   #: (String) -> String
   def delete_prefix(s) = %x{ rbNewStr(self, String(strings.TrimPrefix(string(self), string(s)))) }
 

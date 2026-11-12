@@ -601,6 +601,10 @@ func (f *fctx) partlyLoaded(c *Class, block parser.Node) bool {
 // classCall dispatches on a class-typed receiver.
 func (f *fctx) classCall(n parser.Node, t TClass, recv expr, name string, args []parser.Node, block parser.Node) expr {
 	f.noteYielderFeed(recv, name, args)
+	if t.C.RubyName == "String" && (name == "end_with?" || name == "start_with?") && len(args) == 1 && isSplat(args[0]) && block == nil {
+		// `path.end_with?(*DL_EXTENSIONS)` (rubocop's ResultCache): the list's length is a run-time fact, zero included
+		return f.genMethodCall(n, recv, "__"+strings.TrimSuffix(name, "?")+"_any", []parser.Node{args[0].(*parser.SplatNode).Expression}, nil)
+	}
 	if e, ok := f.moduleCmp(t, recv, name, args, block); ok {
 		return e
 	}

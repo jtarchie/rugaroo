@@ -444,11 +444,20 @@ func (f *fctx) applyTail(n parser.Node, e expr, t tail) {
 			f.emitExprStmt(n, e)
 			return
 		}
+		code := ""
+		if f.m != nil && f.m.inherited != nil && f.block == "" && f.lenient() && isAny(e.typ) && !isAny(t.typ) && typeEq(t.typ, f.m.Ret) {
+			// a gem override's untyped value under the return type it inherits: what fits, else its zero, as an adapter's
+			// (rubocop's ProgressFormatter#started ends in `output.puts` under SimpleTextFormatter#started's `@count = 0`;
+			// decisions 428, 444)
+			code = fmt.Sprintf("rbAsOrZero[%s](%s)", f.c.goType(t.typ), e.code)
+		} else {
+			code = f.coerce(n, e, t.typ)
+		}
 		if f.begins > 0 {
-			f.emit("%s = %s", f.retVar, f.coerce(n, e, t.typ))
+			f.emit("%s = %s", f.retVar, code)
 			return
 		}
-		f.emit("return %s", f.coerce(n, e, t.typ))
+		f.emit("return %s", code)
 	case tailAssign:
 		if t.typ == nil {
 			t.recordFrom(n, e.typ)

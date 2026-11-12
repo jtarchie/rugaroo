@@ -193,6 +193,10 @@ func (c *Compiler) noteNamedConsts(f *File, named, optNamed map[string]bool) {
 			mark(n.Name)
 		case *parser.ConstantPathNode:
 			mark(*n.Name)
+		case *parser.StringNode: // a constant's name as a String, for const_get (rubocop's formatter table: '[p]rogress' => 'ProgressFormatter'; decision 444)
+			if v := n.Unescaped.Value; v != "" && v[0] >= 'A' && v[0] <= 'Z' && isIdentMethod(v) {
+				mark(v)
+			}
 		case *parser.CallNode:
 			if n.Name != "autoload" && n.Arguments != nil {
 				for _, a := range n.Arguments.Arguments {
