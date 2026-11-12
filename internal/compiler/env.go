@@ -20,6 +20,7 @@ type envConfig struct {
 	PruneWhy      bool   // RUGAROO_PRUNE_WHY: the keep chains of the pruner
 	KeepGoing     bool   // RUGAROO_KEEP_GOING: record a collect error and go on
 	DispatchDebug string // RUGAROO_DISPATCH_DEBUG: "all", or any other non-empty value for Kernel/Object/module owners
+	NoEarlyRounds bool   // RUGAROO_NO_EARLY_ROUNDS: run inference rounds to the cap even once they have settled (A/B for decision 444)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
 	UntypedWhy    bool   // RUGAROO_UNTYPED_WHY: each dynamic-call warning names where its untyped receiver came from
@@ -48,6 +49,7 @@ func loadEnv() envConfig {
 		PruneWhy:      set("RUGAROO_PRUNE_WHY"),
 		KeepGoing:     set("RUGAROO_KEEP_GOING"),
 		DispatchDebug: os.Getenv("RUGAROO_DISPATCH_DEBUG"),
+		NoEarlyRounds: os.Getenv("RUGAROO_NO_EARLY_ROUNDS") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",
 		GopoisonDump:  os.Getenv("RUGAROO_GOPOISON_DUMP"),
 		UntypedWhy:    set("RUGAROO_UNTYPED_WHY"),

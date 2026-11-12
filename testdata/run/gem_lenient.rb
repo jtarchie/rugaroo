@@ -37,6 +37,7 @@ require "sexpish"
 require "capish"
 require "hookish"
 require "scanish"
+require "readyish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -174,3 +175,5 @@ Capish.demo.each { |v| p v }
 # fill(v, start, len) on an untyped Array, Dir.glob of several patterns (decision 444)
 Hookish.demo.each { |v| p v }
 Scanish.demo(__dir__).each { |v| p v }
+# self.class.new over subclasses whose initialize takes another count; scan's last match on an untyped String (decision 444)
+Readyish.demo.each { |v| p v }

@@ -42,6 +42,9 @@ type needInfer struct{}
 
 const maxInferRounds = 8
 
+// settledRounds is how many settled rounds in a row end the rounds early (inferRounds).
+const settledRounds = 3
+
 // inference is what the rounds learned: each parameter key's type, from
 // the last round's compile (rehome moves it into the next one's classes).
 type inference struct {
@@ -49,6 +52,7 @@ type inference struct {
 	noUnion map[pendingKey]bool   // parameters whose union type broke their method's body: joined without unions from then on (decision 150)
 	none    map[pendingKey]bool   // pending in the last round and typed by no call: a seeded compile reports them without rounds
 	noDrop  map[pendingKey]bool   // still untyped when rounds converged with its method's untyped returns dropped: no longer dropped (decision 383)
+	settled int                   // rounds in a row that changed at most 2% of the parameters (decision 444)
 	anyUse  map[pendingKey]bool   // a gem parameter typed by some calls while a gem call passes an untyped value: untyped once the rounds converged (decision 444)
 	from    map[pendingKey]string // the first call each type came from, file:line, for a mismatch's message
 	changed bool
@@ -835,6 +839,11 @@ func (c *Compiler) updateInference(inf *inference) {
 		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
 	}
 	settled := !inf.changed || diff*50 <= len(next)
+	if settled {
+		inf.settled++
+	} else {
+		inf.settled = 0
+	}
 	if settled {
 		// settled (a large gem program's last few parameters flip between rounds until the cap): an untyped argument is
 		// now untyped for good, not a parameter still waiting for its type. A typed

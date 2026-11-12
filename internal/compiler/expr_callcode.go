@@ -991,7 +991,7 @@ func (f *fctx) foldInt(n parser.Node) (*big.Int, bool) {
 	return nil, false
 }
 
-// newSigsDiffer reports whether a subclass's new takes keywords or a rest that m's Go signature does not name alike.
+// newSigsDiffer reports whether a subclass's new has another Go signature than m's.
 func (f *fctx) newSigsDiffer(m *Method) bool {
 	ps, _ := f.c.sig(m, nil)
 	queue := slices.Clone(m.Owner.metaOf.Subclasses)
@@ -1001,7 +1001,9 @@ func (f *fctx) newSigsDiffer(m *Method) bool {
 		if k.meta == nil {
 			continue
 		}
-		if e := k.meta.lookup("new"); e != nil && e.M != m && (e.M.kwMask() || m.kwMask() || slices.ContainsFunc(e.M.Params, func(p Param) bool { return p.Keyword || p.KwRest })) {
+		// any other Go shape: keywords, a rest, or another count (rubocop's RedundantCopDisableDirective#initialize takes a
+		// third argument, and Base#ready's `self.class.new(config, options)` asserted the two-argument New; decision 444)
+		if e := k.meta.lookup("new"); e != nil && e.M != m {
 			if qs, _ := f.c.sig(e.M, nil); qs != ps {
 				return true
 			}

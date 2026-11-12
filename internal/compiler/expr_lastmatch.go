@@ -50,7 +50,7 @@ func (f *fctx) scanBlockLastMatch(n parser.Node, recv expr, name string, args []
 	loc, m := b.Location, "rb_m_"
 	r := f.newTmp()
 	f.emit("%s := %s", r, recv.code)
-	set := &exprNode{Node: &parser.NilNode{Location: loc}, e: expr{code: fmt.Sprintf("func() { m_ := %s; %s = &m_ }()", goLocalName(m), f.lastMatch), typ: TVoid{}, stmt: true}}
+	set := &exprNode{Node: &parser.NilNode{Location: loc}, e: expr{code: fmt.Sprintf("func() { m_ := rbAs[*MatchData](any(%s), \"MatchData\"); %s = &m_ }()", goLocalName(m), f.lastMatch), typ: TVoid{}, stmt: true}}
 	blk := &parser.BlockNode{Location: loc, Locals: append([]string{m}, b.Locals...),
 		Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: m}}}},
 		Body:       &parser.StatementsNode{Location: st.Location, Body: append([]parser.Node{set}, st.Body...)}}

@@ -520,6 +520,12 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		if !errors.Is(err, errInferRound) || !opts.infer.changed {
 			break
 		}
+		if opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds {
+			// a large gem program's rounds never converge: a few parameters flip until the cap, each round a full dry
+			// run. The first settled round untypes what an untyped call reaches and stops decision 383's drops; the
+			// next ones carry that through, and the final pass redoes what is still off (errWidenRedo). decision 444
+			break
+		}
 	}
 	return roundErr
 }
