@@ -37,6 +37,11 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 		f.errorf(n, "super outside a method")
 	}
 	e := f.c.inheritedSig(f.m)
+	if e == nil && f.m.aliasOf != "" { // `alias on_csend on_send`: the copy's super is on_send's, as MRI's (rubocop's IndentationWidth)
+		orig := *f.m
+		orig.Name = f.m.aliasOf
+		e = f.c.inheritedSig(&orig)
+	}
 	if e != nil {
 		f.c.inferRet(e.M)
 		if f.lenient() { // an override's super is no evidence of what the method's other (dynamic) callers pass (bindata's String#assign)

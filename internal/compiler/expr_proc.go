@@ -106,6 +106,20 @@ func (f *fctx) procBlock(ba *parser.BlockArgumentNode) *parser.BlockNode {
 	if tc, ok := pt.(TClass); ok && tc.C.RubyName == yielderClass {
 		return yielderBlock(ba)
 	}
+	if kind, _, typed := methodFn(pt); f.lenient() && (isAny(pt) || kind == "Method" && !typed) {
+		// a gem's untyped callable as a block (rubocop's `aligned_with_any_line_range?(ranges, range, &predicate)`, where
+		// predicate is one of two Method objects): `{ |*xs| predicate.call(*xs) }`, called when it runs (decision 444)
+		loc := ba.Location
+		xs := "xs_"
+		call := &parser.CallNode{Location: loc, Receiver: ba.Expression, Name: "call", Arguments: &parser.ArgumentsNode{Location: loc,
+			Arguments: []parser.Node{&parser.SplatNode{Location: loc, Expression: &parser.LocalVariableReadNode{Location: loc, Name: xs}}}}}
+		return &parser.BlockNode{
+			Location:   loc,
+			Locals:     []string{xs},
+			Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Rest: &parser.RestParameterNode{Location: loc, Name: &xs}}},
+			Body:       &parser.StatementsNode{Location: loc, Body: []parser.Node{call}},
+		}
+	}
 	ft, ok := pt.(TFunc)
 	if kind, mf, typed := methodFn(pt); kind == "Method" {
 		if !typed {

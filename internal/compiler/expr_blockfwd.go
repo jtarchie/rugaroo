@@ -69,6 +69,14 @@ func (f *fctx) forwardIter(n parser.Node, call string, yields []Type) {
 			fields[i] = fmt.Sprintf("%s.F%d", list, i)
 		}
 		args = strings.Join(fields, ", ")
+	case f.blockSig.Rest && len(f.blockSig.Params) == 1 && !f.iterator:
+		// a named `&block` takes any number of values (rubocop's each_redundant_disable(&block) into a method yielding
+		// two; decision 444)
+		conv := make([]string, len(vars))
+		for i, v := range vars {
+			conv[i] = f.coerce(n, expr{code: v, typ: yields[i]}, f.blockSig.Params[0])
+		}
+		args = strings.Join(conv, ", ")
 	case len(yields) != len(f.blockSig.Params):
 		f.errorf(n, "the forwarded block takes %d values but %d are yielded", len(f.blockSig.Params), len(yields))
 	default:

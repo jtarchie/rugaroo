@@ -164,6 +164,7 @@ const (
 type Method struct {
 	ivarUse      *bool                // mentionsIvar's answer, once asked
 	attrWriter   bool                 // an unannotated attr_writer/attr_accessor's `def x=(v) = @x = v` (addModuleAttr)
+	aliasOf      string               // an alias's copy: the name its body was defined under, which its `super` looks up (decision 444)
 	blocklessOf  *Method              // a synthesized `__name_enum`: the gem method whose `return x unless block_given?` it answers (decision 418)
 	pendingIdx   map[int]pendingParam // sig param index → a parameter typed from use (decision 146)
 	pendingBlock []pendingParam       // the block's parameters, typed from the yields

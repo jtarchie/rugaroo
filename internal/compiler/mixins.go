@@ -495,6 +495,12 @@ func (c *Compiler) copyIncluderTemplates() {
 				!callsIncluderOnly(mm, mod, obj, incs, c.topDefs) {
 				continue
 			}
+			if slices.ContainsFunc(incs, func(cls *Class) bool {
+				own := cls.Methods[mm.Name]
+				return own != nil && own.Node != nil && containsSuper(own.Node.Body)
+			}) {
+				continue // an includer's own def calls it through super (rubocop-ast's IfNode#modifier_form? over ModifierNode's): it stays the module's (decision 444)
+			}
 			for _, cls := range incs {
 				if cls.Methods[mm.Name] != nil {
 					continue

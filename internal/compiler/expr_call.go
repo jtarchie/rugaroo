@@ -652,6 +652,11 @@ func (f *fctx) classCall(n parser.Node, t TClass, recv expr, name string, args [
 		if (t.C.RubyName == "Module" || t.C.RubyName == "Class" || (t.C.isStruct() && t.C.descendantDefines(name, false))) && block == nil {
 			return f.genDynCall(n, recv, name, args)
 		}
+		if f.lenient() && block != nil && t.C.isStruct() && t.C.descendantDefines(name, false) {
+			// with a block too (rubocop-ast's `child.visit_all_descendants(&block)` on a child narrowed to ::AST::Node,
+			// whose RuboCop subclass includes the method's module; decision 444)
+			return f.universalBlockCall(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
+		}
 		f.whyUndefined(n, t, recv, name)
 		if f.partlyLoaded(t.C, block) { // a gem class whose methods are not all in the closed world (Cask::Cask when the traced run never loaded cask/cask.rb): found, or not, at run time
 			return f.genDynCall(n, recv, name, args)

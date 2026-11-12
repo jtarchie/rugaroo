@@ -109,6 +109,9 @@ func (c *Compiler) addForwarder(ctx context.Context, a pendingAlias, rest string
 func (c *Compiler) copyAlias(cls *Class, old *Method, nn string) *Method {
 	m := *old
 	m.Name, m.GoName = nn, goMethodName(nn)
+	if m.aliasOf == "" {
+		m.aliasOf = old.Name
+	}
 	if prev := cls.Methods[nn]; prev != nil {
 		cls.MethodList = deleteMethod(cls.MethodList, prev)
 	}
