@@ -197,6 +197,9 @@ func (f *fctx) genDynBlockCall(n parser.Node, recv expr, name string, args []par
 	if slices.ContainsFunc(names, func(p blockParam) bool { return p.Rest }) { // a destructuring one binds as any closure's does (rubocop's `with_object({}) do |(line, i), acc|`; decision 444)
 		f.errorf(n, "a block with a rest parameter on an untyped receiver is not supported")
 	}
+	if b.Body != nil && (blockBreaks(b.Body) || blockBreaksValue(b.Body)) && (f.breakCatch == nil || f.breakCatch.block != b) {
+		return f.dynBlockBreakCatch(n, recv, name, args, b)
+	}
 	if f.c.dynBlockNames == nil {
 		f.c.dynBlockNames = map[string]bool{}
 	}
@@ -210,6 +213,33 @@ func (f *fctx) genDynBlockCall(n parser.Node, recv expr, name string, args []par
 	clo := f.genClosure(n, b, &BlockSig{Params: ps, Ret: TAny{}}, map[string]Type{})
 	arg := fmt.Sprintf("rbBlockArg{fn: func(xs_ ...any) any { %sreturn (%s)(%s) }}", autoSplat(len(names), "xs_"), clo, strings.Join(vals, ", "))
 	return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: arg, typ: TAny{}}}))
+}
+
+// dynBlockBreakCatch is genDynBlockCall for a block that breaks: the call runs inside a function that recovers the
+// block's rbBreak, and its value is the break's when one leaves it (decisions 241, 444).
+func (f *fctx) dynBlockBreakCatch(n parser.Node, recv expr, name string, args []parser.Node, b *parser.BlockNode) expr {
+	saved, out := f.breakCatch, f.buf
+	bc := &breakCatch{block: b, id: fmt.Sprintf("%s:%d", f.f.Name, b.Location.StartOffset)}
+	tmp := f.newTmp()
+	f.breakCatch, f.buf = bc, &strings.Builder{}
+	restored := false
+	defer func() {
+		if !restored {
+			f.breakCatch, f.buf = saved, out
+		}
+	}()
+	f.indent++
+	e := f.genDynBlockCall(n, recv, name, args, b)
+	f.emit("%s = %s", tmp, e.code)
+	f.indent--
+	body := f.buf.String()
+	f.breakCatch, f.buf, restored = saved, out, true
+	f.emit("var %s any", tmp)
+	f.emit("func() {")
+	f.emit("\tdefer rbBreakRecoverTo(%q, &%s)", bc.id, tmp)
+	out.WriteString(body)
+	f.emit("}()")
+	return expr{code: tmp, typ: TAny{}}
 }
 
 // dynEnumNames are the Enumerable, Array and Hash methods that take a block and leave their receiver as it is: what

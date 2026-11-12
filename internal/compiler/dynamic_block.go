@@ -177,5 +177,10 @@ func (c *Compiler) dynIterCall(f *fctx, e *entry, recv expr, env map[string]Type
 	f.emit("%s", rangeHead(strings.Join(vars, ", "), call))
 	f.emit("\tlast_ = blk_.fn(%s)", strings.Join(vars, ", "))
 	f.emit("}")
+	if eachReturnsSelf[e.M.Name] && e.M.File.isPrelude() { // a core each-like iterator answers its receiver (`n.times do ... end && rest`, rubocop-ast's generated matchers; decision 444)
+		f.emit("_ = last_")
+		f.emit("return any(self)")
+		return
+	}
 	f.emit("return last_")
 }

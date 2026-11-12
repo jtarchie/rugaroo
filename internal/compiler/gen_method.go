@@ -26,6 +26,7 @@ func (f *fctx) genBody(body parser.Node, params []*local, t tail, prologue func(
 		f.nilElemLocals = nilElemLocals(body)
 	}
 	closures, lambdaClosure, loops, begins, unionArm, retryFlag, retryDepth := f.closures, f.lambdaClosure, f.loops, f.begins, f.unionArm, f.retryFlag, f.retryDepth
+	rbScope, rbFrames, breakCatch := f.rbScope, slices.Clone(f.rbFrames), f.breakCatch
 	fresh := func() {
 		f.locals = map[localKey]*localInfo{}
 		for _, p := range params {
@@ -36,6 +37,10 @@ func (f *fctx) genBody(body parser.Node, params []*local, t tail, prologue func(
 		f.pass = pass
 		// a run a compile error unwound (a gem method's first attempt, decision 251) leaves its nesting behind
 		f.closures, f.lambdaClosure, f.loops, f.begins, f.unionArm, f.retryFlag, f.retryDepth = closures, lambdaClosure, loops, begins, unionArm, retryFlag, retryDepth
+		// the Ruby block it was in too: a retry that kept it declared the method's locals under that block, and a later
+		// block's read of one found no such local (rubocop-ast's generated matchers; decision 444)
+		f.rbScope, f.rbFrames, f.breakCatch = rbScope, slices.Clone(rbFrames), breakCatch
+		f.iterBreakValue, f.iterAsValue, f.argcPass, f.storing = false, false, "", 0
 		f.buf = &strings.Builder{}
 		f.tmp, f.blockCtr, f.block = 0, 0, ""
 		f.scope = &scope{vars: map[string]*local{}}

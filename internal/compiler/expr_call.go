@@ -891,6 +891,10 @@ func (f *fctx) iterCallValue(n *parser.CallNode, recv expr) (expr, bool) {
 	switch {
 	case e == nil || !e.M.Iterator:
 		return expr{}, false
+	case f.lenient() && eachReturnsSelf[n.Name] && e.M.File != nil && e.M.File.isPrelude() && n.Name != "loop":
+		// a gem's `n.times do ... break false unless ok ... end && rest` (rubocop-ast's generated matchers): the receiver
+		// when the loop ends, the break's value when one leaves it (decisions 417, 444)
+		return f.brokenIterValue(n, recv), true
 	case !coreEach(e.M):
 		return f.iteratorValue(n), true
 	case f.lenient() && (blockBreaks(b.Body) || blockBreaksValue(b.Body)):
