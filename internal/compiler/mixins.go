@@ -523,6 +523,7 @@ func (c *Compiler) copyIncluderTemplates() {
 		for _, mm := range copied { // every includer has its copy: the module's own would be compiled for no caller
 			delete(mod.Methods, mm.Name)
 			mod.MethodList = deleteMethod(mod.MethodList, mm)
+			mod.prunedDefs = append(mod.prunedDefs, mm) // still the module's method to reflection (decision 444)
 		}
 		if len(copied) > 0 {
 			mod.msetCache, mod.msetIndex = nil, nil
