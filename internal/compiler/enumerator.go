@@ -113,7 +113,7 @@ func (f *fctx) iterEnum(n parser.Node, e *entry, recv expr, codes []string, env 
 // enumerable is m's block an Enumerator can feed: one closure block of 1-4 values (a Tuple for several).
 func enumerable(m *Method) bool {
 	return m != nil && m.Block != nil && !m.Iterator && len(m.Block.Params) > 0 && len(m.Block.Params) <= 4 &&
-		(len(m.Block.Params) == 1 || !m.Block.Rest) && !m.kwMask() && !m.calleeDefaults
+		(len(m.Block.Params) == 1 || !m.Block.Rest) // callee-side defaults too: enumArgs passes their hidden counts (decision 444)
 }
 
 // genToEnum is `to_enum`/`enum_for` (bare, or naming the enclosing method) in a method taking a closure block: an

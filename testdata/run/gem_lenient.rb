@@ -34,6 +34,7 @@ require "findish"
 require "bufish"
 require "cmpish"
 require "sexpish"
+require "capish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -165,3 +166,5 @@ Bufish.demo.each { |v| p v }
 Cmpish.demo.each { |v| p v }
 # a to_s (an alias) and an inspect that take an optional argument are the object's string forms (decision 444)
 Sexpish.demo.each { |v| p v }
+# enum_for(__method__, named: named) in a mixin's method whose keyword default is a sentinel constant (decision 444)
+Capish.demo.each { |v| p v }

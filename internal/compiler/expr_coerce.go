@@ -629,6 +629,17 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 	}
 	pc, ok := stripOpt(p.Type).(TClass)
 	ac, ok2 := stripOpt(a.typ).(TClass)
+	if ok && ok2 && pc.C != ac.C && !pc.C.IsModule && !pc.C.universal && !ac.C.IsModule && !ac.C.isSubclassOf(pc.C) && !pc.C.isSubclassOf(ac.C) &&
+		!c.isNumericMod(pc.C) && !c.isNumericMod(ac.C) && !isNumeric(p.Type) && !isNumeric(a.typ) && pc.C.GoType != "" && ac.C.GoType != "" {
+		// a core value of another class than the rounds typed the parameter (rubocop-ast's `ProcessedSource#[](*args)`, typed
+		// Integer by its other callers, given a Range): the call would raise TypeError where MRI runs, so the parameter is
+		// untyped and the final pass runs again
+		if c.widenPending == nil {
+			c.widenPending = map[pendingKey]Type{}
+		}
+		c.widenPending[p.Pending] = TAny{}
+		return
+	}
 	if !ok || !ok2 || pc.C != ac.C || len(pc.Args) == 0 || pc.C.RubyName != "Hash" && pc.C.RubyName != "Array" {
 		return
 	}
