@@ -348,6 +348,7 @@ func (c *Compiler) applyPrepends() {
 	for _, p := range c.prepends { // a module only prepended has no includer to compile its own copies (and their super) for
 		mod := c.resolveClassRef(&p.mod)
 		if !c.mixedIn(mod) {
+			mod.prunedDefs = append(mod.prunedDefs, mod.MethodList...) // still the module's methods to reflection (decision 444)
 			mod.Methods, mod.MethodList = map[string]*Method{}, nil
 		}
 	}
