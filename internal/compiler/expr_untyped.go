@@ -90,6 +90,9 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 		f.isBlockParam(ba.Expression) && !f.iterator && f.blockSig != nil && len(f.blockSig.Params) >= 1 && len(f.blockSig.Params) <= 2 {
 		return f.dynEachForward(n, recv)
 	}
+	if e, ok := f.forwardedEnum(n, recv, name, args, block); ok {
+		return e
+	}
 	if f.lenient() && f.heldAsAny(recv.typ) && dynEnumNames[name] {
 		return f.dynEnumBlock(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
 	}
@@ -107,6 +110,52 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 	}
 	f.errorf(n, "blocks on untyped receivers are not supported")
 	return expr{}
+}
+
+// forwardedEnum is a forwarder's `target.map(*args, &block)` on an untyped target (Forwardable's def_delegators over an
+// untyped ivar, rubocop's Config; decision 444). An iterator (each_key) goes to the dispatcher, whose wrappers take the
+// block; a generic Enumerable method (map) has no such wrapper, so with no arguments it is dynEnumBlock's call, and
+// with some the dispatcher's.
+func (f *fctx) forwardedEnum(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
+	_, fwd := block.(*parser.BlockArgumentNode)
+	if !fwd || !f.lenient() || !f.heldAsAny(recv.typ) || !dynEnumNames[name] || len(args) != 1 || !isSplat(args[0]) {
+		return expr{}, false
+	}
+	v, ok := f.dynBlockValue(n, block)
+	if !ok {
+		return expr{}, false
+	}
+	dispatch := func() expr {
+		return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}, blockArg: true}))
+	}
+	iter := func(cls string) bool { e := f.c.classes[cls].lookup(name); return e != nil && e.M.Iterator }
+	if iter("Hash") || iter("Array") {
+		if f.c.dynBlockNames == nil {
+			f.c.dynBlockNames = map[string]bool{}
+		}
+		f.c.dynBlockNames[name] = true // only here: a generic method's wrapper cannot bind its type parameters to a block
+		return dispatch(), true
+	}
+	rest := f.genExpr(args[0].(*parser.SplatNode).Expression, nil)
+	if !isClass(rest.typ, "Array") {
+		return expr{}, false
+	}
+	res := f.newTmp()
+	f.emit("var %s any", res)
+	f.emit("if len(%s.s) == 0 && blk != nil {", f.materialize(rest)) // no block: the plain call, through the dispatcher
+	f.indent++
+	saved := f.enterBlock()
+	f.emit("%s = %s", res, f.coerce(n, f.dynEnumBlock(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, nil, block), TAny{}))
+	f.leaveBlock(saved)
+	f.indent--
+	f.emit("} else {")
+	f.indent++
+	saved = f.enterBlock()
+	f.emit("%s = %s", res, f.genDynCall(n, recv, name, args).code) // ponytail: a block with arguments is dropped here, as before this rule
+	f.leaveBlock(saved)
+	f.indent--
+	f.emit("}")
+	return expr{code: res, typ: TAny{}}, true
 }
 
 // heldAsAny is untyped, a gem module's self, or a value held as Go any (a Sorbet T::Enumerable[X]).

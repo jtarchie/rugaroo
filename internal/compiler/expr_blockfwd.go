@@ -208,6 +208,18 @@ func (f *fctx) restBlockAdapter(n parser.Node, sig *BlockSig, env map[string]Typ
 	if sig.Self != nil || f.blockSig.Self != nil {
 		f.errorf(n, "a forwarded block with a bound self and a rest parameter on one side only is not supported")
 	}
+	if env != nil { // an untyped proc binds nothing: what the callee's block names beyond the call's env is untyped (`target.to_h(&block)`'s [A, B]; decision 444)
+		var vars []string
+		for _, p := range sig.Params {
+			freeVars(p, &vars)
+		}
+		freeVars(sig.Ret, &vars)
+		for _, v := range vars {
+			if _, ok := env[v]; !ok && v != "Self" {
+				env[v] = TAny{}
+			}
+		}
+	}
 	var params, args []string
 	if sig.Rest { // func(xs ...E) R calling blk(p0, p1)
 		elem := subst(sig.Params[len(sig.Params)-1], env)

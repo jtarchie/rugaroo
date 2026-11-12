@@ -85,7 +85,7 @@ func (f *fctx) lenientBlockRet(want, got Type, env map[string]Type) bool {
 
 // lenientMember: a gem's `include?(x)` of a T? is false for nil, as in MRI, where rbMust would raise (decision 172).
 func (f *fctx) lenientMember(n parser.Node, recv expr, name string, args []parser.Node) (expr, bool) {
-	if !f.lenient() || len(args) != 1 || name != "include?" && name != "member?" && name != "key?" && name != "has_key?" {
+	if !f.lenient() || len(args) != 1 || isSplat(args[0]) || name != "include?" && name != "member?" && name != "key?" && name != "has_key?" {
 		return expr{}, false
 	}
 	if rc, ok := recv.typ.(TClass); ok && len(rc.Args) > 0 && isOpt(rc.Args[0]) {
@@ -121,6 +121,7 @@ const (
 var lookupMiss = map[string]map[string]missMode{
 	"Hash":  {"[]": missDefault, "key?": missFalse, "has_key?": missFalse, "include?": missFalse, "member?": missFalse, "delete": missNil, "dig": missNil, "fetch": missFetch},
 	"Array": {"include?": missFalse, "member?": missFalse, "delete": missNil, "index": missNil},
+	"Set":   {"include?": missFalse, "member?": missFalse, "===": missFalse}, // rubocop's `CONFIG_CHECK_KEYS.include?(key)` with a Symbol key (decision 444)
 }
 
 // lenientLookup: a gem's untyped key of another class misses, as in MRI, instead of raising TypeError (decisions 307, 314).
