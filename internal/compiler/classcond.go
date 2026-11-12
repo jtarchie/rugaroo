@@ -263,6 +263,9 @@ func (c *Compiler) loadAutoload(ctx context.Context, f *File, n *parser.CallNode
 	if sym, _ := symbolName(args[0]); c.gemFile(f) && (c.booted || c.bundledFile(f)) && !c.autoloaded[c.real(target)] && !c.backendNamed(sym) {
 		return // a gem autoload boot never loaded: nothing the program runs reaches it (decision 175)
 	} // without a boot (cmd/rubyspec's in-memory suites) it loads where it registers, as a require (matrix's LUPDecomposition, decision 414)
+	if c.lazyAutoloads[c.real(target)] {
+		return // one the program never loaded: it comes after the files it did, in the order MRI loaded them (decision 444)
+	}
 	src, err := os.ReadFile(target) //nolint:gosec // a gem file boot loaded
 	if err != nil {
 		c.errorf(f, n, "cannot load such file -- %s", strings.TrimSuffix(target, ".rb"))

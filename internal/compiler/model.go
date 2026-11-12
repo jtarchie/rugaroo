@@ -15,9 +15,10 @@ type Class struct {
 	Name       string // Go identifier: "Resty_Actions_Show"
 	RubyName   string // constant path: "Resty::Actions::Show"
 	IsModule   bool
-	GoType     string // `@go_type` underlying Go type; "" for struct classes
-	hashBase   bool   // a user class extending Hash or Array: embeds a Hash[any, V] or an Array[E] (decisions 165, 202)
-	selfDefs   bool   // some method has `# @self` (selfOverload)
+	GoType     string    // `@go_type` underlying Go type; "" for struct classes
+	hashBase   bool      // a user class extending Hash or Array: embeds a Hash[any, V] or an Array[E] (decisions 165, 202)
+	prunedDefs []*Method // gem methods nothing reaches (decision 169): not compiled, still listed by reflection (decision 444)
+	selfDefs   bool      // some method has `# @self` (selfOverload)
 	TypeParams []string
 	superRef   *constRef   // superclass expression, resolved in link
 	reSupers   []*constRef // superclasses named when reopening; must resolve to Super
@@ -674,4 +675,13 @@ func (c *Class) objType() string {
 		return "*" + c.Name
 	}
 	return c.ifaceName()
+}
+
+// reflected is the class's own methods as reflection lists them: the compiled ones, then those pruned as unreached,
+// which MRI still defines (rubocop-ast's `def_node_matcher` asks method_defined? of a matcher no enabled cop calls).
+func (c *Class) reflected() []*Method {
+	if len(c.prunedDefs) == 0 {
+		return c.MethodList
+	}
+	return append(slices.Clip(c.MethodList), c.prunedDefs...)
 }

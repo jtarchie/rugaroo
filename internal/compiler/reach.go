@@ -557,7 +557,10 @@ func (r *reach) prune() {
 		for _, m := range cls.MethodList {
 			if keep(m.File, m.Name, cls) {
 				list = append(list, m)
-			} else if cls.Methods[m.Name] == m {
+				continue
+			}
+			cls.prunedDefs = append(cls.prunedDefs, m) // still a method of the class to reflection (method_defined?, instance_methods; decision 444)
+			if cls.Methods[m.Name] == m {
 				delete(cls.Methods, m.Name)
 			}
 		}

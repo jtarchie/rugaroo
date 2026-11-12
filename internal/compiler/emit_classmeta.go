@@ -106,7 +106,7 @@ func (c *Compiler) emitMethodTable(cls, desc *Class) {
 	c.w("func (self *%s) _Methods() []rbConst {\n\treturn []rbConst{\n", cls.Name)
 	seen := map[string]bool{}
 	for _, k := range desc.ancestors() {
-		for _, m := range k.MethodList {
+		for _, m := range k.reflected() {
 			if m.Private || m.Protected || m.Name == "initialize" || strings.HasPrefix(m.Name, "__") || seen[m.Name] {
 				continue
 			}
@@ -164,7 +164,7 @@ func (c *Compiler) emitVisibilityTable(cls, desc *Class, fn string, has func(*Me
 	c.w("func (self *%s) %s() []rbConst {\n\treturn []rbConst{\n", cls.Name, fn)
 	seen := map[string]bool{}
 	for _, k := range desc.ancestors() {
-		for _, m := range k.MethodList {
+		for _, m := range k.reflected() {
 			if seen[m.Name] {
 				continue
 			}
