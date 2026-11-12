@@ -380,7 +380,10 @@ func (f *fctx) noteConv(n parser.Node, code string) string {
 		f.convs[n.GetLocation().StartOffset] = true
 	}
 	if f.pass == 2 && f.c.convs != nil && (f.storing > 0 || !f.lenient()) {
-		f.c.convs[fmt.Sprintf("%s:%d", f.f.Name, n.GetLocation().StartOffset)] = true
+		// keyed by what it converts to as well: the untyped baseline's rbAs[*Hash[any, any]] at a site is not the typing's
+		// rbAs[*Hash[Symbol, Boolean]] there, which can fail on the Hash's contents (decision 444)
+		target, _, _ := strings.Cut(code, "(")
+		f.c.convs[fmt.Sprintf("%s:%d:%s", f.f.Name, n.GetLocation().StartOffset, target)] = true
 	}
 	return code
 }

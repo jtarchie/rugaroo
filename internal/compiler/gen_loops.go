@@ -291,8 +291,9 @@ func (f *fctx) breakCatchStmt(n parser.Node, t tail) bool {
 		return false
 	}
 	if t.kind != tailNone { // a gem's `segment.each do ... break ... end` as a block's value (liquid's For#render_segment, decision 331)
-		f.genBreakCatchValue(c, b, t)
-		return true
+		// an iterator's call is no value expression (Pathname#ascend's loop as a method's last statement, rubocop's
+		// FileFinder): the statement path below gives it its value
+		return catchCompileError(func() { f.genBreakCatchValue(c, b, t) }) == nil
 	}
 	f.genBreakCatch(c, b, t)
 	return true
@@ -305,6 +306,12 @@ func (f *fctx) genBreakCatchValue(c *parser.CallNode, b *parser.BlockNode, t tai
 	bc := &breakCatch{block: b, id: fmt.Sprintf("%s:%d", f.f.Name, b.Location.StartOffset)}
 	tmp := f.newTmp()
 	f.breakCatch, f.buf = bc, &strings.Builder{}
+	restored := false
+	defer func() { // a compile error inside (a typing an analysis pass is trying) must not leave the catch set: the next pass would skip the wrapper
+		if !restored {
+			f.breakCatch, f.buf = saved, out
+		}
+	}()
 	f.indent++
 	e := f.genExpr(c, nil)
 	if isVoid(e.typ) || e.stmt {
@@ -314,7 +321,7 @@ func (f *fctx) genBreakCatchValue(c *parser.CallNode, b *parser.BlockNode, t tai
 	}
 	f.indent--
 	body := f.buf.String()
-	f.breakCatch, f.buf = saved, out
+	f.breakCatch, f.buf, restored = saved, out, true
 	f.emit("var %s any", tmp)
 	f.emit("func() {")
 	f.emit("\tdefer rbBreakRecoverTo(%q, &%s)", bc.id, tmp)
