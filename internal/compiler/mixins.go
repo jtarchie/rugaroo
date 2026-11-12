@@ -495,12 +495,12 @@ func (c *Compiler) copyIncluderTemplates() {
 				!callsIncluderOnly(mm, mod, obj, incs, c.topDefs) {
 				continue
 			}
-			if slices.ContainsFunc(incs, func(cls *Class) bool {
+			// an includer's own def calls it through super (rubocop-ast's IfNode#modifier_form? over ModifierNode's): the
+			// module keeps its own beside the other includers' copies (decision 444)
+			supered := slices.ContainsFunc(incs, func(cls *Class) bool {
 				own := cls.Methods[mm.Name]
 				return own != nil && own.Node != nil && containsSuper(own.Node.Body)
-			}) {
-				continue // an includer's own def calls it through super (rubocop-ast's IfNode#modifier_form? over ModifierNode's): it stays the module's (decision 444)
-			}
+			})
 			for _, cls := range incs {
 				if cls.Methods[mm.Name] != nil {
 					continue
@@ -511,7 +511,9 @@ func (c *Compiler) copyIncluderTemplates() {
 				cls.MethodList = append(cls.MethodList, &cp)
 				cls.msetCache, cls.msetIndex = nil, nil
 			}
-			copied = append(copied, mm)
+			if !supered {
+				copied = append(copied, mm)
+			}
 		}
 		for _, mm := range copied { // every includer has its copy: the module's own would be compiled for no caller
 			delete(mod.Methods, mm.Name)
