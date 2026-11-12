@@ -6,6 +6,7 @@ import "os"
 type envConfig struct {
 	NoWasmCache   bool   // RUGAROO_NO_WASM_CACHE: no wazero compilation cache for prism.wasm
 	InferDebug    bool   // RUGAROO_INFER_DEBUG: what each inference round typed and could not compile
+	ConstDebug    bool   // RUGAROO_CONST_DEBUG: why a gem constant was left nil (decision 205), even when a discarded pass found it
 	Timing        bool   // RUGAROO_TIMING: per-phase durations on stderr
 	ErrStack      bool   // RUGAROO_ERR_STACK: the Go stack of whatever pass raised an error
 	AllLibs       bool   // RUGAROO_ALL_LIBS: load every prelude lib, required or not
@@ -32,6 +33,7 @@ func loadEnv() envConfig {
 	return envConfig{
 		NoWasmCache:   set("RUGAROO_NO_WASM_CACHE"),
 		InferDebug:    set("RUGAROO_INFER_DEBUG"),
+		ConstDebug:    set("RUGAROO_CONST_DEBUG"),
 		Timing:        set("RUGAROO_TIMING"),
 		ErrStack:      set("RUGAROO_ERR_STACK"),
 		AllLibs:       set("RUGAROO_ALL_LIBS"),

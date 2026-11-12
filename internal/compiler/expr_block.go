@@ -1315,6 +1315,13 @@ func (f *fctx) bindBlockRet(n parser.Node, sig *BlockSig, env map[string]Type, g
 			got = TTuple{Elems: elems}
 		}
 	}
+	if sa, ok := sig.Ret.(TClass); ok && sa.C.RubyName == "Array" && len(sa.Args) == 1 {
+		// the other way: a pair where an Array is wanted (`flat_map { |a| [a, [v]] }`, rubocop's SpecialGlobalVars) is an
+		// Array of what its elements join to, untyped when they are of different classes (decisions 22, 444)
+		if gt, ok := got.(TTuple); ok {
+			got = TClass{C: sa.C, Args: []Type{joinOrAny(gt.Elems)}}
+		}
+	}
 	if nilAcc != "" {
 		if j, ok := join(TNil{}, got); ok && !isNil(j) {
 			env[nilAcc] = j

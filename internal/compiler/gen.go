@@ -43,6 +43,7 @@ type fctx struct {
 	selfCode         string
 	selfClassObj     bool   // self is exactly a class constant (a class body)
 	argcPass         string // set while an adapter forwards its slot's arguments: the rbArgc to pass on
+	iterAsValue      bool   // inside callEntry's statement form of a gem iterator used as a value: no second try
 	missingCalls     int    // receiverless calls compiled to self's method_missing, so far: a DSL block that needs them is rebound (blockArg)
 	ret              Type
 	iterator         bool

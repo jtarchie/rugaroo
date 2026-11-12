@@ -473,6 +473,25 @@ func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Nod
 		}
 	}
 	if m.Block != nil {
+		if cn, ok := n.(*parser.CallNode); ok && m.Iterator && block != nil && f.lenient() && !f.iterAsValue {
+			// a gem's `ENGLISH_VARS.each_value(&:freeze).freeze` (rubocop's SpecialGlobalVars): the loop runs as a
+			// statement, and its value is what the statement form answers, the receiver for a core each (decision 444)
+			tmp := f.newTmp()
+			f.emit("var %s any", tmp)
+			call := *cn
+			call.Receiver = &exprNode{Node: cn.Receiver, e: recv}
+			if ba, ok := call.Block.(*parser.BlockArgumentNode); ok && !f.isBlockParam(ba.Expression) { // `&:freeze`, as genCallStmt lowers it
+				if sym, ok := ba.Expression.(*parser.SymbolNode); ok {
+					call.Block = symbolBlock(ba, sym.Unescaped.Value)
+				}
+			}
+			f.iterAsValue = true
+			ok := f.genIterCall(&call, tail{kind: tailAssign, target: tmp, typ: TAny{}})
+			f.iterAsValue = false
+			if ok {
+				return expr{code: tmp, typ: TAny{}}
+			}
+		}
 		if m.Iterator {
 			f.errorf(n, "%s is an iterator (its block returns void); call it as a statement with a block", m.Name)
 		}

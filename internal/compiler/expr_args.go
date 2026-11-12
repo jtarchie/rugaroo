@@ -851,7 +851,8 @@ func (f *fctx) selfOverload(m *Method, owner *Class, name string, recvT Type, ar
 		f.c.resolveMethod(x)
 		return x.SelfType != nil && (x.Block != nil) == (f.curBlock != nil) &&
 			len(args) >= requiredArgs(x) && len(args) <= len(x.Params) &&
-			unify(x.SelfType, recvT, map[string]Type{}) && optShape(x.SelfType, recvT)
+			unify(x.SelfType, recvT, map[string]Type{}) && optShape(x.SelfType, recvT) &&
+			(!strings.HasSuffix(x.Name, "_untyped") || holdsAny(recvT)) // a `__name_untyped` twin is for an untyped receiver only: a typed one keeps its compile error (decision 444)
 	}
 	if m.SelfType != nil && fits(m) {
 		return nil

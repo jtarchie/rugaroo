@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -97,6 +98,9 @@ func (c *Compiler) constType(k *Const) (typ Type) {
 		if err != nil {
 			c.constChain = c.constChain[:len(c.constChain)-1]
 			k.resolving, k.poison, k.Type = false, err.Error(), TAny{}
+			if c.env.ConstDebug { // the warning below is dropped when a discarded pass (a probe, a dry run) is the first to type the constant
+				fmt.Fprintf(os.Stderr, "rugaroo: constant %s does not compile: %s\n", k.RubyName, err.Error())
+			}
 			c.warn(k.File, k.Value, "constant %s does not compile, so it is nil: %s (decision 205)", k.RubyName, err.Error())
 			return k.Type
 		}

@@ -1190,6 +1190,21 @@ class Array < Object
     out
   end
 
+  # Untyped elements (a list built from mixed pieces): each must be a pair when it runs, as MRI checks (decision 444).
+  # @self Array[U]
+  # @rbs [U] () -> Hash[untyped, untyped]
+  def __to_h_untyped
+    out = {} #: Hash[untyped, untyped]
+    each_with_index do |r, i|
+      pair = Array.try_convert(r)
+      raise TypeError, "wrong element type #{r.class} at #{i} (expected array)" if pair.nil?
+      raise ArgumentError, "wrong array length at #{i} (expected 2, was #{pair.size})" unless pair.size == 2
+
+      out[pair[0]] = pair[1]
+    end
+    out
+  end
+
   # @rbs [K, V] () { (E) -> [K, V] } -> Hash[K, V]
   def __to_h_block
     out = {} #: Hash[K, V]
