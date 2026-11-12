@@ -459,7 +459,7 @@ func rbArrayCmpTry(a *Array[any], other any) (res rbOpt[Integer]) {
 	b := o._ToAny()
 	defer func() {
 		if r := recover(); r != nil {
-			if e, ok := r.(interface{ Message() String }); ok && strings.HasPrefix(string(e.Message()), "comparison of ") {
+			if e, ok := r.(interface{ Message() String }); ok && len(e.Message()) > 14 && e.Message()[:14] == "comparison of " {
 				res = rbOpt[Integer]{}
 				return
 			}
@@ -471,7 +471,13 @@ func rbArrayCmpTry(a *Array[any], other any) (res rbOpt[Integer]) {
 			return rbSome(c)
 		}
 	}
-	return rbSome(Integer(cmp.Compare(len(a.s), len(b.s))))
+	switch {
+	case len(a.s) < len(b.s):
+		return rbSome(Integer(-1))
+	case len(a.s) > len(b.s):
+		return rbSome(Integer(1))
+	}
+	return rbSome(Integer(0))
 }
 
 // rbArrayCmpTryAny is rbArrayCmpTry as an untyped value: nil, or the Integer.

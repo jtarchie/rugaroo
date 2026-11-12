@@ -103,6 +103,11 @@ func (f *fctx) genMatchSet(n *parser.CallNode) (expr, bool) {
 	if f.lastMatch == "" || f.inMatchSet || n.Receiver == nil || n.Block != nil {
 		return expr{}, false
 	}
+	if n.Name == "!~" && len(args) == 1 { // `next if text !~ RE`, then Regexp.last_match(1): `!(text =~ RE)`, which sets $~ (decision 444)
+		eq := *n
+		eq.Name = "=~"
+		return f.genExpr(&parser.CallNode{Location: n.Location, Receiver: &parser.ParenthesesNode{Location: n.Location, Body: &parser.StatementsNode{Location: n.Location, Body: []parser.Node{&eq}}}, Name: "!", MessageLoc: n.MessageLoc}, nil), true
+	}
 	if len(args) == 2 && n.Name == "match" && isClass(f.probeType(n.Receiver, nil), "Regexp") { // re.match(str, pos) (decision 368)
 		f.inMatchSet = true
 		m := f.genExpr(n, nil)
