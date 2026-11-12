@@ -406,13 +406,7 @@ func (f *fctx) destructureInto(n parser.Node, v expr, lefts []parser.Node, rest 
 	case TAny: // MRI's implicit to_ary: an Array splits, anything else is the first target
 		f.destructureInto(n, f.toAry(v), lefts, rest, rights)
 	case TUnion:
-		if (trail > 0 || rest != nil && !isBareRest(rest)) && f.lenient() {
-			// a gem's `type, *aliases = type` of a Symbol or an Array of them (rubocop-ast's def_callback): split at run
-			// time as an untyped value is, the targets untyped (decision 444)
-			f.destructureInto(n, f.toAry(expr{code: f.coerce(n, v, TAny{}), typ: TAny{}}), lefts, rest, rights)
-			return
-		}
-		f.destructureUnion(n, v, t, lefts, rest, trail)
+		f.destructureUnionOrSplit(n, v, t, lefts, rest, rights, trail)
 	case TNil: // `q, a = nil`: every target nil, a rest an empty Array (decision 244)
 		for _, l := range append(slices.Clone(lefts), rights...) {
 			f.assignTarget(l, expr{code: "nil", typ: TNil{}})
@@ -469,6 +463,17 @@ func (f *fctx) destructureOne(n parser.Node, v expr, t TClass, lefts []parser.No
 func isInterfaceObj(t Type) bool {
 	c, ok := t.(TClass)
 	return ok && c.C.GoType == "" && !c.C.universal && !c.C.IsModule && strings.HasSuffix(c.C.objType(), "I")
+}
+
+// destructureUnionOrSplit is destructureUnion, or in gem code with a rest or trailing targets (`type, *aliases = type`
+// of a Symbol or an Array of them, rubocop-ast's def_callback) a split at run time, as an untyped value's, the targets
+// untyped (decision 444).
+func (f *fctx) destructureUnionOrSplit(n parser.Node, v expr, u TUnion, lefts []parser.Node, rest parser.Node, rights []parser.Node, trail int) {
+	if (trail > 0 || rest != nil && !isBareRest(rest)) && f.lenient() {
+		f.destructureInto(n, f.toAry(expr{code: f.coerce(n, v, TAny{}), typ: TAny{}}), lefts, rest, rights)
+		return
+	}
+	f.destructureUnion(n, v, u, lefts, rest, trail)
 }
 
 // destructureUnion is `a, b = x` of a union (decision 241): a type switch gives each target what x's member gives it

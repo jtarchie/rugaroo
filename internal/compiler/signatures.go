@@ -24,22 +24,7 @@ func (c *Compiler) markCalleeDefaults() {
 			}
 		}
 	}
-	for _, cls := range c.classList { // an override whose literal default is another than its ancestor's: the call site would fill the ancestor's (decision 444)
-		if cls.universal {
-			continue
-		}
-		for _, anc := range cls.allAncestors() {
-			if anc.universal {
-				continue
-			}
-			for name, m := range cls.Methods {
-				if a := anc.Methods[name]; a != nil && m.Kind == kindDef && a.Kind == kindDef && !names[name] && otherDefaults(m, a) {
-					m.calleeDefaults, a.calleeDefaults = true, true
-					names[name] = true
-				}
-			}
-		}
-	}
+	c.markOtherDefaults(names)
 	for changed := len(names) > 0; changed; {
 		changed = false
 		for _, cls := range c.classList {
@@ -63,6 +48,36 @@ func (c *Compiler) markCalleeDefaults() {
 			m.calleeDefaults = init.M.calleeDefaults
 		}
 	}
+}
+
+// markOtherDefaults marks an override whose literal default is another than its ancestor's, and that ancestor: the call
+// site would fill the ancestor's (decision 444).
+func (c *Compiler) markOtherDefaults(names map[string]bool) {
+	for _, cls := range c.classList {
+		if cls.universal {
+			continue
+		}
+		for _, anc := range cls.allAncestors() {
+			if anc.universal {
+				continue
+			}
+			for name, m := range cls.Methods {
+				if a := anc.Methods[name]; a != nil && m.Kind == kindDef && a.Kind == kindDef && !names[name] && otherDefaults(m, a) {
+					m.calleeDefaults, a.calleeDefaults = true, true
+					names[name] = true
+				}
+			}
+		}
+	}
+}
+
+// overriddenSelfRet: a gem method answering self or a copy that a subclass overrides may answer another class there
+// (rubocop-ast's Node#updated builds the node class its new type names), so callers get the declaring class, not the
+// receiver's own (decision 444).
+func (c *Compiler) overriddenSelfRet(m *Method, ret Type) bool {
+	tv, ok := ret.(TVar)
+	return ok && tv.Name == "Self" && c.gemFile(m.File) && m.Owner != nil && !m.Owner.IsModule && m.Owner.isStruct() &&
+		len(m.Owner.TypeParams) == 0 && m.inherited == nil && m.Owner.descendantDefines(m.Name, true)
 }
 
 // otherDefaults reports two user or gem defs of one name whose optional parameters, by position, spell different defaults.
@@ -436,11 +451,7 @@ func (c *Compiler) inferRet(m *Method) {
 			m.retWhy += ": " + why
 		}
 	}
-	if tv, ok := ret.(TVar); ok && tv.Name == "Self" && c.gemFile(m.File) && m.Owner != nil && !m.Owner.IsModule && m.Owner.isStruct() &&
-		len(m.Owner.TypeParams) == 0 && m.inherited == nil && m.Owner.descendantDefines(m.Name, true) {
-		// a gem method answering self or a copy that a subclass overrides: the override may answer another class
-		// (rubocop-ast's Node#updated builds the node class its new type names), so callers get the declaring class, not
-		// the receiver's own (decision 444)
+	if c.overriddenSelfRet(m, ret) {
 		ret = TClass{C: m.Owner}
 	}
 	m.Ret = ret

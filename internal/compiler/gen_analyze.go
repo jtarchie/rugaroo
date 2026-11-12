@@ -181,20 +181,7 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 		return f.c.retryNil(&retry, ok, err, baseline, func(d *nilDeferral) bool { _, ok := attempt(set, d); return ok })
 	}
 	if len(order) > 0 {
-		var kept map[localKey]bool // the set the last passing try typed
-		trySet := func(set map[localKey]bool) bool {
-			sub := map[localKey]Type{}
-			for k := range set {
-				sub[k] = refined[k]
-			}
-			if len(sub) == 0 || !try(sub) {
-				return false
-			}
-			kept = maps.Clone(set)
-			return true
-		}
-		ok := f.seededLocals(order, trySet) || salvage(order, trySet)
-		f.noteLocalSeed(order, ok, kept)
+		ok := f.searchLocals(order, refined, try)
 		if proofErr != nil { // `rows = ["a"]; rows.each { |r| r << "x" }`: Array[untyped] compiled a `<<` that raised NoMethodError
 			panic(*proofErr)
 		}
@@ -359,6 +346,27 @@ func rewiden(t Type, elems [2][]Type) Type {
 		return nil
 	}
 	return TClass{C: c.C, Args: args}
+}
+
+// searchLocals finds the container locals of order that keep their refined types and the body compiling: the set this
+// method kept last time first (seededLocals, decision 444), else decision 13's salvage; it records the result and reports
+// whether one compiled.
+func (f *fctx) searchLocals(order []localKey, refined map[localKey]Type, try func(map[localKey]Type) bool) bool {
+	var kept map[localKey]bool // the set the last passing try typed
+	trySet := func(set map[localKey]bool) bool {
+		sub := map[localKey]Type{}
+		for k := range set {
+			sub[k] = refined[k]
+		}
+		if len(sub) == 0 || !try(sub) {
+			return false
+		}
+		kept = maps.Clone(set)
+		return true
+	}
+	ok := f.seededLocals(order, trySet) || salvage(order, trySet)
+	f.noteLocalSeed(order, ok, kept)
+	return ok
 }
 
 // refineContainer is the type an open `[]`/`{}` of type t gets from what

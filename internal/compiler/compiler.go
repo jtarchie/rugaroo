@@ -455,6 +455,37 @@ var errWidenRedo = errors.New("parameters widened")
 
 const maxWidenRedo = 4
 
+// inferenceRound is decision 146's round after link: ivars refined, returns inferred, and the parameter uses gathered.
+func (c *Compiler) inferenceRound(opts *options) {
+	_ = catchCompileError(c.refineIvars)
+	for _, m := range c.inferredMethods() {
+		m.Ret = nil
+	}
+	for _, m := range c.inferredMethods() {
+		_ = catchCompileError(func() { c.inferRet(m) })
+	}
+	c.collectUses()
+	if !c.instMissing { // what a template stood in for is not evidence: the restart has the instance (decision 308)
+		c.updateInference(opts.infer)
+	}
+}
+
+// widenRedo reports a final pass that widened parameters (noteWidenPending), with the widened types in opts for the
+// next one.
+func (c *Compiler) widenRedo(opts *options) bool {
+	if len(c.widenPending) == 0 || opts.widenRedo >= maxWidenRedo {
+		return false
+	}
+	opts.widenRedo++
+	for k, t := range c.widenPending {
+		opts.infer.types[k] = t
+	}
+	if opts.env.Timing {
+		fmt.Fprintf(os.Stderr, "rugaroo: final pass again: %d parameters widened to an untyped container\n", len(c.widenPending))
+	}
+	return true
+}
+
 func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) ([]byte, error) {
 	opts.env = loadEnv()
 	if opts.seed != nil {
@@ -583,10 +614,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		tableState:   tableState{procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}, pkgVars: map[string]bool{}}}
 	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
 	c.refineIn, c.refineOut = opts.refineMaps()
-	if opts.roundRefine == nil {
-		opts.roundRefine = map[string]*refineRecord{}
-	}
-	c.roundRefine = opts.roundRefine
+	c.roundRefine = opts.roundRefines()
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
 	c.noPrune = opts.noPrune
@@ -600,9 +628,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		return nil, perr
 	}
 	c.parsed = parsed
-	if opts.boot != nil {
-		c.lazyAutoloads = opts.boot.Lazy
-	}
+	c.lazyAutoloads = opts.lazyAutoloads()
 	c.autoloaded = c.neededAutoloads(ctx, c.bundledAutoloads(ctx, opts.autoloaded))
 	var dms []boot.MethodInfo
 	if opts.boot != nil {
@@ -671,17 +697,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.discoverIvars()
 	c.ivarsDiscovered = true
 	if c.round {
-		_ = catchCompileError(c.refineIvars)
-		for _, m := range c.inferredMethods() {
-			m.Ret = nil
-		}
-		for _, m := range c.inferredMethods() {
-			_ = catchCompileError(func() { c.inferRet(m) })
-		}
-		c.collectUses()
-		if !c.instMissing { // what a template stood in for is not evidence: the restart has the instance (decision 308)
-			c.updateInference(opts.infer)
-		}
+		c.inferenceRound(opts)
 		tick("round")
 		return nil, errInferRound
 	}
@@ -701,14 +717,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		c.errorf(nil, nil, "%d errors:\n%s", len(c.kept), strings.Join(c.kept, "\n"))
 	}
 	tick("emit")
-	if len(c.widenPending) > 0 && opts.widenRedo < maxWidenRedo {
-		opts.widenRedo++
-		for k, t := range c.widenPending {
-			opts.infer.types[k] = t
-		}
-		if opts.env.Timing {
-			fmt.Fprintf(os.Stderr, "rugaroo: final pass again: %d parameters widened to an untyped container\n", len(c.widenPending))
-		}
+	if c.widenRedo(opts) {
 		return nil, errWidenRedo
 	}
 	src := []byte(c.out.String())

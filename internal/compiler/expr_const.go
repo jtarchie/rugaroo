@@ -333,20 +333,7 @@ func (f *fctx) constGetType(recv expr, args []parser.Node) Type {
 		}
 		t := f.c.constTypeOf(f.c.lookupConst(f.f, constPath(lit), scope))
 		if !strings.Contains(lit, "::") && t != nil && f.c.selfConstVaries(mod, lit) {
-			// the receiver may be a subclass with its own constant of the name (rubocop's RESTRICT_ON_SEND, a Set on
-			// Base and an Array on a cop): the join of them all, untyped when they differ (decision 444)
-			ts := []Type{t}
-			for _, sub := range f.c.classList {
-				if sub != mod && sub.metaOf == nil && sub.isSubclassOf(mod) {
-					if st := f.c.constTypeOf(f.c.classes[sub.RubyName+"::"+lit], f.c.consts[sub.RubyName+"::"+lit]); st != nil {
-						ts = append(ts, st)
-					}
-				}
-			}
-			if j := joinOrAny(ts); !isAny(j) {
-				return j
-			}
-			return nil
+			return f.c.subclassConstJoin(mod, lit, t)
 		}
 		return t
 	}
@@ -560,4 +547,22 @@ func (f *fctx) genGlobalUpdate(n parser.Node) expr {
 		return f.genExpr(&parser.AndNode{Left: &parser.GlobalVariableReadNode{Name: n.Name, Location: n.NameLoc}, Right: w, Location: n.Location}, nil)
 	}
 	return expr{}
+}
+
+// subclassConstJoin: the receiver of `const_get(:NAME)` may be a subclass of mod with its own constant of the name
+// (rubocop's RESTRICT_ON_SEND, a Set on Base and an Array on a cop): the join of them all, nil (untyped) when they
+// differ (decision 444).
+func (c *Compiler) subclassConstJoin(mod *Class, name string, t Type) Type {
+	ts := []Type{t}
+	for _, sub := range c.classList {
+		if sub != mod && sub.metaOf == nil && sub.isSubclassOf(mod) {
+			if st := c.constTypeOf(c.classes[sub.RubyName+"::"+name], c.consts[sub.RubyName+"::"+name]); st != nil {
+				ts = append(ts, st)
+			}
+		}
+	}
+	if j := joinOrAny(ts); !isAny(j) {
+		return j
+	}
+	return nil
 }

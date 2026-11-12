@@ -18,6 +18,20 @@ func (c *Compiler) forwarderEnv(cls *Class, e entry) map[string]Type {
 	return env
 }
 
+// needsForwarder reports an entry of cls that its Go method set must answer with a forwarder: not its own direct
+// method, nor promoted from an embedded Hash, nor an attr (promoted through embedding), and one wantsForwarder keeps.
+func (c *Compiler) needsForwarder(cls *Class, e entry) bool {
+	switch {
+	case e.Owner == cls && c.isDirectMethod(e.M):
+		return false
+	case cls.hashBase && e.Owner != cls && slices.Contains(cls.Super.ancestors(), e.Owner):
+		return false // a typed call is intercepted in callCode
+	case e.M.Kind == kindAttrReader || e.M.Kind == kindAttrWriter:
+		return false // never touches virtual self
+	}
+	return c.wantsForwarder(cls, e)
+}
+
 // emitForwarders emits, for a concrete class, a Go method per inherited or
 // included public non-generic method so the class satisfies its interface.
 func (c *Compiler) emitForwarders(cls *Class) {
@@ -27,16 +41,7 @@ func (c *Compiler) emitForwarders(cls *Class) {
 	recv := c.recvType(cls)
 	for _, e := range c.publicEntries(cls) {
 		m := e.M
-		if e.Owner == cls && c.isDirectMethod(m) {
-			continue
-		}
-		if cls.hashBase && e.Owner != cls && slices.Contains(cls.Super.ancestors(), e.Owner) {
-			continue // promoted from the embedded Hash; a typed call is intercepted in callCode
-		}
-		if m.Kind == kindAttrReader || m.Kind == kindAttrWriter {
-			continue // promoted through embedding; never touches virtual self
-		}
-		if !c.wantsForwarder(cls, e) {
+		if !c.needsForwarder(cls, e) {
 			continue
 		}
 		env := c.forwarderEnv(cls, e)
@@ -51,14 +56,7 @@ func (c *Compiler) emitForwarders(cls *Class) {
 	}
 	c.emitBridges(cls, recv)
 	for _, e := range c.publicEntries(cls) {
-		if e.M.protoOpt { // `ToS() String` for the runtime: the method with every default left to it
-			env := c.forwarderEnv(cls, e)
-			args := []string{"self", "0"}
-			for _, p := range e.M.Params {
-				args = append(args, "*new("+c.goType(subst(p.Type, env))+")")
-			}
-			call := freeFuncName(e.M) + c.forwardTypeArgs(e, cls) + "(" + strings.Join(args, ", ") + ")"
-			c.w("func (self %s) %s() String { return rbAs[String](any(%s), \"String\") }\n", recv, strings.TrimSuffix(e.M.GoName, "_opt"), call)
+		if c.emitProtoOpt(cls, e, recv) {
 			continue
 		}
 		if e.M.seqRest {
@@ -114,6 +112,23 @@ func (c *Compiler) emitForwarders(cls *Class) {
 	c.w("\n")
 	c.emitEqAdapter(cls, recv)
 	c.emitCmpAdapter(cls, recv)
+}
+
+// emitProtoOpt is `ToS() String` (or Inspect) for the runtime over a to_s whose parameters are all optional: the
+// method with every default left to it (decision 444).
+func (c *Compiler) emitProtoOpt(cls *Class, e entry, recv string) bool {
+	if !e.M.protoOpt {
+		return false
+	}
+	env := c.forwarderEnv(cls, e)
+	args := make([]string, 0, 2+len(e.M.Params))
+	args = append(args, "self", "0")
+	for _, p := range e.M.Params {
+		args = append(args, "*new("+c.goType(subst(p.Type, env))+")")
+	}
+	call := freeFuncName(e.M) + c.forwardTypeArgs(e, cls) + "(" + strings.Join(args, ", ") + ")"
+	c.w("func (self %s) %s() String { return rbAs[String](any(%s), \"String\") }\n", recv, strings.TrimSuffix(e.M.GoName, "_opt"), call)
+	return true
 }
 
 // emitCmpAdapter: Comparable_Self and rbCmp need Op_cmp(T) Integer, so a nil <=> (Float's NaN) raises there, as MRI's rb_cmpint.
@@ -521,6 +536,15 @@ func (c *Compiler) iterAdapterBody(cls *Class, e entry, s slot) string {
 		elem, c.blkCall(cls, e, strings.Join(args, ", ")), x)
 }
 
+// passArgc is "rbArgc" when an adapter from slot to own passes all n arguments it names, both with callee-side defaults:
+// the slot's own count, so the override runs its defaults for what the caller left out (decision 444).
+func passArgc(slot, own *Method, n int) string {
+	if slot.calleeDefaults && own.calleeDefaults && n == len(slot.Params) && len(own.Params) == n {
+		return "rbArgc"
+	}
+	return ""
+}
+
 // adapterBody answers slot s of an ancestor's interface with cls's method e
 // (checked by checkAdaptable): an argument count e cannot take raises MRI's
 // ArgumentError, anything else converts across the two signatures.
@@ -590,9 +614,7 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 		}
 		args[i] = &exprNode{e: a}
 	}
-	if s.e.M.calleeDefaults && e.M.calleeDefaults && n == len(s.e.M.Params) && len(e.M.Params) == n {
-		f.argcPass = "rbArgc" // the slot's own count: the override runs its defaults for what the caller left out
-	}
+	f.argcPass = passArgc(s.e.M, e.M, n)
 	res := f.callEntry(&parser.NilNode{}, &e, recv, args, nil)
 	f.argcPass = ""
 	ret := subst(s.e.M.Ret, env)

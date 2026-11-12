@@ -60,7 +60,7 @@ func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (s
 	conf := types.Config{Importer: stdImporter(ctx, fset, f), Error: func(err error) {
 		var te types.Error
 		if errors.As(err, &te) {
-			if fd := at(te.Pos); fd != nil && strings.HasPrefix(fd.Name.Name, "rbSend_") && strings.HasPrefix(te.Msg, "impossible type switch case") {
+			if fd := at(te.Pos); impossibleArm(fd, te.Msg) {
 				impossible = append(impossible, te.Pos)
 				return
 			}
@@ -90,14 +90,9 @@ func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (s
 	// method of another name has a different shape than a mixin's cannot be the mixin's Self at all (rubocop's LineLength
 	// #register_offense under Alignment's), so Go calls its arm impossible: the arm goes, the dispatcher stays (decision 444)
 	for _, pos := range impossible {
-		fd := at(pos)
-		ast.Inspect(fd.Body, func(n ast.Node) bool {
-			if cc, ok := n.(*ast.CaseClause); ok && cc.Pos() <= pos && pos < cc.End() && len(cc.List) == 1 {
-				cuts = append(cuts, cut{fset.Position(cc.Pos()).Offset, fset.Position(cc.End()).Offset, ""})
-				return false
-			}
-			return true
-		})
+		if from, to, ok := caseAt(at(pos), pos); ok {
+			cuts = append(cuts, cut{fset.Position(from).Offset, fset.Position(to).Offset, ""})
+		}
 	}
 	if len(cuts) == 0 {
 		return code
@@ -124,6 +119,23 @@ func stubRejected(ctx context.Context, code []byte, stub func(fn, msg string) (s
 		out = slices.Replace(out, c.from, c.to, []byte(c.with)...)
 	}
 	return out
+}
+
+// impossibleArm reports Go's rejection of a dispatcher's type switch arm: a class that cannot be the switch's value.
+func impossibleArm(fd *ast.FuncDecl, msg string) bool {
+	return fd != nil && strings.HasPrefix(fd.Name.Name, "rbSend_") && strings.HasPrefix(msg, "impossible type switch case")
+}
+
+// caseAt is the extent of fd's single-type case clause holding pos.
+func caseAt(fd *ast.FuncDecl, pos token.Pos) (from, to token.Pos, ok bool) {
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		if cc, isCase := n.(*ast.CaseClause); isCase && cc.Pos() <= pos && pos < cc.End() && len(cc.List) == 1 {
+			from, to, ok = cc.Pos(), cc.End(), true
+			return false
+		}
+		return true
+	})
+	return from, to, ok
 }
 
 // funcDeclName is a func's name, or Recv.Name for a method (`func (self *X[V]) M()` is X.M).

@@ -18,6 +18,15 @@ func truncatesFloats(m *Method) bool {
 	return m.File != nil && m.File.isPrelude() && m.Owner != nil && floatTruncators[m.Owner.RubyName]
 }
 
+// argcOr is argc, or under an adapter passing its own arguments on the count its caller gave, not how many it names
+// (decision 444).
+func (f *fctx) argcOr(argc string) string {
+	if f.argcPass != "" {
+		return f.argcPass
+	}
+	return argc
+}
+
 // genArgs generates and coerces call arguments against m's parameters,
 // binding type variables in env. exprs, if non-nil, are pre-generated.
 // genArgs also returns where *rest's codes start (-1 if none), so a block arg can splice in before them, not after.
@@ -128,11 +137,7 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 		}
 	}
 	if m.calleeDefaults { // optional params at Go index i ran their default when rbArgc <= i
-		argc := argcCode(nargs, npos, npost, splatTmp, splatAt)
-		if f.argcPass != "" { // an adapter passing its own arguments on: the count its caller gave, not how many it names (decision 444)
-			argc = f.argcPass
-		}
-		codes = append([]string{argc}, codes...)
+		codes = append([]string{f.argcOr(argcCode(nargs, npos, npost, splatTmp, splatAt))}, codes...)
 		if restIdx >= 0 {
 			restIdx++
 		}

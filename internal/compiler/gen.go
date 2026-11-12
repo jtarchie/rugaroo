@@ -669,20 +669,23 @@ func (f *fctx) emptyTail(n parser.Node, t tail) {
 	f.applyTail(n, expr{code: "nil", typ: TNil{}}, t)
 }
 
+// eachEditStmt is n, or the index loop an each whose block edits its String elements in place runs as (decision 444).
+func (f *fctx) eachEditStmt(n parser.Node) parser.Node {
+	if c, ok := n.(*parser.CallNode); ok && c.Name == "each" && c.Block != nil && f.lenient() {
+		if r := f.eachEdit(c); r != nil {
+			return r
+		}
+	}
+	return n
+}
+
 func (f *fctx) genStmt(n parser.Node, t tail) {
 	if f.genStandIn(n, t) || f.noopStmt(n, t) || f.genLogicJump(n, t) {
 		return
 	}
 	f.lineOf(n)
-	if c, ok := n.(*parser.CallNode); ok && c.Name == "each" && c.Block != nil && f.lenient() {
-		if r := f.eachEdit(c); r != nil { // an each whose block edits its String elements in place (decision 444)
-			n = r
-		}
-	}
-	if f.breakCatchStmt(n, t) {
-		return
-	}
-	if f.breakCatchAssign(n, t) {
+	n = f.eachEditStmt(n)
+	if f.breakCatchForm(n, t) {
 		return
 	}
 	switch n := n.(type) {

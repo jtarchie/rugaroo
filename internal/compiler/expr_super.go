@@ -16,6 +16,49 @@ func (f *fctx) genSuperNode(n parser.Node) expr {
 	return f.genSuper(n, nil, true)
 }
 
+// includedSuper: inheritedSig prefers a superclass's def for the signature (decision 206); super itself goes to a
+// module the class includes first, as MRI's ancestors put it before the superclass (rubocop's SpecialGlobalVars
+// #on_new_investigation over RequireLibrary's, which sets @required_libs and calls super on; decision 444). nil keeps e.
+func (f *fctx) includedSuper(e *entry) *entry {
+	m := f.m
+	if m.Owner == nil || m.Owner.IsModule || m.superTarget != nil || m.structDef != nil || e == nil || e.Owner.IsModule {
+		return nil
+	}
+	for i := len(m.Owner.Includes) - 1; i >= 0; i-- {
+		inc := m.Owner.Includes[i]
+		if inc.Mod == nil || inc.Mod.File == nil || inc.Mod.File.isPrelude() || len(inc.Mod.TypeParams) > 0 {
+			continue
+		}
+		if me := inc.Mod.lookup(m.Name); me != nil && me.M.Node != nil && !me.M.File.isPrelude() {
+			return &entry{M: me.M, Owner: me.Owner, Env: composeEnv(me.Env, map[string]Type{}), Entry: m.Owner}
+		}
+	}
+	return nil
+}
+
+// superEntry is the method super calls: the inherited signature's, a module the class includes first, or for an alias
+// the original name's.
+func (f *fctx) superEntry() *entry {
+	e := f.c.inheritedSig(f.m)
+	if me := f.includedSuper(e); me != nil {
+		return me
+	}
+	if e == nil {
+		return f.aliasSuper()
+	}
+	return e
+}
+
+// aliasSuper: `alias on_csend on_send`, the copy's super is on_send's, as MRI's (rubocop's IndentationWidth; decision 444).
+func (f *fctx) aliasSuper() *entry {
+	if f.m.aliasOf == "" {
+		return nil
+	}
+	orig := *f.m
+	orig.Name = f.m.aliasOf
+	return f.c.inheritedSig(&orig)
+}
+
 // superRespondTo is super in a respond_to? override: Object's, the class's own methods by name at run time (decision 241).
 func (f *fctx) superRespondTo(n parser.Node, args *parser.ArgumentsNode, forwarding bool) expr {
 	var sargs []parser.Node
@@ -36,27 +79,7 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 	if f.m == nil || f.owner == nil {
 		f.errorf(n, "super outside a method")
 	}
-	e := f.c.inheritedSig(f.m)
-	if m := f.m; m.Owner != nil && !m.Owner.IsModule && m.superTarget == nil && m.structDef == nil && e != nil && !e.Owner.IsModule {
-		// inheritedSig prefers a superclass's def for the signature (decision 206); super itself goes to a module the
-		// class includes first, as MRI's ancestors put it before the superclass (rubocop's SpecialGlobalVars
-		// #on_new_investigation over RequireLibrary's, which sets @required_libs and calls super on; decision 444)
-		for i := len(m.Owner.Includes) - 1; i >= 0; i-- {
-			inc := m.Owner.Includes[i]
-			if inc.Mod == nil || inc.Mod.File == nil || inc.Mod.File.isPrelude() || len(inc.Mod.TypeParams) > 0 {
-				continue
-			}
-			if me := inc.Mod.lookup(m.Name); me != nil && me.M.Node != nil && !me.M.File.isPrelude() {
-				e = &entry{M: me.M, Owner: me.Owner, Env: composeEnv(me.Env, map[string]Type{}), Entry: m.Owner}
-				break
-			}
-		}
-	}
-	if e == nil && f.m.aliasOf != "" { // `alias on_csend on_send`: the copy's super is on_send's, as MRI's (rubocop's IndentationWidth)
-		orig := *f.m
-		orig.Name = f.m.aliasOf
-		e = f.c.inheritedSig(&orig)
-	}
+	e := f.superEntry()
 	if e != nil {
 		f.c.inferRet(e.M)
 		if f.lenient() { // an override's super is no evidence of what the method's other (dynamic) callers pass (bindata's String#assign)
@@ -76,39 +99,7 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 		return expr{code: f.selfCode + "." + bridgeName(f.m) + "(" + strings.Join(codes, ", ") + ")", typ: ret}
 	}
 	if e == nil {
-		switch f.m.Name {
-		case "initialize":
-			if e, ok := f.superValueInit(n, args, forwarding); ok {
-				return e
-			}
-			return expr{code: "", typ: TVoid{}, stmt: true}
-		case "respond_to_missing?": // Object's answers false
-			return expr{code: "Boolean(false)", typ: f.cls("Boolean")}
-		case "respond_to?":
-			return f.superRespondTo(n, args, forwarding)
-		case "inherited", "initialize_dup", "initialize_clone", "initialize_copy", "included", "extended", "prepended", "method_added":
-			// Class's and Object's hooks do nothing (decision 232; initialize_copy's copy is done by then, decision 414): an
-			// override's super reaches no method, so no slot
-			return expr{code: "", typ: TVoid{}, stmt: true}
-		case "method_missing": // Object's raises NoMethodError for the name
-			var name parser.Node
-			if forwarding && len(f.m.Params) > 0 {
-				name = &parser.LocalVariableReadNode{Name: f.m.Params[0].Name, Location: n.(*parser.ForwardingSuperNode).Location}
-			} else if args != nil && len(args.Arguments) > 0 {
-				name = args.Arguments[0]
-			}
-			if name == nil {
-				f.errorf(n, "super in method_missing needs the method name")
-			}
-			sym := f.coerce(name, f.genExpr(name, f.cls("Symbol")), f.cls("Symbol"))
-			return expr{code: "panic(rbNoMethod(string(" + sym + "), " + f.selfCode + ", false))", typ: TVoid{}, stmt: true, noreturn: true}
-		}
-		if f.m.Name == "new" && f.owner != nil && f.owner.metaOf != nil && len(f.owner.metaOf.Subclasses) == 0 {
-			// a class's own `def self.new(...)` ending in super (rubocop's Team.new): Class#new, the object through
-			// initialize. ponytail: a class with subclasses still errors, since self may be one of them (decision 444)
-			return f.genNew(n, f.owner.metaOf, f.superArgs(n, args, forwarding), nil, nil, nil)
-		}
-		f.errorf(n, "super: no parent method %s", f.m.Name)
+		return f.superNoParent(n, args, forwarding)
 	}
 	if e.Owner.GoType != "" {
 		if r, ok := f.superValueInit(n, args, forwarding); ok && f.m.Name == "initialize" {
@@ -135,6 +126,45 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 	}
 	code, ret := f.superModuleCall(e, codes), subst(e.M.Ret, env)
 	return expr{code: code, typ: ret}
+}
+
+// superNoParent is super where no parent method is in the closed world: Object's and Class's own (initialize, the
+// hooks, respond_to?, method_missing), Class#new, else the compile error.
+func (f *fctx) superNoParent(n parser.Node, args *parser.ArgumentsNode, forwarding bool) expr {
+	switch f.m.Name {
+	case "initialize":
+		if e, ok := f.superValueInit(n, args, forwarding); ok {
+			return e
+		}
+		return expr{code: "", typ: TVoid{}, stmt: true}
+	case "respond_to_missing?": // Object's answers false
+		return expr{code: "Boolean(false)", typ: f.cls("Boolean")}
+	case "respond_to?":
+		return f.superRespondTo(n, args, forwarding)
+	case "inherited", "initialize_dup", "initialize_clone", "initialize_copy", "included", "extended", "prepended", "method_added":
+		// Class's and Object's hooks do nothing (decision 232; initialize_copy's copy is done by then, decision 414): an
+		// override's super reaches no method, so no slot
+		return expr{code: "", typ: TVoid{}, stmt: true}
+	case "method_missing": // Object's raises NoMethodError for the name
+		var name parser.Node
+		if forwarding && len(f.m.Params) > 0 {
+			name = &parser.LocalVariableReadNode{Name: f.m.Params[0].Name, Location: n.(*parser.ForwardingSuperNode).Location}
+		} else if args != nil && len(args.Arguments) > 0 {
+			name = args.Arguments[0]
+		}
+		if name == nil {
+			f.errorf(n, "super in method_missing needs the method name")
+		}
+		sym := f.coerce(name, f.genExpr(name, f.cls("Symbol")), f.cls("Symbol"))
+		return expr{code: "panic(rbNoMethod(string(" + sym + "), " + f.selfCode + ", false))", typ: TVoid{}, stmt: true, noreturn: true}
+	}
+	if f.m.Name == "new" && f.owner != nil && f.owner.metaOf != nil && len(f.owner.metaOf.Subclasses) == 0 {
+		// a class's own `def self.new(...)` ending in super (rubocop's Team.new): Class#new, the object through
+		// initialize. ponytail: a class with subclasses still errors, since self may be one of them (decision 444)
+		return f.genNew(n, f.owner.metaOf, f.superArgs(n, args, forwarding), nil, nil, nil)
+	}
+	f.errorf(n, "super: no parent method %s", f.m.Name)
+	return expr{}
 }
 
 // superSynthNew is `super` from a class's own `def self.new` into Class#new (elftools' ELFStruct.new): it makes an

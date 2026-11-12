@@ -445,6 +445,17 @@ func (f *fctx) symbolBlockCall(n, block parser.Node, name string, names blockPar
 	return f.genMethodCall(n, expr{code: v.goName, typ: v.typ}, name, args, nil)
 }
 
+// checkPairResult: a `&:name` block whose call answers no pair where one is wanted (`pairs.reduce(&:join)`, the Hash arm
+// of an untyped receiver) is a compile error the arm's caller turns into NoMethodError at run time (decision 444).
+func (f *fctx) checkPairResult(n parser.Node, name string, e expr, t tail) {
+	if _, want := t.typ.(TTuple); !want || f.heldAsAny(e.typ) {
+		return
+	}
+	if _, got := stripOpt(e.typ).(TTuple); !got {
+		f.errorf(n, "&:%s answers %s where the block must answer %s", name, e.typ, t.typ)
+	}
+}
+
 // withClosureSelf binds self to an escaped block's self param (decision 164)
 // for the duration of gen, restoring the enclosing self after.
 func (f *fctx) withClosureSelf(self Type, gen func()) {
@@ -547,11 +558,7 @@ func (f *fctx) genClosure(n parser.Node, block parser.Node, sig *BlockSig, env m
 	gen := func(t tail) {
 		if symbolCall != "" {
 			e := f.symbolBlockCall(n, block, symbolCall, names)
-			if _, want := t.typ.(TTuple); want && !f.heldAsAny(e.typ) {
-				if _, got := stripOpt(e.typ).(TTuple); !got { // `pairs.reduce(&:join)`: a String is no pair (the Hash arm of an untyped receiver)
-					f.errorf(n, "&:%s answers %s where the block must answer %s", symbolCall, e.typ, t.typ)
-				}
-			}
+			f.checkPairResult(n, symbolCall, e, t)
 			f.applyTail(n, e, t)
 			return
 		}

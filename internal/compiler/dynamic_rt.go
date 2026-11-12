@@ -92,6 +92,12 @@ func (c *Compiler) emitDynEachV() {
 	c.w("\tdefault:\n\t}\n\treturn rbEachAny(recv, arity, func(xs ...any) { blk(xs...) })\n}\n\n")
 }
 
+// eachViaDyn reports a program's each on cls that no rbEachAny shape fits (a forwarder's `each(*args, &block)`, rubocop's
+// Config): reached through its Dyn wrapper (decision 444).
+func eachViaDyn(cls *Class, m *Method) bool {
+	return m != nil && m.File != nil && !m.File.isPrelude() && m.Block != nil && !m.Iterator && (len(m.Params) > 0 || m.Block.Rest) && len(cls.TypeParams) == 0
+}
+
 // emitDynEach emits rbEachAny (dynEach): an Array's elements, a Hash's pairs, then one case per Go shape of a user or
 // gem class's own each; a block of two splits a lone Array value and a block of one gets a pair as an Array, as yield does.
 func (c *Compiler) emitDynEach() {
@@ -112,9 +118,7 @@ func (c *Compiler) emitDynEach() {
 	viaDyn := false // an each no shape below fits (a forwarder's `each(*args, &block)`, rubocop's Config): through its Dyn wrapper (decision 444)
 	for _, cls := range c.classList {
 		m := cls.Methods["each"]
-		if m != nil && m.File != nil && !m.File.isPrelude() && m.Block != nil && !m.Iterator && (len(m.Params) > 0 || m.Block.Rest) && len(cls.TypeParams) == 0 {
-			viaDyn = true
-		}
+		viaDyn = viaDyn || eachViaDyn(cls, m)
 		if m == nil || m.File == nil || m.File.isPrelude() || m.Block == nil || len(m.Params) > 0 || m.generic() || len(cls.TypeParams) > 0 ||
 			len(m.Block.Params) == 0 || len(m.Block.Params) > 2 || !isVoid(m.Block.Ret) && (m.Iterator || !isAny(m.Block.Ret)) || m.Block.Self != nil || m.Block.Rest {
 			continue

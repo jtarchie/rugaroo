@@ -445,6 +445,29 @@ func (f *fctx) callTwin(n parser.Node, e *entry, recv expr, args []parser.Node, 
 	return o
 }
 
+// gemIterValue is a gem's iterator call used as a value (`ENGLISH_VARS.each_value(&:freeze).freeze`, rubocop's
+// SpecialGlobalVars): the loop runs as a statement, and its value is what the statement form answers, the receiver for a
+// core each (decision 444).
+func (f *fctx) gemIterValue(n parser.Node, m *Method, recv expr, block parser.Node) (expr, bool) {
+	cn, ok := n.(*parser.CallNode)
+	if !ok || !m.Iterator || block == nil || !f.lenient() || f.iterAsValue {
+		return expr{}, false
+	}
+	tmp := f.newTmp()
+	f.emit("var %s any", tmp)
+	call := *cn
+	call.Receiver = &exprNode{Node: cn.Receiver, e: recv}
+	if ba, ok := call.Block.(*parser.BlockArgumentNode); ok && !f.isBlockParam(ba.Expression) { // `&:freeze`, as genCallStmt lowers it
+		if sym, ok := ba.Expression.(*parser.SymbolNode); ok {
+			call.Block = symbolBlock(ba, sym.Unescaped.Value)
+		}
+	}
+	f.iterAsValue = true
+	ok = f.genIterCall(&call, tail{kind: tailAssign, target: tmp, typ: TAny{}})
+	f.iterAsValue = false
+	return expr{code: tmp, typ: TAny{}}, ok
+}
+
 func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Node, block parser.Node) expr {
 	m := e.M
 	f.c.inferRet(m)
@@ -473,24 +496,8 @@ func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Nod
 		}
 	}
 	if m.Block != nil {
-		if cn, ok := n.(*parser.CallNode); ok && m.Iterator && block != nil && f.lenient() && !f.iterAsValue {
-			// a gem's `ENGLISH_VARS.each_value(&:freeze).freeze` (rubocop's SpecialGlobalVars): the loop runs as a
-			// statement, and its value is what the statement form answers, the receiver for a core each (decision 444)
-			tmp := f.newTmp()
-			f.emit("var %s any", tmp)
-			call := *cn
-			call.Receiver = &exprNode{Node: cn.Receiver, e: recv}
-			if ba, ok := call.Block.(*parser.BlockArgumentNode); ok && !f.isBlockParam(ba.Expression) { // `&:freeze`, as genCallStmt lowers it
-				if sym, ok := ba.Expression.(*parser.SymbolNode); ok {
-					call.Block = symbolBlock(ba, sym.Unescaped.Value)
-				}
-			}
-			f.iterAsValue = true
-			ok := f.genIterCall(&call, tail{kind: tailAssign, target: tmp, typ: TAny{}})
-			f.iterAsValue = false
-			if ok {
-				return expr{code: tmp, typ: TAny{}}
-			}
+		if r, ok := f.gemIterValue(n, m, recv, block); ok {
+			return r
 		}
 		if m.Iterator {
 			f.errorf(n, "%s is an iterator (its block returns void); call it as a statement with a block", m.Name)
@@ -529,14 +536,7 @@ func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Nod
 			out.typ = t
 		}
 	}
-	// `klass.new` returns the hierarchy's root type; narrow to the class the
-	// receiver is statically known to be.
-	if m.Kind == kindSynth && m.Name == "new" {
-		if meta := f.metaOfType(recv.typ); meta != nil && meta.metaOf != meta.metaOf.root() {
-			out.typ = TClass{C: meta.metaOf}
-			out.code, out.assert = out.code+".("+f.c.goType(out.typ)+")", true
-		}
-	}
+	out = f.narrowNew(m, recv, out)
 	if f.c.selfReturnAsserts(e, recv.typ) {
 		out.code, out.assert = out.code+".("+f.c.goType(recv.typ)+")", true
 	} else if f.c.selfVarReturns(e, recv.typ) {
@@ -547,6 +547,18 @@ func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Nod
 		return f.narrowToArm(n, flatOpt(out), subst(armT, env))
 	}
 	return flatOpt(out)
+}
+
+// narrowNew: `klass.new` returns the hierarchy's root type; narrow to the class the receiver is statically known to be.
+func (f *fctx) narrowNew(m *Method, recv, out expr) expr {
+	if m.Kind != kindSynth || m.Name != "new" {
+		return out
+	}
+	if meta := f.metaOfType(recv.typ); meta != nil && meta.metaOf != meta.metaOf.root() {
+		out.typ = TClass{C: meta.metaOf}
+		out.code, out.assert = out.code+".("+f.c.goType(out.typ)+")", true
+	}
+	return out
 }
 
 // flatOpt collapses a nested optional result: a generic E? instantiated

@@ -29,6 +29,22 @@ func (o *options) refineMaps() (in, out map[string]*refineRecord) {
 	return o.refineIn, o.refineOut
 }
 
+// roundRefines is the inference rounds' refineIvars record, made on first use (decision 444).
+func (o *options) roundRefines() map[string]*refineRecord {
+	if o.roundRefine == nil {
+		o.roundRefine = map[string]*refineRecord{}
+	}
+	return o.roundRefine
+}
+
+// lazyAutoloads are the autoload files boot registered and never loaded (decision 444).
+func (o *options) lazyAutoloads() map[string]bool {
+	if o.boot == nil {
+		return nil
+	}
+	return o.boot.Lazy
+}
+
 // refineKind names a final pass: the eager recompile (decision 49) runs refineIvars again from its own state.
 func (c *Compiler) refineKind() string {
 	if c.dynEvery {

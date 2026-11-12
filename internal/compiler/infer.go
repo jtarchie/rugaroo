@@ -779,20 +779,7 @@ func (c *Compiler) updateInference(inf *inference) {
 	next, from := map[pendingKey]Type{}, map[pendingKey]string{}
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
-		seen := map[[2]int]int{}
-		var uses []paramUse
-		for _, u := range c.uses[key] { // a body generates more than once: the last pass's type
-			k := [2]int{order[u.file], u.off}
-			if i, ok := seen[k]; ok {
-				uses[i] = u
-				continue
-			}
-			seen[k] = len(uses)
-			uses = append(uses, u)
-		}
-		slices.SortFunc(uses, func(a, b paramUse) int {
-			return cmp.Or(cmp.Compare(order[a.file], order[b.file]), cmp.Compare(a.off, b.off))
-		})
+		uses := c.lastPassUses(key, order)
 		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
 			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 		}
@@ -824,42 +811,12 @@ func (c *Compiler) updateInference(inf *inference) {
 			next[key], from[key] = t, at
 		}
 	}
-	inf.changed = len(next) != len(inf.types)
-	diff := 0
-	for k, t := range next {
-		if old, ok := inf.types[k]; !ok || fmt.Sprint(old) != fmt.Sprint(t) {
-			inf.changed = true
-			diff++
-			if c.env.Timing && diff <= 3 {
-				fmt.Fprintf(os.Stderr, "rugaroo: round changed %v: %v -> %v\n", k, old, t)
-			}
-		}
-	}
+	diff := c.roundDiff(inf, next)
 	if c.env.Timing {
 		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
 	}
 	settled := !inf.changed || diff*50 <= len(next)
-	if settled {
-		inf.settled++
-	} else {
-		inf.settled = 0
-	}
-	if settled {
-		// settled (a large gem program's last few parameters flip between rounds until the cap): an untyped argument is
-		// now untyped for good, not a parameter still waiting for its type. A typed
-		// parameter would assert the value's class at the call, and raise where MRI runs (parser's
-		// StaticEnvironment#declared?(name) typed Symbol by the parser, called by the lexer with an untyped String it
-		// calls to_sym on). Such parameters become untyped and the rounds go on (decision 444).
-		for _, key := range bets {
-			if t := next[key]; t != nil && !isAny(t) && c.goType(t) != "any" {
-				if inf.anyUse == nil {
-					inf.anyUse = map[pendingKey]bool{}
-				}
-				inf.anyUse[key], next[key], inf.changed = true, TAny{}, true
-				delete(from, key)
-			}
-		}
-	}
+	c.settleRound(inf, settled, bets, next, from)
 	inf.types, inf.from = next, from
 	inf.none = map[pendingKey]bool{}
 	for k := range c.pendingSeen {
@@ -871,6 +828,64 @@ func (c *Compiler) updateInference(inf *inference) {
 	if c.env.InferDebug {
 		for _, k := range slices.Sorted(maps.Keys(next)) {
 			fmt.Fprintf(os.Stderr, "rugaroo: inferred %s: %s\n", k, next[k])
+		}
+	}
+}
+
+// roundDiff counts the parameters next types otherwise than the previous round did, and sets inf.changed.
+func (c *Compiler) roundDiff(inf *inference, next map[pendingKey]Type) int {
+	inf.changed = len(next) != len(inf.types)
+	diff := 0
+	for k, t := range next {
+		if old, ok := inf.types[k]; !ok || fmt.Sprint(old) != fmt.Sprint(t) {
+			inf.changed = true
+			diff++
+			if c.env.Timing && diff <= 3 {
+				fmt.Fprintf(os.Stderr, "rugaroo: round changed %v: %v -> %v\n", k, old, t)
+			}
+		}
+	}
+	return diff
+}
+
+// lastPassUses are key's uses in source order, each site once with the type of the last pass that reached it (a body
+// generates more than once).
+func (c *Compiler) lastPassUses(key pendingKey, order map[*File]int) []paramUse {
+	seen := map[[2]int]int{}
+	var uses []paramUse
+	for _, u := range c.uses[key] {
+		k := [2]int{order[u.file], u.off}
+		if i, ok := seen[k]; ok {
+			uses[i] = u
+			continue
+		}
+		seen[k] = len(uses)
+		uses = append(uses, u)
+	}
+	slices.SortFunc(uses, func(a, b paramUse) int {
+		return cmp.Or(cmp.Compare(order[a.file], order[b.file]), cmp.Compare(a.off, b.off))
+	})
+	return uses
+}
+
+// settleRound counts settled rounds (a round that changed at most 2% of the parameters) and, in one, makes each gem
+// parameter an untyped gem argument reaches untyped. A large gem program's last few parameters flip between rounds until
+// the cap: an untyped argument is now untyped for good, not a parameter still waiting for its type. A typed parameter
+// would assert the value's class at the call, and raise where MRI runs (parser's StaticEnvironment#declared?(name) typed
+// Symbol by the parser, called by the lexer with an untyped String it calls to_sym on). The rounds go on (decision 444).
+func (c *Compiler) settleRound(inf *inference, settled bool, bets []pendingKey, next map[pendingKey]Type, from map[pendingKey]string) {
+	if !settled {
+		inf.settled = 0
+		return
+	}
+	inf.settled++
+	for _, key := range bets {
+		if t := next[key]; t != nil && !isAny(t) && c.goType(t) != "any" {
+			if inf.anyUse == nil {
+				inf.anyUse = map[pendingKey]bool{}
+			}
+			inf.anyUse[key], next[key], inf.changed = true, TAny{}, true
+			delete(from, key)
 		}
 	}
 }

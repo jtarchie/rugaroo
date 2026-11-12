@@ -260,23 +260,28 @@ func (t *rxTranslator) escape(inClass bool) (string, error) {
 		return `(?=\n?\z)`, nil
 	case 'g': // a subexpression call, which regexp2 would read as a literal g (decision 242)
 		return "", errors.New(`\g (a subexpression call) is not supported`)
-	case 'R': // a linebreak: \r\n as one, or any single line terminator
-		if inClass {
-			return "", errors.New(`\R inside a character class`)
-		}
-		return `(?:\r\n|[\n\x0b\x0c\r\x{85}\x{2028}\x{2029}])`, nil
-	case 'G':
-		// where the search began: for one match that is its start, which \A says of the text searched; Regexp#match(s, pos)
-		// searches the text from pos for such a pattern. A scan or gsub would match only once (ponytail: \G as the end of
-		// the previous match needs the engines to carry it)
-		if escStart == 0 {
-			return `\A`, nil
-		}
-		return "", fmt.Errorf(`%s is not supported by RE2`, esc)
+	case 'R', 'G':
+		return linebreakOrStart(esc, inClass, escStart == 0)
 	case 'K', 'X':
 		return "", fmt.Errorf(`%s is not supported by RE2`, esc)
 	}
 	return esc, nil
+}
+
+// linebreakOrStart translates \R, a linebreak (\r\n as one, or any single line terminator), and a leading \G: where the
+// search began, which for one match is its start, \A of the text searched; Regexp#match(s, pos) searches the text from
+// pos for such a pattern. A scan or gsub would match only once (ponytail: \G as the end of the previous match needs the
+// engines to carry it). decision 444
+func linebreakOrStart(esc string, inClass, leading bool) (string, error) {
+	switch {
+	case esc[1] == 'R' && inClass:
+		return "", errors.New(`\R inside a character class`)
+	case esc[1] == 'R':
+		return `(?:\r\n|[\n\x0b\x0c\r\x{85}\x{2028}\x{2029}])`, nil
+	case leading:
+		return `\A`, nil
+	}
+	return "", fmt.Errorf(`%s is not supported by RE2`, esc)
 }
 
 // class translates the bracket expression at t.src[t.i].

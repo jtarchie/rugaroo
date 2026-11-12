@@ -88,6 +88,33 @@ func (f *fctx) dynStringScan(n parser.Node, recv expr, args []parser.Node) expr 
 	return expr{code: res, typ: TAny{}}
 }
 
+// dynBlockArgCall is an untyped receiver's call given `&expr`: a method's own block passed on, or a callable or a
+// Symbol decided when it runs.
+func (f *fctx) dynBlockArgCall(n parser.Node, recv expr, name string, args []parser.Node, ba *parser.BlockArgumentNode) (expr, bool) {
+	if v, ok := f.dynBlockValue(n, ba); ok { // a method's own `&block` passed on (concurrent-ruby's `ns_initialize(opts, &block)`)
+		if f.c.dynBlockNames == nil {
+			f.c.dynBlockNames = map[string]bool{}
+		}
+		f.c.dynBlockNames[name] = true
+		return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}, blockArg: true})), true
+	}
+	if ba.Expression != nil {
+		if pb := f.procBlock(ba); pb != nil { // `&order`, a callable or a Symbol decided when it runs (decision 444)
+			if ps, ok := pb.Parameters.(*parser.BlockParametersNode); ok && ps.Parameters != nil && ps.Parameters.Rest != nil && len(pb.Locals) == 1 {
+				// a dynamic block takes named parameters: `{ |x| xs = [x]; ... }`, the one value an iterator yields
+				loc, x, xs := pb.Location, "x1_", pb.Locals[0]
+				st, _ := pb.Body.(*parser.StatementsNode)
+				one := &parser.LocalVariableWriteNode{Location: loc, Name: xs, Value: &parser.ArrayNode{Location: loc, Elements: []parser.Node{&parser.LocalVariableReadNode{Location: loc, Name: x}}}}
+				pb = &parser.BlockNode{Location: loc, Locals: []string{x, xs},
+					Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: x}}}},
+					Body:       &parser.StatementsNode{Location: loc, Body: append([]parser.Node{one}, st.Body...)}}
+			}
+			return f.genDynBlockCall(n, recv, name, args, pb), true
+		}
+	}
+	return expr{}, false
+}
+
 // universalBlockCall is universalCall with a block: one method every receiver shares, or a gem's untyped each.
 func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) expr {
 	if e := f.c.universalOnly(name); e != nil { // the same method on every receiver: no dispatch needed
@@ -106,42 +133,29 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 	if e, ok := f.forwardedEnum(n, recv, name, args, block); ok {
 		return e
 	}
-	if f.lenient() && f.heldAsAny(recv.typ) && name == "with_object" && len(args) == 1 {
-		// an untyped Enumerator's with_object is each_with_object over what it yields (rubocop's
-		// `lines.each.with_index.with_object({}) do |(line, i), acc|`; decision 444)
-		name = "each_with_object"
-	}
+	name = f.untypedEnumName(recv, name, args)
 	if f.lenient() && f.heldAsAny(recv.typ) && dynEnumNames[name] {
 		return f.dynEnumBlock(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
 	}
 	if b, ok := block.(*parser.BlockNode); ok && f.lenient() {
 		return f.genDynBlockCall(n, recv, name, args, b)
 	}
-	if _, ok := block.(*parser.BlockArgumentNode); ok && f.lenient() { // a method's own `&block` passed on (concurrent-ruby's `ns_initialize(opts, &block)`)
-		if v, ok := f.dynBlockValue(n, block); ok {
-			if f.c.dynBlockNames == nil {
-				f.c.dynBlockNames = map[string]bool{}
-			}
-			f.c.dynBlockNames[name] = true
-			return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}, blockArg: true}))
-		}
-	}
-	if ba, ok := block.(*parser.BlockArgumentNode); ok && f.lenient() && ba.Expression != nil {
-		if pb := f.procBlock(ba); pb != nil { // `&order`, a callable or a Symbol decided when it runs (decision 444)
-			if ps, ok := pb.Parameters.(*parser.BlockParametersNode); ok && ps.Parameters != nil && ps.Parameters.Rest != nil && len(pb.Locals) == 1 {
-				// a dynamic block takes named parameters: `{ |x| xs = [x]; ... }`, the one value an iterator yields
-				loc, x, xs := pb.Location, "x1_", pb.Locals[0]
-				st, _ := pb.Body.(*parser.StatementsNode)
-				one := &parser.LocalVariableWriteNode{Location: loc, Name: xs, Value: &parser.ArrayNode{Location: loc, Elements: []parser.Node{&parser.LocalVariableReadNode{Location: loc, Name: x}}}}
-				pb = &parser.BlockNode{Location: loc, Locals: []string{x, xs},
-					Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: x}}}},
-					Body:       &parser.StatementsNode{Location: loc, Body: append([]parser.Node{one}, st.Body...)}}
-			}
-			return f.genDynBlockCall(n, recv, name, args, pb)
+	if ba, ok := block.(*parser.BlockArgumentNode); ok && f.lenient() {
+		if e, ok := f.dynBlockArgCall(n, recv, name, args, ba); ok {
+			return e
 		}
 	}
 	f.errorf(n, "blocks on untyped receivers are not supported")
 	return expr{}
+}
+
+// untypedEnumName: an untyped Enumerator's with_object is each_with_object over what it yields (rubocop's
+// `lines.each.with_index.with_object({}) do |(line, i), acc|`; decision 444); any other name is itself.
+func (f *fctx) untypedEnumName(recv expr, name string, args []parser.Node) string {
+	if f.lenient() && f.heldAsAny(recv.typ) && name == "with_object" && len(args) == 1 {
+		return "each_with_object"
+	}
+	return name
 }
 
 // forwardedEnum is a forwarder's `target.map(*args, &block)` on an untyped target (Forwardable's def_delegators over an

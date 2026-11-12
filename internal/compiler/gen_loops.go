@@ -232,43 +232,8 @@ func (f *fctx) genBreak(n *parser.BreakNode) {
 		f.emitBreak(l)
 		return
 	}
-	if n.Arguments != nil && f.lenient() && len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopIter {
-		// a gem's `break v` out of an iterator whose value nothing reads (prime's each, yielding into a void block): v
-		// runs for its effects, and the call's value is nil, as a broken-out gem loop's is (decisions 233, 410)
-		l := f.loops[len(f.loops)-1]
-		if args := n.Arguments.Arguments; l.broke != nil && l.broke.res != "" && len(args) == 1 && f.begins <= l.begins {
-			f.emit("%s = %s", l.broke.res, f.coerce(n, f.genExpr(args[0], nil), TAny{})) // the loop is a value: the break's
-			f.emitBreak(l)
-			return
-		}
-		if bc := f.breakCatch; bc != nil && bc.res != "" && len(f.loops) == bc.depth+1 && len(n.Arguments.Arguments) == 1 && f.begins <= l.begins {
-			// the caught call compiled to this loop (`loop do ... break last ... end` as a method's value)
-			f.emit("%s = %s", bc.res, f.coerce(n, f.genExpr(n.Arguments.Arguments[0], nil), TAny{}))
-			f.emitBreak(l)
-			return
-		}
-		for _, a := range n.Arguments.Arguments {
-			if v := f.genExpr(a, nil); v.code != "" && !v.done && !pureNode(a) {
-				f.emit("_ = %s", v.code)
-			}
-		}
-		f.emitBreak(l)
+	if n.Arguments != nil && f.lenient() && f.gemBreakValue(n) {
 		return
-	}
-	if n.Arguments != nil && f.lenient() && len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopClosure {
-		// a gem's `break result if result` out of a closure block (rubocop's `extractors.find do ... end`): the call's
-		// value is the break's (decision 444)
-		if bc := f.breakCatch; bc != nil && len(f.rbFrames) > 0 && f.rbFrames[len(f.rbFrames)-1].key == bc.block.Location.StartOffset {
-			var v expr
-			if args := n.Arguments.Arguments; len(args) == 1 {
-				v = f.genExpr(args[0], nil)
-			} else {
-				v = f.genExpr(&parser.ArrayNode{Location: n.Location, Elements: args}, nil)
-			}
-			bc.used = true
-			f.emit("panic(rbBreak{id: %q, val: %s})", bc.id, f.coerce(n, v, TAny{}))
-			return
-		}
 	}
 	if n.Arguments != nil {
 		f.errorf(n, "break with a value is not supported")
@@ -307,6 +272,11 @@ func (f *fctx) breakCatchStmt(n parser.Node, t tail) bool {
 	return true
 }
 
+// breakCatchForm is a statement whose block breaks out of its call: the call itself, or the call assigned to a local.
+func (f *fctx) breakCatchForm(n parser.Node, t tail) bool {
+	return f.breakCatchStmt(n, t) || f.breakCatchAssign(n, t)
+}
+
 // breakCatchAssign is a gem's `x = recv.find do ... break if c ... end` (rubocop's part_of_assignment_rhs): the call's
 // value, nil when the block broke, is caught as breakCatchStmt's and then assigned (decision 444).
 func (f *fctx) breakCatchAssign(n parser.Node, t tail) bool {
@@ -332,6 +302,50 @@ func (f *fctx) breakCatchAssign(n parser.Node, t tail) bool {
 	held.Value = &exprNode{Node: c, e: expr{code: res, typ: TAny{}}}
 	f.genStmt(&held, t)
 	return true
+}
+
+// gemBreakValue is a gem's `break v` (decisions 233, 410, 444): out of an iterator loop or a caught closure block. false
+// leaves it to genBreak's error.
+func (f *fctx) gemBreakValue(n *parser.BreakNode) bool {
+	if len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopIter {
+		// a gem's `break v` out of an iterator whose value nothing reads (prime's each, yielding into a void block): v
+		// runs for its effects, and the call's value is nil, as a broken-out gem loop's is (decisions 233, 410)
+		l := f.loops[len(f.loops)-1]
+		if args := n.Arguments.Arguments; l.broke != nil && l.broke.res != "" && len(args) == 1 && f.begins <= l.begins {
+			f.emit("%s = %s", l.broke.res, f.coerce(n, f.genExpr(args[0], nil), TAny{})) // the loop is a value: the break's
+			f.emitBreak(l)
+			return true
+		}
+		if bc := f.breakCatch; bc != nil && bc.res != "" && len(f.loops) == bc.depth+1 && len(n.Arguments.Arguments) == 1 && f.begins <= l.begins {
+			// the caught call compiled to this loop (`loop do ... break last ... end` as a method's value)
+			f.emit("%s = %s", bc.res, f.coerce(n, f.genExpr(n.Arguments.Arguments[0], nil), TAny{}))
+			f.emitBreak(l)
+			return true
+		}
+		for _, a := range n.Arguments.Arguments {
+			if v := f.genExpr(a, nil); v.code != "" && !v.done && !pureNode(a) {
+				f.emit("_ = %s", v.code)
+			}
+		}
+		f.emitBreak(l)
+		return true
+	}
+	if len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopClosure {
+		// a gem's `break result if result` out of a closure block (rubocop's `extractors.find do ... end`): the call's
+		// value is the break's (decision 444)
+		if bc := f.breakCatch; bc != nil && len(f.rbFrames) > 0 && f.rbFrames[len(f.rbFrames)-1].key == bc.block.Location.StartOffset {
+			var v expr
+			if args := n.Arguments.Arguments; len(args) == 1 {
+				v = f.genExpr(args[0], nil)
+			} else {
+				v = f.genExpr(&parser.ArrayNode{Location: n.Location, Elements: args}, nil)
+			}
+			bc.used = true
+			f.emit("panic(rbBreak{id: %q, val: %s})", bc.id, f.coerce(n, v, TAny{}))
+			return true
+		}
+	}
+	return false
 }
 
 // genBreakCatchValue is genBreakCatch for a call whose value is used: nil when the block broke, as MRI's valueless
