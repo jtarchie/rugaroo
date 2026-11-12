@@ -81,6 +81,15 @@ class Symbol < Object
   #: (String) -> bool
   def end_with?(suffix) = name.end_with?(suffix)
 
+  #: (String, String) -> bool
+  def __start_with_q_2(a, b) = name.start_with?(a) || name.start_with?(b)
+
+  #: (String, String, String) -> bool
+  def __start_with_q_3(a, b, c) = name.start_with?(a) || name.start_with?(b) || name.start_with?(c)
+
+  #: (String, String) -> bool
+  def __end_with_q_2(a, b) = name.end_with?(a) || name.end_with?(b)
+
   #: () -> String
   def id2name = to_s
 

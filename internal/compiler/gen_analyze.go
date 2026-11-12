@@ -384,7 +384,9 @@ func refineContainer(t Type, open bool, elems [2][]Type) Type {
 			args[i] = c.Args[i]
 			continue
 		}
-		typed := slices.DeleteFunc(slices.Clone(elems[i]), holdsAny)
+		// an untyped value says nothing yet; a container of untyped (parser's `@stack << Set.new` beside a String?) is
+		// evidence of a class the element type must hold, and no element type holding it is typed (decision 444)
+		typed := slices.DeleteFunc(slices.Clone(elems[i]), func(t Type) bool { return isAny(stripOpt(t)) })
 		if args[i] = joinOrAny(typed); len(typed) == 0 || holdsAny(args[i]) {
 			return nil
 		}
