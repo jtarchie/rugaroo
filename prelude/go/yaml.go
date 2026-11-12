@@ -222,6 +222,19 @@ func (l *rbYAMLLoader) tagged(n *ast.TagNode) any {
 		return l.symbol(rbYAMLText(n.Value))
 	case "!!map", "!!seq", "!ruby/hash", "!ruby/array", "tag:yaml.org,2002:map", "tag:yaml.org,2002:seq":
 		return l.node(n.Value)
+	case "!ruby/regexp": // `!ruby/regexp /\Afoo/i` (rubocop's default.yml), as Psych's ToRuby: the text between the slashes, then the option letters
+		l.permit("Regexp")
+		text := rbYAMLText(n.Value)
+		end := strings.LastIndexByte(text, '/')
+		if !strings.HasPrefix(text, "/") || end < 1 {
+			return rbRegexpFromValue(String(text), nil)
+		}
+		return rbRegexpFromValue(String(text[1:end]), String(strings.Map(func(r rune) rune {
+			if strings.ContainsRune("imx", r) {
+				return r
+			}
+			return -1
+		}, text[end+1:])))
 	case "!!set":
 		l.permit("Psych::Set")
 		return l.node(n.Value)

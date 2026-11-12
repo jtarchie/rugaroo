@@ -259,6 +259,7 @@ type refineState struct {
 	roundRefine         map[string]*refineRecord // options.roundRefine (decision 444)
 	inDryRun            bool                     // inside dryRunIvarUsers
 	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
+	widenPending        map[pendingKey]Type      // noteWidenPending's parameters (decision 444)
 	localSeeds          map[*Method]localSeed    // decision 444
 	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
 	noNilDefer          bool                     // options.noNilDefer
@@ -401,6 +402,7 @@ type options struct {
 	refineIn     map[string]*refineRecord // refineIvars' records from the cache, by refineKind (decision 433)
 	refineOut    map[string]*refineRecord // out: this compile's, for the cache
 	roundRefine  map[string]*refineRecord // the previous inference round's candidates and kept typings, tried first by the next (decision 444)
+	widenRedo    int                      // final passes rerun by noteWidenPending
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.
@@ -445,10 +447,24 @@ func compileFresh(ctx context.Context, preludeFS fs.FS, sources []Source, opts *
 	return nil, fmt.Errorf("generic instances still missing after %d compiles: %s", maxInstanceRestarts, strings.Join(opts.instances, ", "))
 }
 
+// errWidenRedo: the final pass widened parameters the rounds typed too narrowly; it runs again (decision 444).
+var errWidenRedo = errors.New("parameters widened")
+
+const maxWidenRedo = 4
+
 func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) ([]byte, error) {
 	opts.env = loadEnv()
 	if opts.seed != nil {
 		opts.infer = opts.seed.inf
+	}
+	final := compileWith
+	compileWith := func(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options, dynEvery bool) ([]byte, error) {
+		out, err := final(ctx, preludeFS, sources, opts, dynEvery)
+		for errors.Is(err, errWidenRedo) {
+			opts.skipped = nil
+			out, err = final(ctx, preludeFS, sources, opts, dynEvery)
+		}
+		return out, err
 	}
 	out, err := compileWith(ctx, preludeFS, sources, opts, false)
 	if errors.Is(err, errNeedInfer) {
@@ -673,6 +689,16 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		c.errorf(nil, nil, "%d errors:\n%s", len(c.kept), strings.Join(c.kept, "\n"))
 	}
 	tick("emit")
+	if len(c.widenPending) > 0 && opts.widenRedo < maxWidenRedo {
+		opts.widenRedo++
+		for k, t := range c.widenPending {
+			opts.infer.types[k] = t
+		}
+		if opts.env.Timing {
+			fmt.Fprintf(os.Stderr, "rugaroo: final pass again: %d parameters widened to an untyped container\n", len(c.widenPending))
+		}
+		return nil, errWidenRedo
+	}
 	src := []byte(c.out.String())
 	lazy := map[string]bool{}
 	for _, k := range c.constList {

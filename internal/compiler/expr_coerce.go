@@ -455,6 +455,7 @@ func (f *fctx) coerceClass(n parser.Node, e expr, to TClass) string {
 // parameter holds typed arguments to T and passes untyped ones as they are.
 func (f *fctx) coerceArg(n parser.Node, a expr, p Param, env map[string]Type) string {
 	if p.Pending != "" {
+		f.noteWidenPending(a, p)
 		return f.coercePending(p, func() string { q := p; q.Pending = ""; return f.coerceArg(n, a, q, env) })
 	}
 	if p.Want != nil && !isAny(a.typ) {
@@ -610,4 +611,32 @@ func (f *fctx) coerceToOpt(n parser.Node, e expr, to TOpt) string {
 		return "rbSome[" + f.c.goType(to.Elem) + "](" + f.coerce(n, e, to.Elem) + ")"
 	}
 	return "Ref[" + f.c.goType(to.Elem) + "](" + f.coerce(n, e, to.Elem) + ")"
+}
+
+// noteWidenPending: the final pass passing a Hash or Array of untyped to a gem parameter the rounds typed as a typed one
+// of the same class. A round types ivars from what it has seen so far (rubocop's `CLI#@options` was
+// Hash[Symbol, Boolean] in every round and is untyped in the final pass, which sees every store), so the parameter took a
+// type its caller does not have, and the call would convert the Hash at run time: a copy that raises on the first value
+// that does not fit. The parameter becomes the untyped container and the final pass runs again (decision 444).
+func (f *fctx) noteWidenPending(a expr, p Param) {
+	c := f.c
+	if c.round || c.infer == nil || c.inDryRun || f.discover || f.probeDepth > 0 || !f.lenient() {
+		return
+	}
+	pc, ok := stripOpt(p.Type).(TClass)
+	ac, ok2 := stripOpt(a.typ).(TClass)
+	if !ok || !ok2 || pc.C != ac.C || len(pc.Args) == 0 || pc.C.RubyName != "Hash" && pc.C.RubyName != "Array" {
+		return
+	}
+	if slices.ContainsFunc(ac.Args, func(t Type) bool { return !isAny(t) }) || !slices.ContainsFunc(pc.Args, func(t Type) bool { return !isAny(t) }) {
+		return
+	}
+	if c.widenPending == nil {
+		c.widenPending = map[pendingKey]Type{}
+	}
+	var t Type = ac
+	if isOpt(p.Type) {
+		t = TOpt{Elem: ac}
+	}
+	c.widenPending[p.Pending] = t
 }
