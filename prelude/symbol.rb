@@ -75,6 +75,13 @@ class Symbol < Object
   #: (Symbol) -> bool
   def casecmp?(other) = name.casecmp?(other.name)
 
+  # The same Symbol (parser's `pair.type.eql?(:pair)` on an untyped node type; decision 444).
+  #: (untyped) -> bool
+  def eql?(other) = %x{
+    o, ok := rbUnbox(other).(Symbol)
+    return Boolean(ok && o == self)
+  }
+
   #: (String) -> bool
   def start_with?(prefix) = name.start_with?(prefix)
 
