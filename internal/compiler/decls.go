@@ -178,6 +178,7 @@ func (c *Compiler) emitTables() {
 	c.emitModIsA()
 	c.emitFrozenFlag()
 	c.emitDynEach()
+	c.emitLoadedFeatures()
 	c.emitDelegateObj()
 	c.emitOptClassFrom()
 	c.emitTuples()
@@ -227,4 +228,16 @@ func (c *Compiler) emitStringLits() {
 		c.w("\t%s,\n", strconv.Quote(s))
 	}
 	c.w("}\n\n")
+}
+
+// emitLoadedFeatures emits rbLoadedFeatures, gem code's `$LOADED_FEATURES` (decision 444): the source files compiled
+// into the program, in load order, a new Array per read. The pruner drops it when nothing reads the global.
+func (c *Compiler) emitLoadedFeatures() {
+	var elems []string
+	for _, f := range c.files {
+		if !f.isPrelude() && f.path != "" && !f.synth {
+			elems = append(elems, strconv.Quote(f.path))
+		}
+	}
+	c.w("func rbLoadedFeatures() *Array[String] {\n\treturn %s\n}\n\n", arrayLit("String", elems))
 }

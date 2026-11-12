@@ -431,6 +431,14 @@ func (f *fctx) genGlobalRead(n *parser.GlobalVariableReadNode) expr {
 			}
 			return expr{code: arrayLit("String", elems), typ: TClass{C: f.c.classes["Array"], Args: []Type{f.cls("String")}}}
 		}
+	case "$LOADED_FEATURES", `$"`:
+		// the files compiled into the program, the same list wherever it is read: every require ran at compile time, so
+		// none is added later (rubocop's `$LOADED_FEATURES - before_us` is empty, its cache checksum reads the list;
+		// decision 444). Gem code only: user code still gets the error that names what rugaroo knows.
+		if f.lenient() {
+			f.c.loadedFeatures = true
+			return expr{code: "rbLoadedFeatures()", typ: TClass{C: f.c.classes["Array"], Args: []Type{f.cls("String")}}}
+		}
 	case "$VERBOSE":
 		return expr{code: "rbVerbose", typ: TOpt{Elem: f.cls("Boolean")}}
 	case "$/": // the input record separator: chomp's default (decision 180)
