@@ -397,6 +397,13 @@ func (f *fctx) keywordFromSplat(n parser.Node, m *Method, p Param, env map[strin
 	if kw.splatTmp == "" {
 		h := f.genExpr(sp.Value, nil)
 		ht, ok := stripOpt(h.typ).(TClass)
+		if hashAny := ok && ht.C.RubyName == "Hash" && !isOpt(h.typ) && isAny(ht.Args[0]); f.lenient() && (isAny(h.typ) || hashAny) {
+			// a gem's `Action.new(range, enforcer, **attributes)` of an untyped Hash (parser's TreeRewriter#combine): its
+			// keys are checked to be Symbols when it runs, as MRI checks them (decision 444)
+			want := TClass{C: f.c.classes["Hash"], Args: []Type{f.cls("Symbol"), TAny{}}}
+			h = expr{code: fmt.Sprintf("rbAs[%s](%s, %q)", f.c.goType(want), f.coerce(sp, h, TAny{}), want.String()), typ: want}
+			ht, ok = want, true
+		}
 		if !ok || ht.C.RubyName != "Hash" || isOpt(h.typ) || !isClass(ht.Args[0], "Symbol") {
 			f.errorf(sp, "**%s into %s's keywords must be a Hash[Symbol, T], not %s", f.f.text(sp.Value.GetLocation()), m.Name, h.typ)
 		}
@@ -456,7 +463,11 @@ func (f *fctx) splatType(kw *kwArgs) Type {
 func (f *fctx) splatHashType(kw *kwArgs) TClass {
 	var h expr
 	f.probe(func() { h = f.genExpr(kw.splats[0].(*parser.AssocSplatNode).Value, nil) })
-	return stripOpt(h.typ).(TClass)
+	if tc, ok := stripOpt(h.typ).(TClass); ok && tc.C.RubyName == "Hash" && !isAny(tc.Args[0]) {
+		return tc
+	}
+	// a gem's untyped **hash, converted to this where it was read (keywordFromSplat; decision 444)
+	return TClass{C: f.c.classes["Hash"], Args: []Type{f.cls("Symbol"), TAny{}}}
 }
 
 // checkUnknown rejects keywords the method has no parameter for (MRI's ArgumentError, at compile time).

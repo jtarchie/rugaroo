@@ -11,6 +11,16 @@ module Gem
   #: () -> bool
   def self.discover_gems_on_require = @discover_gems_on_require != false
 
+  # A compiled program activates no gems: what it loaded is compiled in (decision 444).
+  #: () -> Hash[String, untyped]
+  def self.loaded_specs = {}
+
+  #: () -> Array[String]
+  def self.path = []
+
+  #: () -> bool
+  def self.win_platform? = false
+
   #: (bool) -> void
   def self.discover_gems_on_require=(on)
     @discover_gems_on_require = on

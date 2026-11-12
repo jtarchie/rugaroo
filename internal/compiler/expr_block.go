@@ -107,6 +107,37 @@ func (f *fctx) blockParamList(b parser.Node) blockParams {
 	return nil
 }
 
+// bindLoneSub binds `|(x)|`, a destructuring of one target: x is the value's first element, where `|x|` would take the
+// whole value (rubocop's `scan(RE).map { |(digits)| digits.to_i }`; decision 444).
+func (f *fctx) bindLoneSub(n parser.Node, sub []blockParam, t Type, src string) bool {
+	if len(sub) != 1 || sub[0].Sub != nil || sub[0].Rest {
+		return false
+	}
+	var first expr
+	switch tt := t.(type) {
+	case TTuple:
+		if len(tt.Elems) == 0 {
+			return false
+		}
+		first = expr{code: src + ".F0", typ: tt.Elems[0]}
+	case TClass:
+		if tt.C.RubyName != "Array" || len(tt.Args) != 1 {
+			return false
+		}
+		first = genericOpt(expr{code: fmt.Sprintf("Array_Op_idx[%s](%s, 0)", f.c.goType(tt.Args[0]), src), typ: TOpt{Elem: tt.Args[0]}})
+	case TAny:
+		first = expr{code: fmt.Sprintf("Opt(Array_Op_idx[any](rbToAry(%s), 0))", src), typ: TAny{}}
+	default:
+		return false
+	}
+	v := f.blockParam(sub[0].Name, first.typ)
+	if v.goName != "_" {
+		f.emit("%s := %s", v.goName, first.code)
+		f.noteUnused(v)
+	}
+	return true
+}
+
 // bindRestParams binds `|a, *rest|`: one yielded tuple or Array is split
 // across the params when there are leading ones (Ruby's auto-splat);
 // otherwise rest collects the yielded values past the leading params.
@@ -241,6 +272,9 @@ func (f *fctx) bindTupleParams(n parser.Node, names blockParams, tt TTuple) ([]s
 			if nm.Sub != nil { // `|(k, v), i|`
 				sub, t, src := nm.Sub, tt.Elems[i], fmt.Sprintf("%s.F%d", p, i)
 				nested = append(nested, func() {
+					if f.bindLoneSub(n, sub, t, src) {
+						return
+					}
 					gp, pro := f.bindBlockParams(n, sub, []Type{t})
 					f.emit("%s := %s", gp[0], src)
 					pro()
@@ -356,6 +390,9 @@ func (f *fctx) bindBlockParams(n parser.Node, names blockParams, yields []Type) 
 			goParams = append(goParams, p)
 			sub, t := names[i].Sub, yields[i]
 			destructure = append(destructure, func() {
+				if f.bindLoneSub(n, sub, t, p) {
+					return
+				}
 				gp, pro := f.bindBlockParams(n, sub, []Type{t})
 				f.emit("%s := %s", gp[0], p)
 				pro()
