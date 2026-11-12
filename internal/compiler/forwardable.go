@@ -372,11 +372,14 @@ func allLiteralNames(args []parser.Node) bool {
 // untypedDelegateDef forwards name to the accessor with no signature, so inference types it like any gem def.
 func (c *Compiler) untypedDelegateDef(ctx context.Context, cls *Class, d delegation) {
 	f, n := d.file, d.node
-	call := "target." + d.method + "(*args)" // ponytail: no block through an untyped target until dynamic calls take blocks
-	if d.method == "[]" {
+	call, params := "target."+d.method+"(*args)", "*args" // ponytail: no block through an untyped target but each's: `m(*args, &block)` on an untyped receiver does not compile yet
+	switch d.method {
+	case "[]":
 		call = "target[*args]"
+	case "each": // its block, as Forwardable's forwarder passes it (rubocop's Config#each over @hash; decision 444)
+		call, params = "target.each(&block)", "&block"
 	}
-	src := "def " + d.name + "(*args)\n  target = " + d.accessor + " #: untyped\n  " + call + "\nend\n"
+	src := "def " + d.name + "(" + params + ")\n  target = " + d.accessor + " #: untyped\n  " + call + "\nend\n"
 	sf, def := c.synthDef(ctx, f, n, n.Name+" "+d.name, src, synthOpt{Origin: f.synthOrigin(), Pad: max(f.line(n.Location.StartOffset)-3, 0)})
 	c.addDef(sf, cls, def, false, d.scope)
 }

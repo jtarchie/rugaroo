@@ -83,7 +83,7 @@ func (f *fctx) genOrAssignLocal(n *parser.LocalVariableOrWriteNode) expr {
 			info.hoist = true
 		}
 	}
-	if isOpt(v.typ) && !isOpt(e.typ) {
+	if isOpt(v.typ) && !isOpt(e.typ) && !f.mayBeNil(n.Value) {
 		f.applyNarrow([]narrowInfo{{local: v, typ: e.typ}}) // non-nil from here on
 	}
 	if nw, ok := f.narrowUnion(v, func(m Type) bool { return !isNil(m) }); ok && !isNil(e.typ) {
@@ -91,6 +91,16 @@ func (f *fctx) genOrAssignLocal(n *parser.LocalVariableOrWriteNode) expr {
 		return expr{code: nw.code, typ: nw.typ, done: true}
 	}
 	return e
+}
+
+// mayBeNil: a `x ||= value` whose value is untyped or optional leaves x possibly nil (rubocop's `root ||= yield` before
+// `root ||= if ...`: the second was compiled away as dead; decision 444).
+func (f *fctx) mayBeNil(n parser.Node) bool {
+	var t Type
+	if catchCompileError(func() { t = f.probeType(n, nil) }) != nil || t == nil {
+		return true
+	}
+	return isAny(t) || isOpt(t) || isNil(t) || isVoid(t)
 }
 
 func (f *fctx) genOrAssignIvar(n *parser.InstanceVariableOrWriteNode) expr {

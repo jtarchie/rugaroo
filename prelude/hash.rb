@@ -453,6 +453,19 @@ class Hash < Object
   #: (Hash[K, V]) -> self
   def merge!(other) = update(other)
 
+  # merge!/update with a block, which resolves a key both hashes hold.
+  #: (Hash[K, V]) { (K, V, V) -> V } -> self
+  def __update_block(other)
+    __check_frozen
+    other.each do |k, v|
+      self[k] = key?(k) ? yield(k, fetch(k), v) : v
+    end
+    self
+  end
+
+  #: (Hash[K, V]) { (K, V, V) -> V } -> self
+  def __merge_bang_block(other, &blk) = __update_block(other, &blk)
+
   # The block resolves a key both hashes hold: (key, old, new) -> value.
   #: (Hash[K, V]) { (K, V, V) -> V } -> Hash[K, V]
   def __merge_block(other) = %x{

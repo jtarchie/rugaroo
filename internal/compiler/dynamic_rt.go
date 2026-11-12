@@ -109,8 +109,12 @@ func (c *Compiler) emitDynEach() {
 	c.w("\tcase Enumerator_Any:\n\t\tfor x := range r._ToAny().seq {\n\t\t\tyield(x)\n\t\t}\n")
 
 	seen := map[string]bool{}
+	viaDyn := false // an each no shape below fits (a forwarder's `each(*args, &block)`, rubocop's Config): through its Dyn wrapper (decision 444)
 	for _, cls := range c.classList {
 		m := cls.Methods["each"]
+		if m != nil && m.File != nil && !m.File.isPrelude() && m.Block != nil && !m.Iterator && (len(m.Params) > 0 || m.Block.Rest) && len(cls.TypeParams) == 0 {
+			viaDyn = true
+		}
 		if m == nil || m.File == nil || m.File.isPrelude() || m.Block == nil || len(m.Params) > 0 || m.generic() || len(cls.TypeParams) > 0 ||
 			len(m.Block.Params) == 0 || len(m.Block.Params) > 2 || !isVoid(m.Block.Ret) && (m.Iterator || !isAny(m.Block.Ret)) || m.Block.Self != nil || m.Block.Rest {
 			continue
@@ -139,6 +143,14 @@ func (c *Compiler) emitDynEach() {
 			continue
 		}
 		c.w("\t\tr.%s(func(%s) { yield(%s) })\n", m.GoName, strings.Join(typed, ", "), strings.Join(vars, ", "))
+	}
+	if viaDyn {
+		c.noteDyn("each")
+		if c.dynBlockNames == nil {
+			c.dynBlockNames = map[string]bool{}
+		}
+		c.dynBlockNames["each"] = true
+		c.w("\tcase interface{ DynEach(...any) any }:\n\t\tr.DynEach(rbBlockArg{fn: func(xs ...any) any { yield(xs...); return nil }})\n")
 	}
 	c.w("\tdefault:\n\t\tpanic(rbNoMethod(\"each\", recv, false))\n\t}\n\treturn recv\n}\n\n")
 	c.emitDynEachV()
