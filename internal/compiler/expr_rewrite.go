@@ -223,6 +223,7 @@ func (f *fctx) genCallForm(n *parser.CallNode, expected Type) (expr, bool) {
 	}
 	for _, form := range []func() (expr, bool){
 		func() (expr, bool) { return f.genToEnum(n) },
+		func() (expr, bool) { return f.genEachEdit(n, expected) },
 		func() (expr, bool) { return f.genScanMatches(n, expected) },
 		func() (expr, bool) { return f.genRecvToEnum(n, expected) },
 		func() (expr, bool) { return f.genKernelCall(n, expected) },
@@ -441,4 +442,73 @@ func (f *fctx) genScanMatches(n *parser.CallNode, expected Type) (expr, bool) {
 	}
 	return f.genExpr(&parser.CallNode{Location: n.Location, Receiver: en.Receiver, Name: "__scan_matches", MessageLoc: n.MessageLoc,
 		Arguments: &parser.ArgumentsNode{Location: en.Arguments.Location, Arguments: args[1:]}}, expected), true
+}
+
+// genEachEdit is a gem's `lines.each { |line| line.chomp!("\n") }` on a local Array of Strings: MRI edits each element
+// where it is, and a String is a value here, so the block would edit a copy and say nothing (parser's
+// Buffer#source_lines kept every newline). It runs as `lines.each_index { |i| line = lines[i]; ...; lines[i] = line }`
+// (decision 444, amends 405, whose `<<` on such a parameter raised). A body that leaves early (next, break, return)
+// keeps the old rule.
+func (f *fctx) genEachEdit(n *parser.CallNode, expected Type) (expr, bool) {
+	if r := f.eachEdit(n); r != nil {
+		return f.genExpr(r, expected), true
+	}
+	return expr{}, false
+}
+
+// eachEdit is genEachEdit's rewritten call, or nil.
+func (f *fctx) eachEdit(n *parser.CallNode) *parser.CallNode {
+	b, ok := n.Block.(*parser.BlockNode)
+	recv, isLocal := n.Receiver.(*parser.LocalVariableReadNode)
+	if !ok || !isLocal || n.Name != "each" || len(callArgs(n)) != 0 || !f.lenient() || b.Body == nil {
+		return nil
+	}
+	ps, ok := b.Parameters.(*parser.BlockParametersNode)
+	if !ok || ps.Parameters == nil || len(ps.Parameters.Requireds) != 1 || ps.Parameters.Rest != nil || len(ps.Parameters.Optionals) > 0 {
+		return nil
+	}
+	p, ok := ps.Parameters.Requireds[0].(*parser.RequiredParameterNode)
+	st, isStmts := b.Body.(*parser.StatementsNode)
+	if !ok || !isStmts {
+		return nil
+	}
+	edits, leaves := false, false
+	walkNode(b.Body, func(x parser.Node) (bool, bool) {
+		switch x := x.(type) {
+		case *parser.NextNode, *parser.BreakNode, *parser.ReturnNode, *parser.RedoNode:
+			leaves = true
+		case *parser.CallNode:
+			if r, ok := x.Receiver.(*parser.LocalVariableReadNode); ok && r.Name == p.Name && x.Name != "!" && x.Name != "!=" &&
+				(strings.HasSuffix(x.Name, "!") || strAppendNames[x.Name] || x.Name == "replace" || x.Name == "clear" || x.Name == "[]=") {
+				edits = true
+			}
+		}
+		return false, true
+	})
+	if !edits || leaves {
+		return nil
+	}
+	rt := stripOpt(f.probeType(recv, nil))
+	if t, ok := rt.(TClass); !f.heldAsAny(rt) && (!ok || t.C.RubyName != "Array" || len(t.Args) != 1 || !isClass(t.Args[0], "String") && !isAny(t.Args[0])) {
+		return nil
+	}
+	var pt Type
+	f.probe(func() {
+		_ = catchCompileError(func() {
+			pt = f.genExpr(&parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "first"}, nil).typ
+		})
+	})
+	if pt == nil || !f.heldAsAny(stripOpt(pt)) && !isClass(stripOpt(pt), "String") {
+		return nil
+	}
+	loc, i := b.Location, "rb_i_"
+	read := func(name string) parser.Node { return &parser.LocalVariableReadNode{Location: loc, Name: name} }
+	at := &parser.CallNode{Location: loc, Receiver: read(recv.Name), Name: "[]", Arguments: &parser.ArgumentsNode{Location: loc, Arguments: []parser.Node{read(i)}}}
+	set := &parser.CallNode{Location: loc, Receiver: read(recv.Name), Name: "[]=", Arguments: &parser.ArgumentsNode{Location: loc, Arguments: []parser.Node{read(i), read(p.Name)}}}
+	body := append([]parser.Node{&parser.LocalVariableWriteNode{Location: loc, Name: p.Name, Value: at}}, st.Body...)
+	body = append(body, set)
+	blk := &parser.BlockNode{Location: loc, Locals: append([]string{i, p.Name}, b.Locals...),
+		Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: i}}}},
+		Body:       &parser.StatementsNode{Location: st.Location, Body: body}}
+	return &parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "each_index", MessageLoc: n.MessageLoc, Block: blk}
 }

@@ -28,6 +28,10 @@ require "nodish"
 require "srcish"
 require "slotish"
 require "rngish"
+require "dynish"
+require "fwdish"
+require "findish"
+require "bufish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -147,3 +151,10 @@ Srcish.demo.each { |v| p v }
 p Slotish::Line.new.run("abc"), Slotish::Other.new.run
 # a Range subclass whose initialize calls super(first, last), with infinite bounds (decision 444)
 Rngish.demo.each { |v| p v }
+# untyped receivers (decision 444): Set.new of an untyped list, a sentinel keyword default with its own ==, an each
+# shared by classes through one dispatcher arm, blockless none?/any? beside block forms, find with next, and an each
+# whose block edits its String elements in place
+Dynish.demo.each { |v| p v }
+Fwdish.demo.each { |v| p v }
+Findish.demo.each { |v| p v }
+Bufish.demo.each { |v| p v }

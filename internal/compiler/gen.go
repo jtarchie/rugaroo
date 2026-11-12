@@ -674,6 +674,11 @@ func (f *fctx) genStmt(n parser.Node, t tail) {
 		return
 	}
 	f.lineOf(n)
+	if c, ok := n.(*parser.CallNode); ok && c.Name == "each" && c.Block != nil && f.lenient() {
+		if r := f.eachEdit(c); r != nil { // an each whose block edits its String elements in place (decision 444)
+			n = r
+		}
+	}
 	if f.breakCatchStmt(n, t) {
 		return
 	}
