@@ -13,6 +13,8 @@ type breakCatch struct {
 	block *parser.BlockNode
 	id    string
 	used  bool
+	res   string // genBreakCatchValue's result variable: a `break v` out of the call compiled as a loop assigns it
+	depth int    // len(f.loops) where the catch began: the call's own loop is the next one
 }
 
 type loopKind int
@@ -239,6 +241,12 @@ func (f *fctx) genBreak(n *parser.BreakNode) {
 			f.emitBreak(l)
 			return
 		}
+		if bc := f.breakCatch; bc != nil && bc.res != "" && len(f.loops) == bc.depth+1 && len(n.Arguments.Arguments) == 1 && f.begins <= l.begins {
+			// the caught call compiled to this loop (`loop do ... break last ... end` as a method's value)
+			f.emit("%s = %s", bc.res, f.coerce(n, f.genExpr(n.Arguments.Arguments[0], nil), TAny{}))
+			f.emitBreak(l)
+			return
+		}
 		for _, a := range n.Arguments.Arguments {
 			if v := f.genExpr(a, nil); v.code != "" && !v.done && !pureNode(a) {
 				f.emit("_ = %s", v.code)
@@ -305,6 +313,7 @@ func (f *fctx) genBreakCatchValue(c *parser.CallNode, b *parser.BlockNode, t tai
 	saved, out := f.breakCatch, f.buf
 	bc := &breakCatch{block: b, id: fmt.Sprintf("%s:%d", f.f.Name, b.Location.StartOffset)}
 	tmp := f.newTmp()
+	bc.res, bc.depth = tmp, len(f.loops)
 	f.breakCatch, f.buf = bc, &strings.Builder{}
 	restored := false
 	defer func() { // a compile error inside (a typing an analysis pass is trying) must not leave the catch set: the next pass would skip the wrapper

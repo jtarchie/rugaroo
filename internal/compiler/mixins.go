@@ -326,6 +326,11 @@ func (c *Compiler) applyPrepends() {
 			c.errorf(p.mod.file, p.mod.node, "prepend %s: not a module", mod.RubyName)
 		}
 		target.prepended = append(target.prepended, mod)
+		for _, inc := range mod.Includes { // M's own includes are the class's too (decision 444): M's copies call their methods
+			if !slices.ContainsFunc(target.Includes, func(t Include) bool { return t.Mod == inc.Mod }) {
+				target.Includes = append(target.Includes, inc)
+			}
+		}
 		for _, mm := range slices.Clone(mod.MethodList) {
 			if mm.Kind != kindDef || mm.Node == nil {
 				continue

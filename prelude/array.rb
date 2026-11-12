@@ -1191,6 +1191,7 @@ class Array < Object
   end
 
   # Untyped elements (a list built from mixed pieces): each must be a pair when it runs, as MRI checks (decision 444).
+  # @dynamic
   # @self Array[U]
   # @rbs [U] () -> Hash[untyped, untyped]
   def __to_h_untyped

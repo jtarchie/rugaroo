@@ -296,6 +296,12 @@ func (r *reach) computeLive() {
 		for i := range cls.extends {
 			mark(r.resolve(&cls.extends[i].ref))
 		}
+		for i := range r.c.prepends { // a prepended module's methods are the class's (decisions 199, 444)
+			p := &r.c.prepends[i]
+			if t := p.target; t == cls || t == nil && r.resolve(&p.targetRef) == cls {
+				mark(r.resolve(&p.mod))
+			}
+		}
 	}
 	for _, cls := range r.c.classList {
 		name := cls.RubyName

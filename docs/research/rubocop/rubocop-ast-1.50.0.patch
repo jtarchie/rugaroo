@@ -1,6 +1,6 @@
-diff -ru a/lib/rubocop/ast/node/casgn_node.rb b/lib/rubocop/ast/node/casgn_node.rb
---- a/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 09:21:05
-+++ b/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 09:21:05
+diff -ruN -x *.orig -x *.rej rubocop-ast-1.50.0/lib/rubocop/ast/node/casgn_node.rb rubocop-ast-1.50.0/lib/rubocop/ast/node/casgn_node.rb
+--- rubocop-ast-1.50.0/lib/rubocop/ast/node/casgn_node.rb	2026-10-27 20:22:55
++++ rubocop-ast-1.50.0/lib/rubocop/ast/node/casgn_node.rb	2026-11-11 20:59:18
 @@ -8,8 +8,8 @@
      class CasgnNode < Node
        include ConstantNode
@@ -12,9 +12,9 @@ diff -ru a/lib/rubocop/ast/node/casgn_node.rb b/lib/rubocop/ast/node/casgn_node.
  
        # The expression being assigned to the variable.
        #
-diff -ru a/lib/rubocop/ast/node/mixin/collection_node.rb b/lib/rubocop/ast/node/mixin/collection_node.rb
---- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 09:21:05
-+++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 09:21:05
+diff -ruN -x *.orig -x *.rej rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/collection_node.rb rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/collection_node.rb
+--- rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/collection_node.rb	2026-10-27 20:22:55
++++ rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-11 20:59:18
 @@ -10,7 +10,9 @@
          (Array.instance_methods - Object.instance_methods - [:to_a]).freeze
        private_constant :ARRAY_METHODS
@@ -26,9 +26,9 @@ diff -ru a/lib/rubocop/ast/node/mixin/collection_node.rb b/lib/rubocop/ast/node/
      end
    end
  end
-diff -ru a/lib/rubocop/ast/node_pattern.rb b/lib/rubocop/ast/node_pattern.rb
---- a/lib/rubocop/ast/node_pattern.rb	2026-11-12 09:21:05
-+++ b/lib/rubocop/ast/node_pattern.rb	2026-11-12 09:21:05
+diff -ruN -x *.orig -x *.rej rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern.rb rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern.rb
+--- rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern.rb	2026-10-27 20:22:56
++++ rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern.rb	2026-11-11 21:22:21
 @@ -36,6 +36,10 @@
          # If the node matches, and no block is provided, the new method will
          # return the captures, or `true` if there were none.
@@ -51,3 +51,15 @@ diff -ru a/lib/rubocop/ast/node_pattern.rb b/lib/rubocop/ast/node_pattern.rb
            NodePattern.new(pattern_str).def_node_search(self, method_name, **keyword_defaults)
          end
        end
+diff -ruN -x *.orig -x *.rej rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb
+--- rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb	2026-10-27 20:22:56
++++ rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb	2026-11-12 10:10:23
+@@ -275,7 +275,7 @@
+                              tokens
+                            else
+                              # Use stable sort.
+-                             tokens.sort_by.with_index { |token, i| [token.begin_pos, i] }
++                             tokens.each_with_index.sort_by { |token, i| [token.begin_pos, i] }.map(&:first)
+                            end
+       end
+ 

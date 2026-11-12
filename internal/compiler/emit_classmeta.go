@@ -23,11 +23,18 @@ func (c *Compiler) emitDescendants(meta, desc *Class) {
 	}
 	c.w("func (self *%s) _Descendants() []any { return []any{%s} }\n\n", meta.Name, strings.Join(subs, ", "))
 	var anc []string
+	viaPrepend := map[*Class]bool{} // M's own modules come with it, before the class, and are not listed again (decision 444)
 	for _, k := range fullAncestors(desc) {
 		for i := len(k.prepended) - 1; i >= 0; i-- { // `prepend M` puts M before the class (decision 199)
-			if m := k.prepended[i]; m.meta != nil {
-				anc = append(anc, classVar(m))
+			for _, m := range fullAncestors(k.prepended[i]) {
+				if m.meta != nil && !viaPrepend[m] {
+					anc = append(anc, classVar(m))
+				}
+				viaPrepend[m] = true
 			}
+		}
+		if viaPrepend[k] {
+			continue
 		}
 		if k.meta != nil && (!k.hidden || k == desc) {
 			anc = append(anc, classVar(k))

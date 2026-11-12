@@ -21,6 +21,7 @@ require "registryish_sub"
 require "registryish_sub2"
 require "arityish"
 require "strapish"
+require "prepish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -113,3 +114,7 @@ rescue NotImplementedError
   true
 end)
 p st.tails([["y"]])
+# a module only ever prepended, with its own include (decision 444): its methods and its module's are the class's
+p Prepish::Calc.calculate([1, 2])
+p Prepish::Calc.calculate([1, 2], discount: true)
+p Prepish::Calc.ancestors.first(3)
