@@ -52,7 +52,10 @@ func (f *fctx) declareLocal(name string, typ Type) *local {
 		info = &localInfo{declBlock: f.block, declRuby: f.rbScope, typ: typ}
 		f.locals[key] = info
 	}
-	if info.declPass != f.pass {
+	if info.declPass != f.pass || !isAncestorBlock(info.declRuby, f.rbScope) {
+		// or the Ruby scope it was declared in is not this one's ancestor: its block is being generated again in another
+		// Go scope (a condition compiled twice, an arm per receiver class), and the reads that follow are this copy's
+		// (rubocop-ast's nested any-order matchers; decision 444)
 		info.declPass = f.pass
 		info.declBlock, info.declRuby = f.block, f.rbScope
 	}

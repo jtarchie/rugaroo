@@ -38,6 +38,7 @@ require "capish"
 require "hookish"
 require "scanish"
 require "readyish"
+require "matchish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -177,3 +178,5 @@ Hookish.demo.each { |v| p v }
 Scanish.demo(__dir__).each { |v| p v }
 # self.class.new over subclasses whose initialize takes another count; scan's last match on an untyped String (decision 444)
 Readyish.demo.each { |v| p v }
+# rubocop-ast's generated matcher for a nested any-order pattern, as the condition of `return unless` (decision 444)
+p Matchish.demo
