@@ -163,6 +163,13 @@ func (f *fctx) classRef(n parser.Node) *Class {
 
 // genConstRead reads a constant: a Go package variable.
 func (f *fctx) genConstRead(n parser.Node) expr {
+	if cp, ok := n.(*parser.ConstantPathNode); ok && f.lenient() && cp.Name != nil && len(f.lex) > 0 {
+		if _, self := cp.Parent.(*parser.SelfNode); self && f.c.selfConstVaries(f.lex[len(f.lex)-1], *cp.Name) {
+			// a gem's `self::RESTRICT_ON_SEND` where subclasses have their own (rubocop's Cop::Base): the receiver's, found
+			// when it runs, as MRI finds it (decision 444)
+			return f.genMethodCall(n, f.genExpr(cp.Parent, nil), "const_get", []parser.Node{&parser.SymbolNode{Location: cp.Location, Unescaped: parser.RubyString{Value: *cp.Name}}}, nil)
+		}
+	}
 	cls, k := f.c.lookupConst(f.f, n, f.lex)
 	if err, bad := f.c.badClasses[cls]; bad && cls != nil {
 		panic(err)
@@ -324,7 +331,24 @@ func (f *fctx) constGetType(recv expr, args []parser.Node) Type {
 				return nil
 			}
 		}
-		return f.c.constTypeOf(f.c.lookupConst(f.f, constPath(lit), scope))
+		t := f.c.constTypeOf(f.c.lookupConst(f.f, constPath(lit), scope))
+		if !strings.Contains(lit, "::") && t != nil && f.c.selfConstVaries(mod, lit) {
+			// the receiver may be a subclass with its own constant of the name (rubocop's RESTRICT_ON_SEND, a Set on
+			// Base and an Array on a cop): the join of them all, untyped when they differ (decision 444)
+			ts := []Type{t}
+			for _, sub := range f.c.classList {
+				if sub != mod && sub.metaOf == nil && sub.isSubclassOf(mod) {
+					if st := f.c.constTypeOf(f.c.classes[sub.RubyName+"::"+lit], f.c.consts[sub.RubyName+"::"+lit]); st != nil {
+						ts = append(ts, st)
+					}
+				}
+			}
+			if j := joinOrAny(ts); !isAny(j) {
+				return j
+			}
+			return nil
+		}
+		return t
 	}
 	var ts []Type
 	var walk func(c *Class)

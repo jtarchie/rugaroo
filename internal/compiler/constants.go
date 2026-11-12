@@ -161,6 +161,19 @@ func (c *Compiler) methodClassVars() {
 // privateRef: generated source may name a private constant by path (a Struct's `==` names Homebrew's private Vulns::Scanner::Target).
 func (c *Compiler) privateRef(f *File, full string) bool { return c.privateConsts[full] && !f.synth }
 
+// selfConstVaries reports a subclass of parent with its own constant (or class) name: `self::name` depends on the receiver.
+func (c *Compiler) selfConstVaries(parent *Class, name string) bool {
+	if parent.metaOf != nil {
+		parent = parent.metaOf
+	}
+	for _, sub := range c.classList {
+		if sub != parent && sub.isSubclassOf(parent) && (c.consts[sub.RubyName+"::"+name] != nil || c.classes[sub.RubyName+"::"+name] != nil) {
+			return true
+		}
+	}
+	return false
+}
+
 // selfConstParent is `self::X` in a class body or class method: the lexical class, unless a subclass has its own X,
 // which MRI would pick by the receiver at run time.
 func (c *Compiler) selfConstParent(f *File, n *parser.ConstantPathNode, scope []*Class) *Class {
@@ -185,6 +198,9 @@ func (c *Compiler) lookupConst(f *File, n parser.Node, scope []*Class) (*Class, 
 		var parent *Class
 		var k *Const
 		if _, ok := n.Parent.(*parser.SelfNode); ok && len(scope) > 0 {
+			if f != nil && c.gemFile(f) && c.selfConstVaries(scope[len(scope)-1], *n.Name) {
+				return nil, nil // no one constant: genConstRead asks the receiver at run time (decision 444)
+			}
 			parent = c.selfConstParent(f, n, scope)
 		} else {
 			parent, k = c.lookupConst(f, n.Parent, scope)
