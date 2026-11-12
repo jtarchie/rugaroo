@@ -37,6 +37,21 @@ func (f *fctx) genSuper(n parser.Node, args *parser.ArgumentsNode, forwarding bo
 		f.errorf(n, "super outside a method")
 	}
 	e := f.c.inheritedSig(f.m)
+	if m := f.m; m.Owner != nil && !m.Owner.IsModule && m.superTarget == nil && m.structDef == nil && e != nil && !e.Owner.IsModule {
+		// inheritedSig prefers a superclass's def for the signature (decision 206); super itself goes to a module the
+		// class includes first, as MRI's ancestors put it before the superclass (rubocop's SpecialGlobalVars
+		// #on_new_investigation over RequireLibrary's, which sets @required_libs and calls super on; decision 444)
+		for i := len(m.Owner.Includes) - 1; i >= 0; i-- {
+			inc := m.Owner.Includes[i]
+			if inc.Mod == nil || inc.Mod.File == nil || inc.Mod.File.isPrelude() || len(inc.Mod.TypeParams) > 0 {
+				continue
+			}
+			if me := inc.Mod.lookup(m.Name); me != nil && me.M.Node != nil && !me.M.File.isPrelude() {
+				e = &entry{M: me.M, Owner: me.Owner, Env: composeEnv(me.Env, map[string]Type{}), Entry: m.Owner}
+				break
+			}
+		}
+	}
 	if e == nil && f.m.aliasOf != "" { // `alias on_csend on_send`: the copy's super is on_send's, as MRI's (rubocop's IndentationWidth)
 		orig := *f.m
 		orig.Name = f.m.aliasOf

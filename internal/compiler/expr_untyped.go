@@ -1298,12 +1298,21 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 		}
 	}
 	for _, m := range f.c.gemMethodsNamed(name) {
-		if len(args) > len(m.Params) {
+		rest := slices.IndexFunc(m.Params, func(p Param) bool { return p.Rest && !p.Keyword && !p.KwRest })
+		if len(args) > len(m.Params) && rest < 0 {
 			continue
 		}
 		for i, a := range args {
-			p := m.Params[i]
-			if p.Pending == "" || p.Rest || p.Keyword {
+			// a trailing `*args` takes every argument from its place on (rubocop-ast's `ProcessedSource#[](*args)`, an
+			// Integer from its typed callers and a Range from an untyped one; decision 444)
+			p := m.Params[min(i, len(m.Params)-1)]
+			if rest >= 0 && i >= rest {
+				if rest != len(m.Params)-1 {
+					break
+				}
+				p = m.Params[rest]
+			}
+			if p.Pending == "" || p.Rest && rest < 0 || p.Keyword {
 				break
 			}
 			if _, kw := a.(*parser.KeywordHashNode); kw {

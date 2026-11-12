@@ -386,9 +386,28 @@ func rbViewCall(name string, s rbView, args []any) (any, bool) { //nolint:cyclop
 		rbViewReplace(s, rbViewArg(args[0], "Array"))
 		return s, true
 	case "fill":
-		rbArity(len(args), 1, 1)
+		rbArity(len(args), 1, 3)
 		s.rbCheckFrozen()
-		for i := range int(s._Len()) {
+		n := int(s._Len())
+		from, to := 0, n
+		if len(args) > 1 { // fill(v, start, len = to the end): past the end the Array grows, nil between
+			if _, isRange := rbUnbox(args[1]).(Integer); !isRange && rbUnbox(args[1]) != nil {
+				return nil, false // a Range: the typed twin's
+			}
+			if st, ok := rbUnbox(args[1]).(Integer); ok {
+				if from = int(st); from < 0 {
+					from = max(from+n, 0)
+				}
+			}
+			to = max(n, from)
+			if len(args) > 2 && rbUnbox(args[2]) != nil {
+				to = from + max(int(rbAs[Integer](rbUnbox(args[2]), "Integer")), 0)
+			}
+		}
+		for i := n; i < to; i++ {
+			s._Append(nil)
+		}
+		for i := from; i < to; i++ {
 			s._Set(Integer(i), args[0])
 		}
 		return s, true

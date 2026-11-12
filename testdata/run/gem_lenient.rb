@@ -35,6 +35,8 @@ require "bufish"
 require "cmpish"
 require "sexpish"
 require "capish"
+require "hookish"
+require "scanish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -168,3 +170,7 @@ Cmpish.demo.each { |v| p v }
 Sexpish.demo.each { |v| p v }
 # enum_for(__method__, named: named) in a mixin's method whose keyword default is a sentinel constant (decision 444)
 Capish.demo.each { |v| p v }
+# super from a class into a module it includes, before the superclass; scan with a block reading Regexp.last_match,
+# fill(v, start, len) on an untyped Array, Dir.glob of several patterns (decision 444)
+Hookish.demo.each { |v| p v }
+Scanish.demo(__dir__).each { |v| p v }

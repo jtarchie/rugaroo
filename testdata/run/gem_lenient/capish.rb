@@ -40,8 +40,7 @@ module Capish
 
     def end?(src, n) = src[n] == "end"
     def after(src, n) = src[n + 1]
-    def prev(src, n) = src[0..(n - 2)].reverse.find { |l| l != "" }
-    def span(a, b) = @src[(a - 1)..(b - 1)]
+    def prev_any(src, n) = src[0..(n - 2)].reverse.find { |l| l != "" }
     def one(i) = @src[i]
 
     def mixed?(node)
@@ -57,7 +56,7 @@ module Capish
   def self.demo
     s = Src.new("a\n\nb\nend\n")
     c = Cop.new(s)
-    h = { r: Rx.new(%w[1 a 2].map { |x| x == "a" ? :a : x.to_i }), q: Rx.new(%w[1 2].map(&:to_i)), z: Rx.new(nil) } #: Hash[Symbol, untyped]
-    [c.end?(s, 3), c.after(s, 1), c.prev(s, 4), c.span(3, 4), c.one(0), c.mixed?(h[:r]), c.mixed?(h[:q]), c.all(h[:r]), c.all(h[:z])]
+    h = { r: Rx.new(%w[1 a 2].map { |x| x == "a" ? :a : x.to_i }), q: Rx.new(%w[1 2].map(&:to_i)), z: Rx.new(nil), s: s } #: Hash[Symbol, untyped]
+    [c.end?(s, 3), c.after(s, 1), c.one(0), c.mixed?(h[:r]), c.mixed?(h[:q]), c.all(h[:r]), c.all(h[:z]), c.prev_any(h[:s], 4)]
   end
 end

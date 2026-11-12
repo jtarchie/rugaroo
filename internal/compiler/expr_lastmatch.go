@@ -35,6 +35,32 @@ func (f *fctx) subBlockLastMatch(n parser.Node, recv expr, name string, args []p
 	return expr{code: code, typ: f.cls("String"), bin: recv.bin, binDeps: recv.binDeps}, true
 }
 
+// scanBlockLastMatch is `s.scan(re) { ... Regexp.last_match ... }` with a block of no parameters, in a frame that reads
+// $~ (rubocop's FormatString): each match's MatchData is the frame's last match while the block runs, as MRI's. It runs
+// as `s.__scan_matches(re).each { |m| <$~ = m>; ... }` and answers the receiver (decision 444).
+func (f *fctx) scanBlockLastMatch(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
+	b, ok := block.(*parser.BlockNode)
+	if f.lastMatch == "" || !ok || name != "scan" || len(args) != 1 || b.Parameters != nil || b.Body == nil || !f.heldAsAny(recv.typ) && !isClass(recv.typ, "String") {
+		return expr{}, false
+	}
+	st, ok := b.Body.(*parser.StatementsNode)
+	if !ok {
+		return expr{}, false
+	}
+	loc, m := b.Location, "rb_m_"
+	r := f.newTmp()
+	f.emit("%s := %s", r, recv.code)
+	set := &exprNode{Node: &parser.NilNode{Location: loc}, e: expr{code: fmt.Sprintf("func() { m_ := %s; %s = &m_ }()", goLocalName(m), f.lastMatch), typ: TVoid{}, stmt: true}}
+	blk := &parser.BlockNode{Location: loc, Locals: append([]string{m}, b.Locals...),
+		Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: m}}}},
+		Body:       &parser.StatementsNode{Location: st.Location, Body: append([]parser.Node{set}, st.Body...)}}
+	matches := f.genMethodCall(n, expr{code: r, typ: recv.typ}, "__scan_matches", args, nil)
+	ms := f.newTmp()
+	f.emit("%s := %s", ms, matches.code)
+	f.genStmt(&parser.CallNode{Location: loc, Receiver: &exprNode{Node: &parser.NilNode{Location: loc}, e: expr{code: ms, typ: matches.typ}}, Name: "each", Block: blk}, tail{})
+	return expr{code: r, typ: recv.typ}, true
+}
+
 // grepBlockLastMatch is `xs.grep(re) { $1 }` / grep_v on an Array in a frame that reads $~: each test sets the
 // frame's last match before the block runs, as MRI's (decision 171's frame variable, handed to the runner).
 func (f *fctx) grepBlockLastMatch(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {

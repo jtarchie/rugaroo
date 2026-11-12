@@ -1210,6 +1210,14 @@ class Dir < Object
   #: (String, ?Integer) -> Array[String]
   def self.glob(pattern, flags = 0) = %x{ return rbStrs(rbGlob(string(pattern), int(flags))) }
 
+  # Several patterns: each one's matches, in order (rubocop's TargetFinder#find_files; decision 444).
+  #: (Array[String], ?Integer) -> Array[String]
+  def self.__glob_array(patterns, flags = 0)
+    out = [] #: Array[String]
+    patterns.each { |pattern| out.concat(glob(pattern, flags)) }
+    out
+  end
+
   #: (*String) -> Array[String]
   def self.[](*patterns)
     out = [] #: Array[String]
