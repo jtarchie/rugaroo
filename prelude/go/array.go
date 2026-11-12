@@ -448,3 +448,36 @@ func rbCompactNil[T comparable](a *Array[T]) *Array[T] {
 	}
 	return out
 }
+
+// rbArrayCmpTry is Array#<=> answering nil where two elements do not compare, as MRI's does (rbCmp raises there, for
+// sort's sake): gem code reads the nil (rubocop's `(x <=> y || 0) <= 0` over lists of exception classes; decision 444).
+func rbArrayCmpTry(a *Array[any], other any) (res rbOpt[Integer]) {
+	o, ok := rbUnbox(other).(Array_Any)
+	if !ok {
+		return rbOpt[Integer]{}
+	}
+	b := o._ToAny()
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(interface{ Message() String }); ok && strings.HasPrefix(string(e.Message()), "comparison of ") {
+				res = rbOpt[Integer]{}
+				return
+			}
+			panic(r)
+		}
+	}()
+	for i := range min(len(a.s), len(b.s)) {
+		if c := rbCmp(a.s[i], b.s[i]); c != 0 {
+			return rbSome(c)
+		}
+	}
+	return rbSome(Integer(cmp.Compare(len(a.s), len(b.s))))
+}
+
+// rbArrayCmpTryAny is rbArrayCmpTry as an untyped value: nil, or the Integer.
+func rbArrayCmpTryAny(a *Array[any], other any) any {
+	if r := rbArrayCmpTry(a, other); r.ok {
+		return r.v
+	}
+	return nil
+}

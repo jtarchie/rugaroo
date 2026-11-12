@@ -281,6 +281,7 @@ func (f *fctx) dynEnumBlock(n parser.Node, recv expr, name string, args []parser
 	f.emit("switch %s := rbUnbox(%s).(type) {", r, recv.code)
 	branch := func(head string, on expr) {
 		f.emit("%s", head)
+		f.redeclareBlockLocals(block) // each arm is the block's body again, in another Go scope
 		if call, ok := n.(*parser.CallNode); ok {
 			if e := classOf(on.typ).lookup(name); e != nil && e.M.Iterator && e.M.Block != nil {
 				if _, isBlock := call.Block.(*parser.BlockNode); isBlock { // `each_key do ... end`, `each_cons(2) do |a, b| ... end` (rubocop's token pairs): a range loop, valued its receiver as MRI's
@@ -1311,6 +1312,22 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 			if t := f.probeType(a, nil); t != nil && !isAny(t) {
 				f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true})
 			}
+		}
+	}
+}
+
+// redeclareBlockLocals forgets where this pass declared the locals of block and of the blocks inside it: a block
+// compiled once per receiver class (dynEnumBlock's arms) declares them again in each arm's Go scope, and a read outside
+// the Go block of the first assignment (`dot = a.loc.dot if a.loc?(:dot)`, then `next unless dot`) must find this arm's
+// (decision 444).
+func (f *fctx) redeclareBlockLocals(block parser.Node) {
+	if block == nil {
+		return
+	}
+	loc := block.GetLocation()
+	for key, li := range f.locals {
+		if key.scope >= loc.StartOffset && key.scope < loc.StartOffset+loc.Length {
+			li.declPass = -1
 		}
 	}
 }

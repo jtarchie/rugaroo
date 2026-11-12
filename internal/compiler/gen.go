@@ -682,6 +682,9 @@ func (f *fctx) genStmt(n parser.Node, t tail) {
 	if f.breakCatchStmt(n, t) {
 		return
 	}
+	if f.breakCatchAssign(n, t) {
+		return
+	}
 	switch n := n.(type) {
 	case *parser.IfNode:
 		f.genIf(n, n.Predicate, n.Statements, n.Subsequent, false, t)

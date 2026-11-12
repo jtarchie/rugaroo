@@ -333,6 +333,18 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 	if e, ok := f.nilSpaceship(n, recv, name, args, block); ok {
 		return e
 	}
+	if name == "<=>" && len(args) == 1 && block == nil && f.lenient() && isClass(recv.typ, "Array") && f.resolve(recv.typ, "__cmp_try") != nil {
+		return f.genMethodCall1(n, recv, "__cmp_try", args, nil) // nil for elements that do not compare, which gem code reads (decision 444)
+	}
+	if name == "<=>" && len(args) == 1 && block == nil && f.lenient() && isAny(recv.typ) {
+		// an untyped receiver that is an Array when it runs: the same nil (decision 444)
+		r, a := f.newTmp(), f.newTmp()
+		f.emit("%s := %s", r, recv.code)
+		f.emit("%s := %s", a, f.coerce(args[0], f.genExpr(args[0], nil), TAny{}))
+		rest := f.genMethodCall1(n, expr{code: r, typ: TAny{}}, name, []parser.Node{&exprNode{Node: args[0], e: expr{code: a, typ: TAny{}}}}, nil)
+		code := fmt.Sprintf("func() any { if x, ok := rbUnbox(%s).(Array_Any); ok { return rbArrayCmpTryAny(x._ToAny(), %s) }; return %s }()", r, a, f.coerce(n, rest, TAny{}))
+		return expr{code: code, typ: TAny{}}
+	}
 	if _, lit := block.(*parser.BlockNode); lit && name == "flat_map" && len(args) == 0 && f.lenient() && !f.heldAsAny(recv.typ) {
 		// a gem block that answers an Array or one value, known when it runs (rubocop-ast's MlhsNode#assignments answers a
 		// node or a nested list): the twin appends what is no Array, as MRI does (decision 444)

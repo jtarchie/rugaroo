@@ -175,8 +175,53 @@ func (f *fctx) namesMethod(name string, m *Method) bool {
 // rest param's as Go variadic arguments after the block (index's `to_enum :find_index, which, *args`).
 func (f *fctx) enumArgs(n parser.Node, m *Method, args []parser.Node) ([]string, string, bool) {
 	var as []string
+	bare := len(args) == 0
+	kw := map[string]parser.Node{} // `enum_for(__method__, named: named)`: each keyword to its parameter (decision 444)
+	if len(args) > 0 {
+		if h, ok := args[len(args)-1].(*parser.KeywordHashNode); ok {
+			for _, el := range h.Elements {
+				a, ok := el.(*parser.AssocNode)
+				sym, isSym := (*parser.SymbolNode)(nil), false
+				if ok {
+					sym, isSym = a.Key.(*parser.SymbolNode)
+				}
+				if !isSym {
+					return nil, "", false
+				}
+				kw[sym.Unescaped.Value] = a.Value
+			}
+			args = args[:len(args)-1]
+		}
+	}
+	// the hidden counts a callee-side default reads (sig): the method's own for a bare to_enum, else every one given,
+	// since the defaults of what is left out are passed below
+	if m.calleeDefaults {
+		if bare {
+			as = append(as, "rbArgc")
+		} else {
+			as = append(as, strconv.Itoa(len(m.Params)))
+		}
+	}
+	if m.kwMask() {
+		if bare {
+			as = append(as, "rbKw")
+		} else {
+			as = append(as, "-1")
+		}
+	}
 	for i, p := range m.Params {
 		switch {
+		case p.Keyword && !p.KwRest && !bare:
+			switch v := kw[p.Name]; {
+			case v != nil:
+				as = append(as, f.coerce(n, f.genExpr(v, p.Type), p.Type))
+			case p.Default != nil:
+				as = append(as, f.coerce(n, f.genExpr(p.Default, p.Type), p.Type))
+			default:
+				return nil, "", false
+			}
+		case p.KwRest && !bare:
+			return nil, "", false
 		case p.Rest:
 			if i != len(m.Params)-1 || p.Keyword {
 				return nil, "", false

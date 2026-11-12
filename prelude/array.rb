@@ -1053,6 +1053,10 @@ class Array < Object
     return Integer(cmp.Compare(len(self.s), len(other.s)))
   }
 
+  # nil where two elements do not compare, as MRI answers; gem code's `<=>` (decision 444).
+  #: (untyped) -> Integer?
+  def __cmp_try(other) = %x{ return rbArrayCmpTry(self._ToAny(), other) }
+
   # The untyped view (rbView, prelude/go/view.go): a few one-line accessors per element type, so a dynamic call of a
   # whole-array method runs one body compiled once instead of one per element type (decision 236).
   #: () -> Integer

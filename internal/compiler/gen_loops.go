@@ -307,6 +307,33 @@ func (f *fctx) breakCatchStmt(n parser.Node, t tail) bool {
 	return true
 }
 
+// breakCatchAssign is a gem's `x = recv.find do ... break if c ... end` (rubocop's part_of_assignment_rhs): the call's
+// value, nil when the block broke, is caught as breakCatchStmt's and then assigned (decision 444).
+func (f *fctx) breakCatchAssign(n parser.Node, t tail) bool {
+	w, ok := n.(*parser.LocalVariableWriteNode)
+	if !ok || !f.lenient() {
+		return false
+	}
+	c, ok := w.Value.(*parser.CallNode)
+	if !ok {
+		return false
+	}
+	b, ok := c.Block.(*parser.BlockNode)
+	if !ok || b.Body == nil || !blockBreaks(b.Body) && !blockBreaksValue(b.Body) || f.breakCatch != nil && f.breakCatch.block == b {
+		return false
+	}
+	res := f.newTmp()
+	f.emit("var %s any", res)
+	f.emit("_ = %s", res)
+	if catchCompileError(func() { f.genBreakCatchValue(c, b, tail{kind: tailAssign, target: res, typ: TAny{}}) }) != nil {
+		return false
+	}
+	held := *w
+	held.Value = &exprNode{Node: c, e: expr{code: res, typ: TAny{}}}
+	f.genStmt(&held, t)
+	return true
+}
+
 // genBreakCatchValue is genBreakCatch for a call whose value is used: nil when the block broke, as MRI's valueless
 // break makes it.
 func (f *fctx) genBreakCatchValue(c *parser.CallNode, b *parser.BlockNode, t tail) {
