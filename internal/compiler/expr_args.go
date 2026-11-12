@@ -128,7 +128,11 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 		}
 	}
 	if m.calleeDefaults { // optional params at Go index i ran their default when rbArgc <= i
-		codes = append([]string{argcCode(nargs, npos, npost, splatTmp, splatAt)}, codes...)
+		argc := argcCode(nargs, npos, npost, splatTmp, splatAt)
+		if f.argcPass != "" { // an adapter passing its own arguments on: the count its caller gave, not how many it names (decision 444)
+			argc = f.argcPass
+		}
+		codes = append([]string{argc}, codes...)
 		if restIdx >= 0 {
 			restIdx++
 		}

@@ -580,7 +580,11 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 		}
 		args[i] = &exprNode{e: a}
 	}
+	if s.e.M.calleeDefaults && e.M.calleeDefaults && n == len(s.e.M.Params) && len(e.M.Params) == n {
+		f.argcPass = "rbArgc" // the slot's own count: the override runs its defaults for what the caller left out
+	}
 	res := f.callEntry(&parser.NilNode{}, &e, recv, args, nil)
+	f.argcPass = ""
 	ret := subst(s.e.M.Ret, env)
 	switch {
 	case !isVoid(ret) && c.gemFile(e.M.File) && isAny(res.typ) && !isAny(ret):
