@@ -27,6 +27,7 @@ require "redish"
 require "nodish"
 require "srcish"
 require "slotish"
+require "rngish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -144,3 +145,5 @@ Nodish.demo.each { |v| p v }
 Srcish.demo.each { |v| p v }
 # a class's own method of another arity under one of a module its module includes (decision 444)
 p Slotish::Line.new.run("abc"), Slotish::Other.new.run
+# a Range subclass whose initialize calls super(first, last), with infinite bounds (decision 444)
+Rngish.demo.each { |v| p v }

@@ -287,6 +287,20 @@ func (f *fctx) genContainerSuper(n parser.Node, e *entry, args *parser.Arguments
 // superValueInit is `super(path)` in initialize of a Pathname (String) subclass: the embedded base is Base.new(path).
 func (f *fctx) superValueInit(n parser.Node, args *parser.ArgumentsNode, forwarding bool) (expr, bool) {
 	o := f.owner
+	if f.m.Name == "initialize" && o != nil && o.hashBase && o.Super.RubyName == "Range" && o.Super.meta != nil && args != nil && len(args.Arguments) >= 2 {
+		// `super(first, last)` in a Range subclass (rubocop's DirectiveRange): the embedded Range is Range.new's, its
+		// bounds untyped as the subclass holds them (decision 444)
+		rt := TClass{C: o.Super, Args: []Type{TAny{}}}
+		base := expr{code: classVar(o.Super), typ: TClass{C: o.Super.meta}, classObj: true}
+		sa := f.superArgs(n, args, forwarding)
+		for i, a := range sa {
+			if i < 2 {
+				sa[i] = &exprNode{Node: a, e: expr{code: f.coerce(a, f.genExpr(a, nil), TAny{}), typ: TAny{}}}
+			}
+		}
+		built := f.genMethodCall(n, base, "new", sa, nil)
+		return expr{code: f.selfCode + "." + superField(o.Super) + " = *" + f.coerce(n, built, rt), typ: TVoid{}, stmt: true}, true
+	}
 	if f.m.Name != "initialize" || o == nil || !o.hashBase || o.Super.mutable() || o.Super.meta == nil {
 		return expr{}, false
 	}
