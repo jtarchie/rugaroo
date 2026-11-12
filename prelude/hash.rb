@@ -283,6 +283,19 @@ class Hash < Object
     return self
   }
 
+  # Keys match by Go ==: object identity for a class's objects. A String, Float or tuple key is a Go value with no
+  # identity of its own and still matches by content (decision 444). ponytail: a copy (dup, select) starts by-value again.
+  #: () -> self
+  def compare_by_identity = %x{
+    self.rbCheckFrozen()
+    self.idx.plain, self.idx.ident = true, true
+    clear(self.idx.byHash)
+    return self
+  }
+
+  #: () -> bool
+  def compare_by_identity? = %x{ Boolean(self.idx.ident) }
+
   #: (K) -> bool
   def key?(k) = %x{
     _, ok := self.rbGet(k)

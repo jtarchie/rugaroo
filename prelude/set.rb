@@ -95,6 +95,15 @@ class Set < Object
   #: (E) -> self
   def <<(x) = add(x)
 
+  #: () -> self
+  def compare_by_identity = %x{
+    Hash_CompareByIdentity(self.h)
+    return self
+  }
+
+  #: () -> bool
+  def compare_by_identity? = %x{ Hash_CompareByIdentityQ(self.h) }
+
   #: (E) -> Set[E]?
   def add?(x)
     return nil if include?(x)

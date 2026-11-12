@@ -249,3 +249,9 @@ func rbPtrAny[T any](p *T) any {
 	}
 	return p
 }
+
+// rbRescueMissing is a rescue clause naming a constant no loaded file defines: MRI reads it when an exception reaches
+// the clause, and raises NameError (decision 444).
+func rbRescueMissing(name string) bool {
+	panic(NewNameError(Ref(String("uninitialized constant " + strings.TrimPrefix(name, "::")))))
+}

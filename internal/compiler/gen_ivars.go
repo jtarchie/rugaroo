@@ -78,17 +78,39 @@ func (c *Compiler) refineIvars() {
 		}
 		return ok
 	}
-	salvage(cands, try) // a failed last try leaves the original types
-	if c.round || c.refineOut == nil {
-		return
+	if prev := c.roundRefine[kind]; !c.round || prev == nil || !try(seedSet(cands, sig, prev)) {
+		salvage(cands, try) // a failed last try leaves the original types
 	}
 	accepted := make([]bool, len(cands))
 	for i, iv := range cands {
 		accepted[i] = typeEq(iv.Type, typed[iv])
 	}
+	if c.round {
+		c.roundRefine[kind] = &refineRecord{Cands: sig, Accepted: accepted}
+		return
+	}
+	if c.refineOut == nil {
+		return
+	}
 	if rec := c.recordRefine(snap, sig, accepted); rec != nil {
 		c.refineOut[kind] = rec
 	}
+}
+
+// seedSet is every candidate but the typings the previous inference round dropped: a round tries that set first and
+// searches only when it does not compile (decision 444). The final pass always searches.
+func seedSet(cands []*Ivar, sig []string, prev *refineRecord) map[*Ivar]bool {
+	dropped := map[string]bool{}
+	for i, s := range prev.Cands {
+		dropped[s] = !prev.Accepted[i]
+	}
+	set := map[*Ivar]bool{}
+	for i, iv := range cands {
+		if !dropped[sig[i]] {
+			set[iv] = true
+		}
+	}
+	return set
 }
 
 // setIvarTypes gives each candidate its typed type when set has it, else its original.

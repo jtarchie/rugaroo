@@ -256,6 +256,7 @@ type pathCache struct {
 // tableState: what emitTables reads (see tableInputs) and the tables' bookkeeping.
 type refineState struct {
 	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
+	roundRefine         map[string]*refineRecord // options.roundRefine (decision 444)
 	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
 	noNilDefer          bool                     // options.noNilDefer
 	nilDeferUsed        *bool                    // options.nilDeferred: a typing kept by decision 440
@@ -396,6 +397,7 @@ type options struct {
 	inputs       map[string]string        // out: the final compile's input files and their hashes (decision 430)
 	refineIn     map[string]*refineRecord // refineIvars' records from the cache, by refineKind (decision 433)
 	refineOut    map[string]*refineRecord // out: this compile's, for the cache
+	roundRefine  map[string]*refineRecord // the previous inference round's candidates and kept typings, tried first by the next (decision 444)
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.
@@ -553,6 +555,10 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		tableState:   tableState{procTypes: map[string]bool{}, procFuncs: map[string]TFunc{}, procShapes: map[string]string{}, argBoxes: map[string]bool{}, boxes: map[string]bool{}, unions: map[string]TUnion{}, unionsOut: map[string]bool{}, strLits: map[string]bool{}, pkgVars: map[string]bool{}}}
 	c.loadPath, c.gemDirs, c.pruneGems = opts.loadPath, opts.gemDirs, opts.pruneGems
 	c.refineIn, c.refineOut = opts.refineMaps()
+	if opts.roundRefine == nil {
+		opts.roundRefine = map[string]*refineRecord{}
+	}
+	c.roundRefine = opts.roundRefine
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
 	c.noPrune = opts.noPrune

@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -109,11 +110,15 @@ func (c *Compiler) dynBlockTwin(f *fctx, e *entry, recv expr, env map[string]Typ
 		return
 	}
 	tw := cls.lookup("__" + overloadBase(m.Name) + "_block")
+	if tw != nil && tw.M.Owner != m.Owner && (m.File == nil || !m.File.isPrelude()) {
+		return // a gem class's own method shadows an included module's twin: MRI ignores the block (MatchLength#max)
+	}
 	if tw == nil || tw.M.Block == nil || tw.M.generic() || tw.M.hasKeywords() ||
 		slices.ContainsFunc(tw.M.Params, func(p Param) bool { return p.Rest || p.Default != nil }) {
 		return
 	}
 	c.resolveMethod(tw.M)
+	env = twinEnv(tw.M, env)
 	f.emit("if blk_, args := rbPopBlock(args); blk_ != nil {")
 	f.indent++
 	f.emit("rbArity(len(args), %d, %d)", len(tw.M.Params), len(tw.M.Params))
@@ -127,6 +132,29 @@ func (c *Compiler) dynBlockTwin(f *fctx, e *entry, recv expr, env map[string]Typ
 	f.emit("return %s", f.coerce(&parser.NilNode{}, res, TAny{}))
 	f.indent--
 	f.emit("}")
+}
+
+// twinEnv binds what the twin's signature names beyond the method's own env to untyped: an Enumerable includer with its
+// own `max` reaches Enumerable#__max_block, whose `E` the class's env does not carry (regexp_parser's MatchLength).
+func twinEnv(tw *Method, env map[string]Type) map[string]Type {
+	var vars []string
+	for _, p := range tw.Params {
+		freeVars(p.Type, &vars)
+	}
+	for _, p := range tw.Block.Params {
+		freeVars(p, &vars)
+	}
+	freeVars(tw.Block.Ret, &vars)
+	out := maps.Clone(env)
+	for _, v := range vars {
+		if _, ok := out[v]; !ok && v != "Self" {
+			if out == nil {
+				out = map[string]Type{}
+			}
+			out[v] = TAny{}
+		}
+	}
+	return out
 }
 
 // dynIterCall is a dynamic call with a block of an iterator method: a range over it, each yield into the call's block.

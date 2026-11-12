@@ -63,6 +63,11 @@ func (c *Compiler) collectTopCall(ctx context.Context, f *File, n *parser.CallNo
 			c.noteAutoload(sym)
 		}
 		c.loadAutoload(ctx, f, n, nil) // compile-time autoload (decision 161)
+	case n.Name == "autoload" && c.lookupClassRef(f, n.Receiver) != nil:
+		// `Parser.autoload :WithMeta, path` from outside the class (rubocop-ast's ast.rb): the class's own autoload (decision 444)
+		scope := []*Class{c.lookupClassRef(f, n.Receiver)}
+		c.noteAutoloadCall(n, callArgs(n), scope)
+		c.loadAutoload(ctx, f, n, scope)
 	default:
 		c.scanAnon(ctx, f, n, nil)
 		c.addMainStmt(f, n)

@@ -29,6 +29,7 @@ func rbInspectPair(k, v any, seen *rbSeen) string {
 // make uniq a Go instantiation cycle (decision 9).
 type rbKeyIndex[K comparable] struct {
 	plain  bool
+	ident  bool // compare_by_identity: plain was set by it
 	byHash map[uint64][]K
 }
 

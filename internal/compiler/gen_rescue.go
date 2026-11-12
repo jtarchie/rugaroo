@@ -323,6 +323,14 @@ func (f *fctx) genRescueClause(rc *parser.RescueNode, t tail) {
 			continue
 		}
 		cls := f.classRef(ex)
+		if _, k := f.c.lookupConst(f.f, ex, f.lex); cls == nil && k == nil && f.lenient() && isConstNode(ex) {
+			// a gem's `rescue ::Bundler::GemfileNotFound` of a library the program never loads (rubocop's Lockfile): MRI
+			// reads the constant only when an exception reaches the clause, and raises NameError there (decision 444)
+			f.c.warn(f.f, ex, "uninitialized constant %s: raises NameError if an exception reaches this rescue", f.f.text(ex.GetLocation()))
+			conds = append(conds, fmt.Sprintf("rbRescueMissing(%q)", f.f.text(ex.GetLocation())))
+			classes = append(classes, f.c.classes["Exception"])
+			continue
+		}
 		if cls == nil {
 			f.errorf(ex, "rescue needs exception class names")
 		}
