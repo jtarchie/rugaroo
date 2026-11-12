@@ -1311,6 +1311,14 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 			args = args[:k]
 		}
 	}
+	types := make([]Type, len(args)) // each argument typed once, not once per method of the name (it was a quarter of rubocop's transpile)
+	typed := make([]bool, len(args))
+	typeOf := func(i int) Type {
+		if !typed[i] {
+			types[i], typed[i] = f.probeType(args[i], nil), true
+		}
+		return types[i]
+	}
 	for _, m := range f.c.gemMethodsNamed(name) {
 		rest := slices.IndexFunc(m.Params, func(p Param) bool { return p.Rest && !p.Keyword && !p.KwRest })
 		if len(args) > len(m.Params) && rest < 0 {
@@ -1332,7 +1340,7 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 			if _, kw := a.(*parser.KeywordHashNode); kw {
 				break
 			}
-			if t := f.probeType(a, nil); t != nil && !isAny(t) {
+			if t := typeOf(i); t != nil && !isAny(t) {
 				f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true})
 			}
 		}
