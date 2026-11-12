@@ -333,8 +333,20 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 	if e, ok := f.nilSpaceship(n, recv, name, args, block); ok {
 		return e
 	}
+	if e, ok := f.gemCallValue(n, recv, name, args, block); ok {
+		return e
+	}
+	return f.genMethodCall1(n, recv, name, args, block)
+}
+
+// gemCallValue is a gem call whose value MRI decides when it runs (decision 444): `<=>` of Arrays, nil where two
+// elements do not compare, and flat_map of a block that answers an Array or one value.
+func (f *fctx) gemCallValue(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
+	if !f.lenient() {
+		return expr{}, false
+	}
 	if name == "<=>" && len(args) == 1 && block == nil && f.lenient() && isClass(recv.typ, "Array") && f.resolve(recv.typ, "__cmp_try") != nil {
-		return f.genMethodCall1(n, recv, "__cmp_try", args, nil) // nil for elements that do not compare, which gem code reads (decision 444)
+		return f.genMethodCall1(n, recv, "__cmp_try", args, nil), true // nil for elements that do not compare, which gem code reads (decision 444)
 	}
 	if name == "<=>" && len(args) == 1 && block == nil && f.lenient() && isAny(recv.typ) {
 		// an untyped receiver that is an Array when it runs: the same nil (decision 444)
@@ -343,7 +355,7 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 		f.emit("%s := %s", a, f.coerce(args[0], f.genExpr(args[0], nil), TAny{}))
 		rest := f.genMethodCall1(n, expr{code: r, typ: TAny{}}, name, []parser.Node{&exprNode{Node: args[0], e: expr{code: a, typ: TAny{}}}}, nil)
 		code := fmt.Sprintf("func() any { if x, ok := rbUnbox(%s).(Array_Any); ok { return rbArrayCmpTryAny(x._ToAny(), %s) }; return %s }()", r, a, f.coerce(n, rest, TAny{}))
-		return expr{code: code, typ: TAny{}}
+		return expr{code: code, typ: TAny{}}, true
 	}
 	if _, lit := block.(*parser.BlockNode); lit && name == "flat_map" && len(args) == 0 && f.lenient() && !f.heldAsAny(recv.typ) {
 		// a gem block that answers an Array or one value, known when it runs (rubocop-ast's MlhsNode#assignments answers a
@@ -353,11 +365,11 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 		f.probe(func() { err = catchCompileError(func() { typed = f.genMethodCall1(n, recv, name, args, block) }) })
 		if tc, ok := typed.typ.(TClass); err != nil || ok && len(tc.Args) == 1 && isAny(tc.Args[0]) {
 			if f.resolve(recv.typ, "__flat_map_untyped") != nil {
-				return f.genMethodCall1(n, recv, "__flat_map_untyped", args, block)
+				return f.genMethodCall1(n, recv, "__flat_map_untyped", args, block), true
 			}
 		}
 	}
-	return f.genMethodCall1(n, recv, name, args, block)
+	return expr{}, false
 }
 
 // getobjCall is `__getobj__`, typed by what the delegator wraps when delegateType knows it (decision 284).
@@ -661,31 +673,7 @@ func (f *fctx) classCall(n parser.Node, t TClass, recv expr, name string, args [
 		}
 	}
 	if e == nil {
-		if mm := t.C.lookup("method_missing"); mm != nil {
-			if recv.code == f.selfCode {
-				f.missingCalls++
-			}
-			return f.callMissing(n, mm, recv, name, args, block)
-		}
-		if f.c.isDelegator(t.C) {
-			return f.delegateCall(n, recv, name, args, block)
-		}
-		// a Module/Class-typed value is some class object, and a
-		// struct-typed value may be a subclass defining the method:
-		// either way the method is found at run time
-		if (t.C.RubyName == "Module" || t.C.RubyName == "Class" || (t.C.isStruct() && t.C.descendantDefines(name, false))) && block == nil {
-			return f.genDynCall(n, recv, name, args)
-		}
-		if f.lenient() && block != nil && t.C.isStruct() && t.C.descendantDefines(name, false) {
-			// with a block too (rubocop-ast's `child.visit_all_descendants(&block)` on a child narrowed to ::AST::Node,
-			// whose RuboCop subclass includes the method's module; decision 444)
-			return f.universalBlockCall(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
-		}
-		f.whyUndefined(n, t, recv, name)
-		if f.partlyLoaded(t.C, block) { // a gem class whose methods are not all in the closed world (Cask::Cask when the traced run never loaded cask/cask.rb): found, or not, at run time
-			return f.genDynCall(n, recv, name, args)
-		}
-		f.errorf(n, "undefined method %s for %s", name, recv.typ)
+		return f.undefinedCall(n, t, recv, name, args, block)
 	}
 	if f.lenient() && e.Owner != nil && e.Owner.universal && e.M.File != nil && e.M.File.isPrelude() && t.C.isStruct() && !t.C.universal && t.C.descendantDefines(name, false) {
 		// Kernel's `then` on an AbstractEventFuture whose Event and Future define their own (concurrent-ruby's
@@ -700,6 +688,37 @@ func (f *fctx) classCall(n parser.Node, t TClass, recv expr, name string, args [
 		return x
 	}
 	return f.numericMix(n, recv, e, args, block)
+}
+
+// undefinedCall is a call of a name the receiver's class does not define: method_missing, a delegator's object, a class
+// object's or a subclass's method found at run time, else the compile error.
+func (f *fctx) undefinedCall(n parser.Node, t TClass, recv expr, name string, args []parser.Node, block parser.Node) expr {
+	if mm := t.C.lookup("method_missing"); mm != nil {
+		if recv.code == f.selfCode {
+			f.missingCalls++
+		}
+		return f.callMissing(n, mm, recv, name, args, block)
+	}
+	if f.c.isDelegator(t.C) {
+		return f.delegateCall(n, recv, name, args, block)
+	}
+	// a Module/Class-typed value is some class object, and a
+	// struct-typed value may be a subclass defining the method:
+	// either way the method is found at run time
+	if (t.C.RubyName == "Module" || t.C.RubyName == "Class" || (t.C.isStruct() && t.C.descendantDefines(name, false))) && block == nil {
+		return f.genDynCall(n, recv, name, args)
+	}
+	if f.lenient() && block != nil && t.C.isStruct() && t.C.descendantDefines(name, false) {
+		// with a block too (rubocop-ast's `child.visit_all_descendants(&block)` on a child narrowed to ::AST::Node,
+		// whose RuboCop subclass includes the method's module; decision 444)
+		return f.universalBlockCall(n, expr{code: f.coerce(n, recv, TAny{}), typ: TAny{}}, name, args, block)
+	}
+	f.whyUndefined(n, t, recv, name)
+	if f.partlyLoaded(t.C, block) { // a gem class whose methods are not all in the closed world (Cask::Cask when the traced run never loaded cask/cask.rb): found, or not, at run time
+		return f.genDynCall(n, recv, name, args)
+	}
+	f.errorf(n, "undefined method %s for %s", name, recv.typ)
+	return expr{}
 }
 
 // selfEntryCall is a call on self (Self) of its class's method e, through a `<=>` that takes untyped for a Comparable

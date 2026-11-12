@@ -109,7 +109,7 @@ func (f *fctx) blockParamList(b parser.Node) blockParams {
 
 // bindLoneSub binds `|(x)|`, a destructuring of one target: x is the value's first element, where `|x|` would take the
 // whole value (rubocop's `scan(RE).map { |(digits)| digits.to_i }`; decision 444).
-func (f *fctx) bindLoneSub(n parser.Node, sub []blockParam, t Type, src string) bool {
+func (f *fctx) bindLoneSub(sub []blockParam, t Type, src string) bool {
 	if len(sub) != 1 || sub[0].Sub != nil || sub[0].Rest {
 		return false
 	}
@@ -272,7 +272,7 @@ func (f *fctx) bindTupleParams(n parser.Node, names blockParams, tt TTuple) ([]s
 			if nm.Sub != nil { // `|(k, v), i|`
 				sub, t, src := nm.Sub, tt.Elems[i], fmt.Sprintf("%s.F%d", p, i)
 				nested = append(nested, func() {
-					if f.bindLoneSub(n, sub, t, src) {
+					if f.bindLoneSub(sub, t, src) {
 						return
 					}
 					gp, pro := f.bindBlockParams(n, sub, []Type{t})
@@ -395,7 +395,7 @@ func (f *fctx) bindBlockParams(n parser.Node, names blockParams, yields []Type) 
 			goParams = append(goParams, p)
 			sub, t := names[i].Sub, yields[i]
 			destructure = append(destructure, func() {
-				if f.bindLoneSub(n, sub, t, p) {
+				if f.bindLoneSub(sub, t, p) {
 					return
 				}
 				gp, pro := f.bindBlockParams(n, sub, []Type{t})

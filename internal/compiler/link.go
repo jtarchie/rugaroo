@@ -54,13 +54,14 @@ func (c *Compiler) link(ctx context.Context) {
 	c.markSuperBridges()
 	for _, cls := range c.classList {
 		for _, m := range cls.MethodList {
-			if c.overridesIterator(m) || c.blockEachOfEnumerable(cls, m) {
+			switch {
+			case c.overridesIterator(m) || c.blockEachOfEnumerable(cls, m):
 				m.seqAdapter = true
 				m.GoName += "_blk"
-			} else if c.restEachOfEnumerable(cls, m) {
+			case c.restEachOfEnumerable(cls, m):
 				m.seqRest = true
 				m.GoName += "_rest"
-			} else if protoOptShape(m) {
+			case protoOptShape(m):
 				m.protoOpt = true
 				m.GoName += "_opt"
 			}

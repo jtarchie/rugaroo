@@ -295,7 +295,7 @@ func (f *fctx) breakCatchStmt(n parser.Node, t tail) bool {
 		return false
 	}
 	b, ok := c.Block.(*parser.BlockNode)
-	if !ok || b.Body == nil || !blockBreaks(b.Body) && !(f.lenient() && blockBreaksValue(b.Body)) {
+	if !ok || b.Body == nil || !blockBreaks(b.Body) && (!f.lenient() || !blockBreaksValue(b.Body)) {
 		return false
 	}
 	if t.kind != tailNone { // a gem's `segment.each do ... break ... end` as a block's value (liquid's For#render_segment, decision 331)

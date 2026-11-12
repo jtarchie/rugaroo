@@ -178,15 +178,18 @@ func lazyAutoloadPath(path string, loadPath []string) string {
 	if filepath.Ext(path) != ".rb" {
 		path += ".rb"
 	}
+	isFile := func(p string) bool {
+		info, err := os.Stat(p)
+		return err == nil && !info.IsDir()
+	}
 	if filepath.IsAbs(path) {
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		if isFile(path) {
 			return path
 		}
 		return ""
 	}
 	for _, dir := range loadPath {
-		p := filepath.Join(dir, path)
-		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+		if p := filepath.Join(dir, path); isFile(p) {
 			return p
 		}
 	}
