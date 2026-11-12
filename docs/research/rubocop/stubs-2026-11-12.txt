@@ -1,102 +1,36 @@
-rugaroo: a branch does not compile: parallel-2.3.0/lib/parallel.rb:180: trap_interrupt with a block is an iterator and can only be used as a statement
-rugaroo: a branch does not compile: parallel-2.3.0/lib/parallel.rb:211: undefined method call for String
-rugaroo: a branch does not compile: parallel-2.3.0/lib/parallel.rb:311: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: a branch does not compile: parallel-2.3.0/lib/parallel.rb:313: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: a branch does not compile: parallel-2.3.0/lib/parallel.rb:317: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: a branch does not compile: rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb:111: undefined method insert for String: Strings are immutable in rugaroo; build a new one (s += x, s = s.sub(...)), write into a StringIO (decision 58), or append to (decision 382) or setbyte (decision 395) a String local nothing else holds
-rugaroo: a branch does not compile: rubocop-1.92.1/lib/rubocop/remote_config.rb:112: undefined method user= for URI::Generic
-rugaroo: a branch does not compile: rubocop-1.92.1/lib/rubocop/remote_config.rb:113: undefined method password= for URI::Generic
-rugaroo: a branch does not compile: rubocop-1.92.1/lib/rubocop/runner.rb:589: undefined method 'call' for ^(RuboCop::AST::ProcessedSource) -> Array[Hash[Symbol, untyped]]
-rugaroo: a branch does not compile: rubocop-1.92.1/lib/rubocop/target_ruby.rb:110: break with a value is not supported
-rugaroo: a branch does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: break with a value is not supported
-rugaroo: a branch does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb:361: undefined method call for Proc
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3625: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3692: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3733: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3834: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3893: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:3934: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4026: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4067: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4210: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4243: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4344: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4395: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4428: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4512: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4613: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4672: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4705: undefined local lookahead
-rugaroo: a when arm does not compile: parser-3.3.13.0/lib/parser/lexer-strings.rb:4789: undefined local lookahead
-rugaroo: a when arm does not compile: rubocop-1.92.1/lib/rubocop/plugin/configuration_integrator.rb:110: undefined method source_location for Method[untyped]
 rugaroo: Parallel_JobFactory#next does not compile: parallel-2.3.0/lib/parallel.rb:136: undefined local item
 rugaroo: Parallel_Serializer_Hmac#initialize does not compile: parallel-2.3.0/lib/parallel/serializer.rb:22: undefined method bytes for singleton(SecureRandom)
 rugaroo: Parallel.ractor_build does not compile: parallel-2.3.0/lib/parallel.rb:556: unsupported syntax: SplatNode
-rugaroo: Parallel.replace_worker does not compile: parallel-2.3.0/lib/parallel.rb:651: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: Parser_Source_TreeRewriter#combine does not compile: parser-3.3.13.0/lib/parser/source/tree_rewriter.rb:399: **attributes into initialize's keywords must be a Hash[Symbol, T], not untyped
 rugaroo: Prism_ConstantPathNode#full_name_parts does not compile: Go rejects it: invalid operation: current (variable of type *Prism_ConstantPathNode) is not an interface
 rugaroo: Rainbow_Color_X11Named#initialize does not compile: rainbow-3.1.1/lib/rainbow/color.rb:146: splat of non-array Array[Integer]?
 rugaroo: Regexp_Expression_ReferencedExpressions#initialize_copy does not compile: Go rejects it: self._Regexp_Expression_ReferencedExpressions undefined (type ClassI has no field or method _Regexp_Expression_ReferencedExpressions)
 rugaroo: Regexp_Expression_Subexpression#flat_map does not compile: Go rejects it: cannot use blk (variable of type func(any) any) as func(Tuple2[any, any]) any value in argument to Enumerable_Map[*Hash[any, any], Tuple2[any, any], any]
 rugaroo: Regexp_Parser#property does not compile: regexp_parser-2.13.1/lib/regexp_parser/parser.rb:467: when *UPTokens::Derived needs an Array
-rugaroo: Regexp::Syntax.const_missing does not compile: regexp_parser-2.13.1/lib/regexp_parser/syntax/version_lookup.rb:53: super: no parent method const_missing
-rugaroo: RuboCop_AST_IfNode#modifier_form? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node/if_node.rb:88: super: no parent method modifier_form?
-rugaroo: RuboCop_AST_MethodDispatchNode#non_bare_access_modifier_declaration? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_index
-rugaroo: RuboCop_AST_Node#visit_all_descendants does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/descendence.rb:120: undefined method visit_all_descendants for AST::Node
-rugaroo: RuboCop_AST_Node#visit_descendants_of_types does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/descendence.rb:129: undefined method visit_descendants_of_types for AST::Node
 rugaroo: RuboCop_AST_NodePattern_Compiler_SequenceSubcompiler#compile_and_advance does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/compiler/sequence_subcompiler.rb:180: undefined method + for Symbol
 rugaroo: RuboCop_AST_NodePattern_Compiler_SequenceSubcompiler#visit_other_type does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/compiler/sequence_subcompiler.rb:70: undefined method negative? for Symbol
 rugaroo: RuboCop_AST_NodePattern_MethodDefiner#wrapping_block does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:45: unsupported block parameter form
-rugaroo: RuboCop_AST_NodePattern_Node#visit_all_descendants does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/descendence.rb:120: undefined method visit_all_descendants for AST::Node
-rugaroo: RuboCop_AST_NodePattern_Node#visit_descendants_of_types does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node/mixin/descendence.rb:129: undefined method visit_descendants_of_types for AST::Node
-rugaroo: RuboCop_CLI_Command_ExecuteRunner#bug_tracker_uri does not compile: rubocop-1.92.1/lib/rubocop/cli/command/execute_runner.rb:126: undefined method loaded_specs for singleton(Gem)
-rugaroo: RuboCop_ConfigLoaderResolver#duplicate_setting? does not compile: rubocop-1.92.1/lib/rubocop/config_loader_resolver.rb:245: undefined method path for singleton(Gem)
+rugaroo: RuboCop_AST_NodePattern_Node_Subsequence#in_sequence_head does not compile: Go rejects it: in call to RuboCop_AST_NodePattern_Node_ForbidInSeqHead_InSequenceHead, Self (type RuboCop_AST_NodePattern_Node_SubsequenceI) does not satisfy RuboCop_AST_NodePattern_Node_ForbidInSeqHead_Self[Self] (missing method ToS)
 rugaroo: RuboCop_Cop_AllowedMethods#ignored_method? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/allowed_methods.rb:23: RuboCop_Cop_AllowedMethods#allowed_method?: wrong number of arguments (given 0, expected 1)
+rugaroo: RuboCop_Cop_Bundler_GemVersion#includes_commit_reference? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_index3
 rugaroo: RuboCop_Cop_Cop_Correction#call does not compile: rubocop-1.92.1/lib/rubocop/cop/cop.rb:19: lambda needs a literal block
-rugaroo: RuboCop_Cop_DigHelp#dig? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Gemspec_RequiredRubyVersion#defined_ruby_version does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
+rugaroo: RuboCop_Cop_Gemspec_DependencyVersion#includes_commit_reference? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_index3
 rugaroo: RuboCop_Cop_Generator_ConfigurationInjector#find_target_line does not compile: rubocop-1.92.1/lib/rubocop/cop/generator/configuration_injector.rb:50: find requires a block
 rugaroo: RuboCop_Cop_Generator_RegistrationInjector#first_directive_position does not compile: rubocop-1.92.1/lib/rubocop/cop/generator/registration_injector.rb:137: filter_map requires a block
 rugaroo: RuboCop_Cop_Generator_RegistrationInjector#module_opening_lines does not compile: rubocop-1.92.1/lib/rubocop/cop/generator/registration_injector.rb:167: flat_map requires a block
 rugaroo: RuboCop_Cop_Generator_RegistrationInjector#parse_entries does not compile: rubocop-1.92.1/lib/rubocop/cop/generator/registration_injector.rb:84: filter_map requires a block
 rugaroo: RuboCop_Cop_Generator_RequireFileInjector#target_line does not compile: rubocop-1.92.1/lib/rubocop/cop/generator/require_file_injector.rb:44: find requires a block
-rugaroo: RuboCop_Cop_HashAlignmentStyles_SeparatorAlignment#deltas does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/hash_alignment_styles.rb:168: super: no parent method deltas
-rugaroo: RuboCop_Cop_Layout_ExtraSpacing#aligned_with_adjacent_line? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/preceding_following_alignment.rb:48: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: RuboCop_Cop_Layout_IndentationWidth#on_csend does not compile: rubocop-1.92.1/lib/rubocop/cop/layout/indentation_width.rb:146: super: no parent method on_csend
-rugaroo: RuboCop_Cop_Layout_IndentationWidth#on_send does not compile: rubocop-1.92.1/lib/rubocop/cop/layout/indentation_width.rb:146: super: no parent method on_send
-rugaroo: RuboCop_Cop_Layout_SpaceAfterSemicolon#space_missing? does not compile: rubocop-1.92.1/lib/rubocop/cop/layout/space_after_semicolon.rb:28: super: no parent method space_missing?
-rugaroo: RuboCop_Cop_Layout_SpaceAroundOperators#aligned_with_adjacent_line? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/preceding_following_alignment.rb:48: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: RuboCop_Cop_Layout_SpaceBeforeFirstArg#aligned_with_adjacent_line? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/preceding_following_alignment.rb:48: only &:symbol, a Proc, a Method and a method's own &block are supported as block arguments
-rugaroo: RuboCop_Cop_Lint_DuplicateMethods#delegate_args does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local matched4
-rugaroo: RuboCop_Cop_Lint_DuplicateMethods#delegators? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Lint_FormatParameterMismatch#matched_arguments_count? does not compile: rubocop-1.92.1/lib/rubocop/cop/lint/format_parameter_mismatch.rb:82: undefined method negative? for Symbol
-rugaroo: RuboCop_Cop_Lint_RedundantCopDisableDirective#each_redundant_disable does not compile: rubocop-1.92.1/lib/rubocop/cop/lint/redundant_cop_disable_directive.rb:107: the forwarded block takes 1 values but 2 are yielded
-rugaroo: RuboCop_Cop_Lint_SendWithMixinArgument#send_with_mixin_argument? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Lint_UselessTimes#times_call? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Security_MarshalLoad#marshal_load does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_index
-rugaroo: RuboCop_Cop_Style_AccessModifierDeclarations#access_modifier_with_symbol? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Style_Alias#add_offense_for_args does not compile: Go rejects it: cannot use Array_Join[any](&Array[any]{…}, rbAs[String](a1__._ToAny(), \
-rugaroo: RuboCop_Cop_Style_EmptyLiteral#array_node does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
+rugaroo: RuboCop_Cop_MultilineLiteralBraceCorrector#check_new_line does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/multiline_literal_brace_layout.rb:46: undefined method add_offense for RuboCop::Cop::MultilineLiteralBraceCorrector
+rugaroo: RuboCop_Cop_MultilineLiteralBraceCorrector#check_same_line does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/multiline_literal_brace_layout.rb:54: undefined method add_offense for RuboCop::Cop::MultilineLiteralBraceCorrector
+rugaroo: RuboCop_Cop_Style_EmptyHeredoc#wrong_quotes? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/string_literals_help.rb:13: undefined method style for RuboCop::Cop::Style::EmptyHeredoc
 rugaroo: RuboCop_Cop_Style_EmptyLiteral#wrong_quotes? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/string_literals_help.rb:13: undefined method style for RuboCop::Cop::Style::EmptyLiteral
-rugaroo: RuboCop_Cop_Style_Encoding#comments does not compile: rubocop-1.92.1/lib/rubocop/cop/style/encoding.rb:39: a block with a rest or destructuring parameter on an untyped receiver is not supported
-rugaroo: RuboCop_Cop_Style_FormatStringToken#tokens does not compile: rubocop-1.92.1/lib/rubocop/cop/style/format_string_token.rb:243: the forwarded block takes 1 values but 2 are yielded
-rugaroo: RuboCop_Cop_Style_HashLikeCase#hash_like_case? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Style_IfUnlessModifier#non_eligible_node? does not compile: rubocop-1.92.1/lib/rubocop/cop/style/if_unless_modifier.rb:203: super: no parent method non_eligible_node?
-rugaroo: RuboCop_Cop_Style_MixinUsage#include_statement does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop_Cop_Style_SingleLineMethods#command_body_in_argument? does not compile: rubocop-1.92.1/lib/rubocop/cop/style/single_line_methods.rb:83: super: no parent method command_body_in_argument?
-rugaroo: RuboCop_Cop_Style_WhileUntilModifier#non_eligible_body? does not compile: rubocop-1.92.1/lib/rubocop/cop/style/while_until_modifier.rb:62: super: no parent method non_eligible_body?
-rugaroo: RuboCop_Cop_Utils_FormatString_FormatSequence#max_digit_dollar_num does not compile: rubocop-1.92.1/lib/rubocop/cop/utils/format_string.rb:90: undefined method to_i for Array[String?]
-rugaroo: RuboCop_Cop_VisibilityHelp#visibility_inline_on_method_name? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local matched2
-rugaroo: RuboCop_Ext_RegexpParser_Expression_Base#loc does not compile: rubocop-1.92.1/lib/rubocop/ext/regexp_parser.rb:45: **build_location into initialize's keywords must be a Hash[Symbol, T], not untyped
+rugaroo: RuboCop_Cop_Style_RedundantFormat#splatted_arguments? does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_index3
+rugaroo: RuboCop_Cop_Style_RedundantRegexpArgument#wrong_quotes? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/string_literals_help.rb:13: undefined method style for RuboCop::Cop::Style::RedundantRegexpArgument
 rugaroo: RuboCop_FeatureLoader#load does not compile: rubocop-1.92.1/lib/rubocop/feature_loader.rb:37: undefined method path for LoadError
+rugaroo: RuboCop_Formatter_HTMLFormatter_CSSContext#binding does not compile: html_formatter.rb:148: super: no parent method binding
+rugaroo: RuboCop_Formatter_HTMLFormatter_ERBContext#binding does not compile: html_formatter.rb:79: super: no parent method binding
+rugaroo: RuboCop_Formatter_HTMLFormatter_ERBContext#render_css does not compile: html_formatter.rb:128: ERB.new needs a literal template, a String or heredoc without interpolation: the template is compiled with the program (docs/design.md decision 111)
+rugaroo: RuboCop_Formatter_HTMLFormatter#render_html does not compile: html_formatter.rb:54: ERB.new needs a literal template, a String or heredoc without interpolation: the template is compiled with the program (docs/design.md decision 111)
+rugaroo: RuboCop_Formatter_PacmanFormatter#started does not compile: pacman_formatter.rb:33: String where Integer is expected
 rugaroo: RuboCop_Options#require_feature does not compile: Go rejects it: in call to rbMust, cannot infer T (declared at prelude/go/runtime.go:1872)
 rugaroo: RuboCop_Plugin_NotSupportedError#message does not compile: rubocop-1.92.1/lib/rubocop/plugin/not_supported_error.rb:15: undefined method one? for String
 rugaroo: RuboCop_RemoteConfig#request does not compile: rubocop-1.92.1/lib/rubocop/remote_config.rb:51: undefined method hostname for URI::Generic
-rugaroo: RuboCop_Runner#project_index_disables_parallel? does not compile: rubocop-1.92.1/lib/rubocop/runner.rb:254: undefined method win_platform? for singleton(Gem)
-rugaroo: RuboCop_TargetFinder#target_files_in_dir does not compile: rubocop-1.92.1/lib/rubocop/target_finder.rb:56: blocks on untyped receivers are not supported
-rugaroo: RuboCop_TargetRuby_GemspecFile#gem_requirement_versions does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/node_pattern/method_definer.rb:58: undefined local cur_child
-rugaroo: RuboCop::AST::ProcessedSource.lazy_tokens_parser_class does not compile: rubocop-ast-1.50.0/lib/rubocop/ast/processed_source.rb:91: Class.new's superclass must be a constant (decision 145)
-rugaroo: RuboCop::Cop::FrozenStringLiteral.frozen_string_literal_comment_exists? does not compile: rubocop-1.92.1/lib/rubocop/cop/mixin/frozen_string_literal.rb:15: undefined method leading_comment_lines for RuboCop::Cop::FrozenStringLiteral
-rugaroo: RuboCop::Cop::Util.comment_lines? does not compile: rubocop-1.92.1/lib/rubocop/cop/util.rb:27: undefined method processed_source for RuboCop::Cop::Util
-rugaroo: RuboCop::Plugin::Loader.constantize_plugin_from_gemspec_metadata does not compile: rubocop-1.92.1/lib/rubocop/plugin/loader.rb:91: undefined method loaded_specs for singleton(Gem)
-rugaroo: RuboCop::Plugin.plugin_capable? does not compile: rubocop-1.92.1/lib/rubocop/plugin.rb:32: undefined method loaded_specs for singleton(Gem)
