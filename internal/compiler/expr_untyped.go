@@ -125,6 +125,11 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 			return f.genDynCall(n, recv, name, append(slices.Clone(args), &exprNode{e: expr{code: v, typ: TAny{}}, blockArg: true}))
 		}
 	}
+	if ba, ok := block.(*parser.BlockArgumentNode); ok && f.lenient() && ba.Expression != nil {
+		if pb := f.procBlock(ba); pb != nil { // `&order`, a callable or a Symbol decided when it runs (decision 444)
+			return f.genDynBlockCall(n, recv, name, args, pb)
+		}
+	}
 	f.errorf(n, "blocks on untyped receivers are not supported")
 	return expr{}
 }

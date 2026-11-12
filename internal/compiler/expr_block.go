@@ -337,8 +337,13 @@ func (f *fctx) bindArraySplat(n parser.Node, names blockParams, elem Type, untyp
 		for i, nm := range names {
 			e := genericOpt(expr{code: fmt.Sprintf("%s(%s, %d)", splat, a, i), typ: TOpt{Elem: elem}})
 			if nm.Sub != nil { // `|(k, v), i|`
-				gp, pro := f.bindBlockParams(n, nm.Sub, []Type{e.typ})
-				f.emit("%s := %s", gp[0], e.code)
+				st, code := e.typ, e.code
+				if o, ok := st.(TOpt); ok && strings.HasPrefix(f.c.goType(o.Elem), "*Array[") && f.c.goType(st) == "*"+f.c.goType(o.Elem) {
+					// `|(a, b), (c, d)|` over pairs of pairs: a missing pair's targets are nil, as the splat of a nil Array's are
+					st, code = o.Elem, fmt.Sprintf("rbDerefOrNil(%s)", code)
+				}
+				gp, pro := f.bindBlockParams(n, nm.Sub, []Type{st})
+				f.emit("%s := %s", gp[0], code)
 				pro()
 				continue
 			}

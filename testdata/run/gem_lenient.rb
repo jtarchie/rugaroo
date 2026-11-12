@@ -22,6 +22,7 @@ require "registryish_sub2"
 require "arityish"
 require "strapish"
 require "prepish"
+require "shapish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -118,3 +119,11 @@ p st.tails([["y"]])
 p Prepish::Calc.calculate([1, 2])
 p Prepish::Calc.calculate([1, 2], discount: true)
 p Prepish::Calc.ancestors.first(3)
+# nested destructuring over pairs of pairs; `&order`, a Symbol or a lambda when it runs; reduce(&:join) with a forwarded block (decision 444)
+sh_parts = [Shapish::Rng.new(5), Shapish::Nd.new("x", 1), Shapish::Nd.new("y", 9), Shapish::Rng.new(12), Shapish::Nd.new("z", 14), Shapish::Rng.new(20)]
+p Shapish::Safe.new.on_and(sh_parts)
+sh_f = Shapish::Fmt.new
+p sh_f.offense?(1), sh_f.offense?(2), sh_f.offense?(3)
+p Shapish::Finder.new(true).targets(%w[bbb a cc dddd]), Shapish::Finder.new(false).targets(%w[bbb a cc])
+sh_a = Shapish::Al.new
+p sh_a.for_args(Shapish::Nd.new("n", 0)), sh_a.for_args(Shapish::Nd.new("n", 0)) { |r| "!#{r.pos}" }

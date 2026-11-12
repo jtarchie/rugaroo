@@ -106,18 +106,42 @@ func (f *fctx) procBlock(ba *parser.BlockArgumentNode) *parser.BlockNode {
 	if tc, ok := pt.(TClass); ok && tc.C.RubyName == yielderClass {
 		return yielderBlock(ba)
 	}
-	if kind, _, typed := methodFn(pt); f.lenient() && (isAny(pt) || kind == "Method" && !typed) {
+	if kind, _, typed := methodFn(pt); f.lenient() && (f.heldAsAny(pt) || kind == "Method" && !typed) {
 		// a gem's untyped callable as a block (rubocop's `aligned_with_any_line_range?(ranges, range, &predicate)`, where
 		// predicate is one of two Method objects): `{ |*xs| predicate.call(*xs) }`, called when it runs (decision 444)
 		loc := ba.Location
 		xs := "xs_"
 		call := &parser.CallNode{Location: loc, Receiver: ba.Expression, Name: "call", Arguments: &parser.ArgumentsNode{Location: loc,
 			Arguments: []parser.Node{&parser.SplatNode{Location: loc, Expression: &parser.LocalVariableReadNode{Location: loc, Name: xs}}}}}
+		var body parser.Node = call
+		if kind != "Method" && !f.isLocalRead(ba.Expression) {
+			// read once, before the call, as MRI converts `&expr` once
+			tmp := f.newTmp()
+			f.emit("%s := %s", tmp, f.coerce(ba, f.genExpr(ba.Expression, nil), TAny{}))
+			f.emit("_ = %s", tmp)
+			held := &exprNode{Node: ba.Expression, e: expr{code: tmp, typ: TAny{}}}
+			call.Receiver = held
+			ba = &parser.BlockArgumentNode{Location: ba.Location, Expression: held}
+		}
+		if kind != "Method" { // it may be a Symbol when it runs (rubocop's `sort_by!(&order)`, :itself or a lambda): `x.__send__(sym, *rest)`
+			read := func() parser.Node { return &parser.LocalVariableReadNode{Location: loc, Name: xs} }
+			mk := func(recv parser.Node, name string, args ...parser.Node) *parser.CallNode {
+				c := &parser.CallNode{Location: loc, Receiver: recv, Name: name}
+				if len(args) > 0 {
+					c.Arguments = &parser.ArgumentsNode{Location: loc, Arguments: args}
+				}
+				return c
+			}
+			rest := &parser.SplatNode{Location: loc, Expression: mk(read(), "drop", &parser.IntegerNode{Location: parser.Location{StartOffset: loc.StartOffset}, Value: 1})}
+			body = &parser.IfNode{Location: loc, Predicate: mk(ba.Expression, "is_a?", &parser.ConstantReadNode{Location: loc, Name: "Symbol"}),
+				Statements: &parser.StatementsNode{Location: loc, Body: []parser.Node{mk(mk(read(), "first"), "__send__", ba.Expression, rest)}},
+				Subsequent: &parser.ElseNode{Location: loc, Statements: &parser.StatementsNode{Location: loc, Body: []parser.Node{call}}}}
+		}
 		return &parser.BlockNode{
 			Location:   loc,
 			Locals:     []string{xs},
 			Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Rest: &parser.RestParameterNode{Location: loc, Name: &xs}}},
-			Body:       &parser.StatementsNode{Location: loc, Body: []parser.Node{call}},
+			Body:       &parser.StatementsNode{Location: loc, Body: []parser.Node{body}},
 		}
 	}
 	ft, ok := pt.(TFunc)
@@ -521,4 +545,10 @@ func derefCode(p string) string {
 		return inner[:len(inner)-1]
 	}
 	return "(*" + p + ")"
+}
+
+// isLocalRead reports whether n reads a local variable.
+func (f *fctx) isLocalRead(n parser.Node) bool {
+	_, ok := n.(*parser.LocalVariableReadNode)
+	return ok
 }
