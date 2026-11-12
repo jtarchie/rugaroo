@@ -278,7 +278,9 @@ var blockValueTaken = map[string]bool{"map": true, "collect": true, "flat_map": 
 	"none?": true, "one?": true, "inject": true, "reduce": true, "to_h": true, "uniq": true, "take_while": true,
 	"drop_while": true, "new": true, "fetch": true, "map!": true, "collect!": true, "select!": true, "reject!": true,
 	"keep_if": true, "delete_if": true, "sort": true, "min": true, "max": true, "sum_by": true, "then": true, "yield_self": true,
-	"fill": true, "sub": true, "gsub": true}
+	"fill": true, "sub": true, "gsub": true, "bsearch": true, "bsearch_index": true, "index": true, "rindex": true, "find_all": true,
+	"each_with_object": false, "minmax_by": true, "chunk_while": true, "slice_when": true, "sort!": true, "sort_by!": true, "uniq!": true, "tally_by": true,
+	"filter!": true, "transform_values": true, "transform_keys": true, "merge": true, "merge!": true, "update": true, "match": true}
 
 // callValueUsed reports a call named name (with a block, if withBlock) somewhere in the program's own files whose value is used
 // (not a statement of its own; a def's or block's last statement counts as used): only then is a def's tail yield or
