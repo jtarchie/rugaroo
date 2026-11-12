@@ -1453,6 +1453,10 @@ func rbRangeSlice(a any, n Integer) (*Tuple2[Integer, Integer], bool) {
 		return Range___Slice[Integer](r, n), true
 	case *Range[rbOpt[Integer]]:
 		return Range___Slice[rbOpt[Integer]](r, n), true
+	case *Range[any]: // a gem's `lines[0...(tok.line - 1)]` with an untyped bound (rubocop's FrozenStringLiteral; decision 444)
+		if x, ok := (*Range[Integer])(nil).rbFrom(r); ok {
+			return Range___Slice[Integer](x, n), true
+		}
 	}
 	return nil, false
 }
@@ -1464,6 +1468,10 @@ func rbRangeSpan(a any, n Integer) (*Tuple2[Integer, Integer], bool) {
 		return Range___Span[Integer](r, n), true
 	case *Range[rbOpt[Integer]]:
 		return Range___Span[rbOpt[Integer]](r, n), true
+	case *Range[any]: // a gem's `lines[0...(tok.line - 1)]` with an untyped bound (rubocop's FrozenStringLiteral; decision 444)
+		if x, ok := (*Range[Integer])(nil).rbFrom(r); ok {
+			return Range___Span[Integer](x, n), true
+		}
 	}
 	return nil, false
 }
