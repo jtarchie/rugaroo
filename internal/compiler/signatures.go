@@ -24,6 +24,22 @@ func (c *Compiler) markCalleeDefaults() {
 			}
 		}
 	}
+	for _, cls := range c.classList { // an override whose literal default is another than its ancestor's: the call site would fill the ancestor's (decision 444)
+		if cls.universal {
+			continue
+		}
+		for _, anc := range cls.allAncestors() {
+			if anc.universal {
+				continue
+			}
+			for name, m := range cls.Methods {
+				if a := anc.Methods[name]; a != nil && m.Kind == kindDef && a.Kind == kindDef && !names[name] && otherDefaults(m, a) {
+					m.calleeDefaults, a.calleeDefaults = true, true
+					names[name] = true
+				}
+			}
+		}
+	}
 	for changed := len(names) > 0; changed; {
 		changed = false
 		for _, cls := range c.classList {
@@ -47,6 +63,25 @@ func (c *Compiler) markCalleeDefaults() {
 			m.calleeDefaults = init.M.calleeDefaults
 		}
 	}
+}
+
+// otherDefaults reports two user or gem defs of one name whose optional parameters, by position, spell different defaults.
+func otherDefaults(m, a *Method) bool {
+	if m.Node == nil || a.Node == nil || m.Node.Parameters == nil || a.Node.Parameters == nil || m.File == nil || a.File == nil || m.File.isPrelude() || a.File.isPrelude() {
+		return false
+	}
+	mo, ao := m.Node.Parameters.Optionals, a.Node.Parameters.Optionals
+	if len(mo) != len(ao) || len(m.Node.Parameters.Requireds) != len(a.Node.Parameters.Requireds) {
+		return false
+	}
+	for i := range mo {
+		x, ok1 := mo[i].(*parser.OptionalParameterNode)
+		y, ok2 := ao[i].(*parser.OptionalParameterNode)
+		if ok1 && ok2 && m.File.text(x.Value.GetLocation()) != a.File.text(y.Value.GetLocation()) {
+			return true
+		}
+	}
+	return false
 }
 
 // scopedDefault reports whether some default of m is not a plain literal.
@@ -545,6 +580,30 @@ func (c *Compiler) inheritSignature(m *Method) bool {
 	m.TypeParams = e.M.TypeParams
 	for _, p := range e.M.Params {
 		m.Params = append(m.Params, Param{Name: p.Name, Type: subst(p.Type, e.Env), Default: p.Default, Rest: p.Rest, Keyword: p.Keyword, KwRest: p.KwRest, Post: p.Post, Want: subst(p.Want, e.Env), Pending: p.Pending})
+	}
+	if m.Node != nil && m.Node.Parameters != nil {
+		// its own defaults, not the parent's: rubocop-ast's `updated(type = nil, children = nil, properties = {})` over
+		// AST::Node's `properties=nil` reads `properties[:location]` (decision 444)
+		var own []parser.Node
+		for range m.Node.Parameters.Requireds {
+			own = append(own, nil)
+		}
+		for _, o := range m.Node.Parameters.Optionals {
+			if op, ok := o.(*parser.OptionalParameterNode); ok {
+				own = append(own, op.Value)
+			} else {
+				own = append(own, nil)
+			}
+		}
+		i := 0
+		for k := range m.Params {
+			if p := &m.Params[k]; !p.Rest && !p.Keyword && !p.KwRest {
+				if i < len(own) && own[i] != nil && p.Default != nil {
+					p.Default = own[i]
+				}
+				i++
+			}
+		}
 	}
 	if e.M.Block != nil && !c.ignoresOwnBlock(m) {
 		// all of the parent's block: a dropped Rest made concurrent-ruby's ThenPromise#initialize take one value of the
