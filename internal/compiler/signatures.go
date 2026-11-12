@@ -18,7 +18,7 @@ func (c *Compiler) markCalleeDefaults() {
 	}
 	for _, cls := range c.classList {
 		for _, m := range cls.MethodList {
-			if !cls.universal && m.Kind == kindDef && scopedDefault(m) {
+			if !cls.universal && (m.Kind == kindDef && scopedDefault(m) || protoOptShape(m)) {
 				m.calleeDefaults = true
 				names[m.Name] = true
 			}
@@ -1031,4 +1031,14 @@ func (c *Compiler) awaitsParams(m *Method, ret Type) bool {
 	return c.round && isAny(ret) && slices.ContainsFunc(m.Params, func(p Param) bool {
 		return p.Pending != "" && isAny(p.Type) && (c.infer == nil || !c.infer.none[p.Pending])
 	})
+}
+
+// protoOptShape reports a program's to_s or inspect that takes only optional parameters (the ast gem's
+// `inspect(indent = 0)`, `alias to_s to_sexp`): the runtime's string conversion asserts a method of no arguments, so
+// the class answers that through an adapter and its own method fills its defaults itself (decision 444).
+func protoOptShape(m *Method) bool {
+	if m.Name != "to_s" && m.Name != "inspect" || m.File == nil || m.File.isPrelude() || len(m.Params) == 0 || m.Block != nil || m.generic() {
+		return false
+	}
+	return !slices.ContainsFunc(m.Params, func(p Param) bool { return p.Default == nil || p.Rest || p.Keyword || p.KwRest })
 }

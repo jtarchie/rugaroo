@@ -60,6 +60,9 @@ func (c *Compiler) link(ctx context.Context) {
 			} else if c.restEachOfEnumerable(cls, m) {
 				m.seqRest = true
 				m.GoName += "_rest"
+			} else if protoOptShape(m) {
+				m.protoOpt = true
+				m.GoName += "_opt"
 			}
 		}
 	}

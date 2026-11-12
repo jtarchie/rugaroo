@@ -6981,9 +6981,27 @@ module ObjectTests
     include NestStyled
   end
 
+  class NestSexp
+    #: (String) -> void
+    def initialize(name) = @name = name
+
+    #: (?Integer) -> String
+    def to_sexp(indent = 0) = "#{'  ' * indent}(#{@name})"
+
+    alias to_s to_sexp
+
+    #: (?Integer) -> String
+    def inspect(indent = 0) = "s(#{@name})"
+  end
+
   class NestedModuleOverrideTest < Minitest::Test
     def test_nearer_module_wins
       assert_equal([:keyword, :plain], [NestCopA.new.nest_style, NestCopB.new.nest_style])
+    end
+
+    def test_to_s_with_an_optional_argument
+      n = NestSexp.new("x")
+      assert_equal(["(x)", "  (x)", "(x)", "s(x)", "[s(x)]"], [n.to_s, n.to_s(1), "#{n}", n.inspect, [n].inspect])
     end
 
     def test_module_spaceship

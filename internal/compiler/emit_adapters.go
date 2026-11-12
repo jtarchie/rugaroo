@@ -51,6 +51,16 @@ func (c *Compiler) emitForwarders(cls *Class) {
 	}
 	c.emitBridges(cls, recv)
 	for _, e := range c.publicEntries(cls) {
+		if e.M.protoOpt { // `ToS() String` for the runtime: the method with every default left to it
+			env := c.forwarderEnv(cls, e)
+			args := []string{"self", "0"}
+			for _, p := range e.M.Params {
+				args = append(args, "*new("+c.goType(subst(p.Type, env))+")")
+			}
+			call := freeFuncName(e.M) + c.forwardTypeArgs(e, cls) + "(" + strings.Join(args, ", ") + ")"
+			c.w("func (self %s) %s() String { return rbAs[String](any(%s), \"String\") }\n", recv, strings.TrimSuffix(e.M.GoName, "_opt"), call)
+			continue
+		}
 		if e.M.seqRest {
 			env := c.forwarderEnv(cls, e)
 			name, ps, ret := c.seqAdapterSig(e.M, env)

@@ -33,6 +33,7 @@ require "fwdish"
 require "findish"
 require "bufish"
 require "cmpish"
+require "sexpish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -162,3 +163,5 @@ Bufish.demo.each { |v| p v }
 # enum_for(__method__, named: named), a Range through an untyped `[]`, Array#<=> answering nil for classes that do not
 # compare, a break in a block whose call is assigned (decision 444)
 Cmpish.demo.each { |v| p v }
+# a to_s (an alias) and an inspect that take an optional argument are the object's string forms (decision 444)
+Sexpish.demo.each { |v| p v }

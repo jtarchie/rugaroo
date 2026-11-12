@@ -196,6 +196,7 @@ type Method struct {
 	Ret         Type
 	Iterator    bool   // block returns void → iter.Seq
 	seqAdapter  bool   // a closure overriding an iterator: GoName gains _blk, an iter.Seq adapter keeps the name
+	protoOpt    bool   // a to_s or inspect whose parameters are all optional (ast's `inspect(indent=0)`): GoName gains _opt, a no-argument adapter keeps the name the runtime asserts
 	seqRest     bool   // an iterator `each(*args)` under Enumerable: GoName gains _rest, a no-argument iter.Seq adapter keeps the name
 	shadowed    []slot // ancestors' interface slots this override's signature differs from, nearest first; adapters answer them
 	BlockParam  string // name of an explicit &block parameter
