@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -624,13 +623,9 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 	if c.round || c.infer == nil || c.inDryRun || f.discover || f.probeDepth > 0 || !f.lenient() {
 		return
 	}
-	if os.Getenv("RUGAROO_BET_DEBUG") != "" && isAny(a.typ) && !isAny(p.Type) && f.c.goType(p.Type) != "any" {
-		fmt.Fprintf(os.Stderr, "bet %v %s\n", p.Pending, p.Type)
-	}
 	pc, ok := stripOpt(p.Type).(TClass)
 	ac, ok2 := stripOpt(a.typ).(TClass)
-	if ok && ok2 && pc.C != ac.C && !pc.C.IsModule && !pc.C.universal && !ac.C.IsModule && !ac.C.isSubclassOf(pc.C) && !pc.C.isSubclassOf(ac.C) &&
-		!c.isNumericMod(pc.C) && !c.isNumericMod(ac.C) && !isNumeric(p.Type) && !isNumeric(a.typ) && pc.C.GoType != "" && ac.C.GoType != "" {
+	if ok && ok2 && c.otherCoreClass(pc, ac) {
 		// a core value of another class than the rounds typed the parameter (rubocop-ast's `ProcessedSource#[](*args)`, typed
 		// Integer by its other callers, given a Range): the call would raise TypeError where MRI runs, so the parameter is
 		// untyped and the final pass runs again
@@ -654,4 +649,12 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 		t = TOpt{Elem: ac}
 	}
 	c.widenPending[p.Pending] = t
+}
+
+// otherCoreClass reports two unrelated core value classes (Integer and Range), neither a module nor a number.
+func (c *Compiler) otherCoreClass(p, a TClass) bool {
+	core := func(t TClass) bool {
+		return !t.C.IsModule && !t.C.universal && !c.isNumericMod(t.C) && !isNumeric(t) && t.C.GoType != ""
+	}
+	return p.C != a.C && core(p) && core(a) && !a.C.isSubclassOf(p.C) && !p.C.isSubclassOf(a.C)
 }

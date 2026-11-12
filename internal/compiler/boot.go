@@ -103,7 +103,7 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 	entry := sourceName(sources[0])
 	_, statErr := os.Stat(entry)
 	if statErr != nil {
-		return sources, nil, nil, nil //nolint:nilerr // no file on disk (the playground): nothing to boot
+		return sources, nil, nil, nil // no file on disk (the playground): nothing to boot
 	}
 	m, err := boot.Capture(ctx, entry, loadPath...)
 	if err != nil {

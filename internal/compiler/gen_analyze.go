@@ -2,12 +2,9 @@ package compiler
 
 import (
 	"cmp"
-	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
 )
@@ -196,12 +193,7 @@ func (f *fctx) analyze(fresh func(), run func(int)) {
 			kept = maps.Clone(set)
 			return true
 		}
-		t0 := time.Now()
-		seeded := f.seededLocals(order, trySet)
-		ok := seeded || salvage(order, trySet)
-		if d := time.Since(t0); d > 2*time.Second && os.Getenv("RUGAROO_REFINE_DEBUG") != "" && f.m != nil {
-			fmt.Fprintf(os.Stderr, "analyze slow: %s#%s %d locals seeded=%t ok=%t %v\n", f.m.Owner.RubyName, f.m.Name, len(order), seeded, ok, d)
-		}
+		ok := f.seededLocals(order, trySet) || salvage(order, trySet)
 		f.noteLocalSeed(order, ok, kept)
 		if proofErr != nil { // `rows = ["a"]; rows.each { |r| r << "x" }`: Array[untyped] compiled a `<<` that raised NoMethodError
 			panic(*proofErr)

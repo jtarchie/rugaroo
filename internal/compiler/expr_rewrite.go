@@ -472,33 +472,10 @@ func (f *fctx) eachEdit(n *parser.CallNode) *parser.CallNode {
 	if !ok || !isStmts {
 		return nil
 	}
-	edits, leaves := false, false
-	walkNode(b.Body, func(x parser.Node) (bool, bool) {
-		switch x := x.(type) {
-		case *parser.NextNode, *parser.BreakNode, *parser.ReturnNode, *parser.RedoNode:
-			leaves = true
-		case *parser.CallNode:
-			if r, ok := x.Receiver.(*parser.LocalVariableReadNode); ok && r.Name == p.Name && x.Name != "!" && x.Name != "!=" &&
-				(strings.HasSuffix(x.Name, "!") || strAppendNames[x.Name] || x.Name == "replace" || x.Name == "clear" || x.Name == "[]=") {
-				edits = true
-			}
-		}
-		return false, true
-	})
-	if !edits || leaves {
+	if !editsParamInPlace(b.Body, p.Name) {
 		return nil
 	}
-	rt := stripOpt(f.probeType(recv, nil))
-	if t, ok := rt.(TClass); !f.heldAsAny(rt) && (!ok || t.C.RubyName != "Array" || len(t.Args) != 1 || !isClass(t.Args[0], "String") && !isAny(t.Args[0])) {
-		return nil
-	}
-	var pt Type
-	f.probe(func() {
-		_ = catchCompileError(func() {
-			pt = f.genExpr(&parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "first"}, nil).typ
-		})
-	})
-	if pt == nil || !f.heldAsAny(stripOpt(pt)) && !isClass(stripOpt(pt), "String") {
+	if !f.stringElements(n) {
 		return nil
 	}
 	loc, i := b.Location, "rb_i_"
@@ -511,4 +488,39 @@ func (f *fctx) eachEdit(n *parser.CallNode) *parser.CallNode {
 		Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: i}}}},
 		Body:       &parser.StatementsNode{Location: st.Location, Body: body}}
 	return &parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "each_index", MessageLoc: n.MessageLoc, Block: blk}
+}
+
+// editsParamInPlace reports a block body that edits its parameter name in place (`line.chomp!`, `s << x`) and never
+// leaves early (next, break, return, redo).
+func editsParamInPlace(body parser.Node, name string) bool {
+	edits, leaves := false, false
+	walkNode(body, func(x parser.Node) (bool, bool) {
+		switch x := x.(type) {
+		case *parser.NextNode, *parser.BreakNode, *parser.ReturnNode, *parser.RedoNode:
+			leaves = true
+		case *parser.CallNode:
+			if r, ok := x.Receiver.(*parser.LocalVariableReadNode); ok && r.Name == name && x.Name != "!" && x.Name != "!=" &&
+				(strings.HasSuffix(x.Name, "!") || strAppendNames[x.Name] || x.Name == "replace" || x.Name == "clear" || x.Name == "[]=") {
+				edits = true
+			}
+		}
+		return false, true
+	})
+	return edits && !leaves
+}
+
+// stringElements reports n's receiver an Array whose elements are Strings, or untyped ones, as far as the compiler knows.
+func (f *fctx) stringElements(n *parser.CallNode) bool {
+	recv := n.Receiver
+	rt := stripOpt(f.probeType(recv, nil))
+	if t, ok := rt.(TClass); !f.heldAsAny(rt) && (!ok || t.C.RubyName != "Array" || len(t.Args) != 1 || !isClass(t.Args[0], "String") && !isAny(t.Args[0])) {
+		return false
+	}
+	var pt Type
+	f.probe(func() {
+		_ = catchCompileError(func() {
+			pt = f.genExpr(&parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "first"}, nil).typ
+		})
+	})
+	return pt != nil && (f.heldAsAny(stripOpt(pt)) || isClass(stripOpt(pt), "String"))
 }
