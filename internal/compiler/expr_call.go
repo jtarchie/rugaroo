@@ -115,6 +115,15 @@ func (f *fctx) genKernelCall(n *parser.CallNode, expected Type) (expr, bool) {
 	if n.Receiver == nil {
 		return f.genKernelIntrinsic(n, expected)
 	}
+	if args := callArgs(n); isTopConst(n.Receiver, "Kernel") && n.Name == "methods" && len(args) == 1 && n.Block == nil {
+		if _, no := args[0].(*parser.FalseNode); no { // `Kernel.methods(false)` (rubocop's KERNEL_METHODS): its module functions, MRI's list in MRI's order (decision 444)
+			elems := make([]string, len(kernelMethodsMRI))
+			for i, name := range kernelMethodsMRI {
+				elems[i] = "Symbol(" + strconv.Quote(name) + ")"
+			}
+			return expr{code: arrayLit("Symbol", elems), typ: TClass{C: f.c.classes["Array"], Args: []Type{f.cls("Symbol")}}}, true
+		}
+	}
 	runtimeRequire := n.Name == "require" && f.c.methodRequiresRuntime && !f.f.isPrelude() // `Kernel.require path` (decision 246)
 	if !isTopConst(n.Receiver, "Kernel") || !kernelModuleNames[n.Name] && !runtimeRequire || n.Name == "require" && !runtimeRequire || n.Name == "require_relative" {
 		return expr{}, false
@@ -576,6 +585,16 @@ func (f *fctx) dispatch(n parser.Node, recv expr, name string, args []parser.Nod
 		}
 		return f.universalCall(n, recv, name, args, block)
 	case TAny, TNil:
+		if isNil(recv.typ) && name == "methods" && len(args) == 0 && block == nil {
+			// `nil.methods` (rubocop's NIL_METHODS, which its cops compare method names against): MRI's list in MRI's
+			// order; rugaroo's NilClass defines other names (decision 444)
+			elems := make([]string, len(nilMethodsMRI))
+			for i, m := range nilMethodsMRI {
+				elems[i] = "Symbol(" + strconv.Quote(m) + ")"
+			}
+			f.discard(recv)
+			return expr{code: arrayLit("Symbol", elems), typ: TClass{C: f.c.classes["Array"], Args: []Type{f.cls("Symbol")}}}
+		}
 		return f.universalCall(n, recv, name, args, block)
 	case TVoid: // a void call's value is nil, as in Ruby: run it, then call on nil (`log(x).nil?`)
 		return f.universalCall(n, f.voidAsNil(recv), name, args, block)
@@ -930,3 +949,11 @@ func (f *fctx) genAllocate(n parser.Node, recv expr, name string, args []parser.
 	f.emit("_ = %s", recv.code)
 	return expr{code: "(&" + meta.metaOf.Name + "{})", typ: TClass{C: meta.metaOf}}, true
 }
+
+// kernelMethodsMRI is `Kernel.methods(false)` on the MRI release .mri-version names; regenerate with
+// `ruby -e 'print Kernel.methods(false).join(" ")'` on a Ruby upgrade.
+var kernelMethodsMRI = strings.Fields("sleep trap Integer load require require_relative autoload autoload? syscall open printf print putc puts readline sprintf format String Array Hash binding readlines p Float local_variables Rational loop Complex warn gets exec exit! proc lambda caller caller_locations raise fail global_variables __method__ __callee__ __dir__ system test abort spawn eval iterator? block_given? catch throw set_trace_func fork Pathname exit ` select trace_var untrace_var at_exit rand srand")
+
+// nilMethodsMRI is `nil.methods` on the MRI release .mri-version names; regenerate with
+// `ruby -e 'print nil.methods.join(" ")'` on a Ruby upgrade.
+var nilMethodsMRI = strings.Fields("to_h to_c & === =~ inspect rationalize to_a to_s to_i to_f to_r nil? | ^ enum_for singleton_class dup itself methods singleton_methods protected_methods private_methods public_methods instance_variables instance_variable_get instance_variable_set instance_variable_defined? remove_instance_variable instance_of? kind_of? is_a? display class frozen? then yield_self public_send extend clone <=> !~ eql? respond_to? method public_method singleton_method hash freeze object_id define_singleton_method send tap to_enum ! equal? __send__ == != __id__ instance_exec instance_eval")
