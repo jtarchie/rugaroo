@@ -115,7 +115,20 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 	}
 	out := sources
 	for _, a := range m.Autoloads {
-		if !a.Resolved || a.Loaded == "" || !strings.HasSuffix(a.Loaded, ".rb") {
+		if !a.Resolved && a.Loaded == "" {
+			// registered and never loaded by this run: offered, and compiled only when a compiled file names its constant
+			// (neededAutoloads; rubocop's AnnotationComment, which a file with no comment never loads; decision 444)
+			if p := lazyAutoloadPath(a.Path, m.LoadPath); p != "" && !seen[realPath(p)] {
+				a.Loaded = p
+				if m.Lazy == nil {
+					m.Lazy = map[string]bool{}
+				}
+				m.Lazy[realPath(p)] = true
+			}
+		} else if !a.Resolved {
+			continue
+		}
+		if a.Loaded == "" || !strings.HasSuffix(a.Loaded, ".rb") {
 			continue
 		}
 		if _, ok := consts[realPath(a.Loaded)]; ok { // one file under several autoloads (prism's visitor.rb: BasicVisitor, Visitor)
@@ -142,6 +155,29 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 	return out, consts, m, nil
 }
 
+// lazyAutoloadPath is the file an autoload's path names: absolute, or found on boot's load path; "" when none is.
+func lazyAutoloadPath(path string, loadPath []string) string {
+	if path == "" {
+		return ""
+	}
+	if filepath.Ext(path) != ".rb" {
+		path += ".rb"
+	}
+	if filepath.IsAbs(path) {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path
+		}
+		return ""
+	}
+	for _, dir := range loadPath {
+		p := filepath.Join(dir, path)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
 // neededAutoloads keeps the boot-resolved autoload files whose constant another program file names (decision 175); the rest are marked loaded, so never compiled.
 func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]string) map[string]bool {
 	if len(consts) == 0 {
@@ -150,6 +186,7 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 	// named: every kept file's constants; optNamed: those a file outside the bundled gem names, which alone load an optional
 	// autoload (prism's Translation needs the parser gem: lex_compat.rb's or ripper's mention is not enough)
 	named, optNamed := map[string]bool{}, map[string]bool{}
+	c.constNamed = map[string]bool{}
 	note := func(f *File) { c.noteNamedConsts(f, named, optNamed) }
 	for path, f := range c.parsed {
 		if _, ok := consts[path]; !ok {
@@ -164,6 +201,9 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 			by := named
 			if c.bundledOptional(path) {
 				by = optNamed
+			}
+			if c.lazyAutoloads[path] { // never loaded by boot: a constant reference keeps it, a Symbol (register_cop :Name) does not
+				by = c.constNamed
 			}
 			if !needed[path] && slices.ContainsFunc(ks, func(k string) bool { return by[k] }) && c.parsed[path] != nil {
 				needed[path], changed = true, true
@@ -191,8 +231,10 @@ func (c *Compiler) noteNamedConsts(f *File, named, optNamed map[string]bool) {
 		switch n := n.(type) {
 		case *parser.ConstantReadNode:
 			mark(n.Name)
+			c.constNamed[n.Name] = true
 		case *parser.ConstantPathNode:
 			mark(*n.Name)
+			c.constNamed[*n.Name] = true
 		case *parser.StringNode: // a constant's name as a String, for const_get (rubocop's formatter table: '[p]rogress' => 'ProgressFormatter'; decision 444)
 			if v := n.Unescaped.Value; v != "" && v[0] >= 'A' && v[0] <= 'Z' && isIdentMethod(v) {
 				mark(v)

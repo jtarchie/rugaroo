@@ -104,6 +104,8 @@ type Compiler struct {
 	sigs                  map[string]*rbs.ClassDecl // .rbs signatures by qualified class name (decision 160)
 	gemSigs               fs.FS                     // vendored gem `.rbs` signatures (decision 160), or nil
 	autoloaded            map[string]bool           // boot-resolved autoload files: loaded where their autoload registers (decision 175)
+	lazyAutoloads         map[string]bool           // autoload files boot registered and never loaded (decision 444)
+	constNamed            map[string]bool           // names the kept files read as constants (neededAutoloads)
 	pruneGems             bool                      // a gem program: unreached gem methods are dropped (decision 169)
 	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
 	gemNilIvars           []gemNilIvar              // gem ivars discovery saw only nil assigned to (decision 169)
@@ -592,6 +594,9 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		return nil, perr
 	}
 	c.parsed = parsed
+	if opts.boot != nil {
+		c.lazyAutoloads = opts.boot.Lazy
+	}
 	c.autoloaded = c.neededAutoloads(ctx, c.bundledAutoloads(ctx, opts.autoloaded))
 	var dms []boot.MethodInfo
 	if opts.boot != nil {

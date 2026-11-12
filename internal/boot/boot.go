@@ -41,6 +41,7 @@ type Manifest struct {
 	ConstClasses   map[string]string       `json:"const_classes"` // a constant naming a class under another name (decision 203)
 	Delegators     map[string][]string     `json:"delegators"`    // def_delegators' method names by "path:line" (decision 204)
 	Structs        map[string][]StructProp `json:"structs"`       // each T::Struct's props after load (decision 241)
+	Lazy           map[string]bool         `json:"-"`             // real paths of autoload files boot registered but never loaded, offered to the compiler (decision 444)
 }
 
 // Loc is a file and 1-based line; records embed it so "file"/"line" stay flat JSON keys, and bare "path:line" strings go through String/ParseLoc.

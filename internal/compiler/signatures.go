@@ -436,6 +436,13 @@ func (c *Compiler) inferRet(m *Method) {
 			m.retWhy += ": " + why
 		}
 	}
+	if tv, ok := ret.(TVar); ok && tv.Name == "Self" && c.gemFile(m.File) && m.Owner != nil && !m.Owner.IsModule && m.Owner.isStruct() &&
+		len(m.Owner.TypeParams) == 0 && m.inherited == nil && m.Owner.descendantDefines(m.Name, true) {
+		// a gem method answering self or a copy that a subclass overrides: the override may answer another class
+		// (rubocop-ast's Node#updated builds the node class its new type names), so callers get the declaring class, not
+		// the receiver's own (decision 444)
+		ret = TClass{C: m.Owner}
+	}
 	m.Ret = ret
 	m.roundRet = c.awaitsParams(m, ret)
 }
