@@ -299,6 +299,13 @@ func (c *Compiler) publicGemOverrides() {
 					m.Private = false
 					break
 				}
+				if pm := a.Methods[m.Name]; pm != nil && pm.Kind == kindDef && a.IsModule && !a.universal && pm.File != nil && c.gemFile(pm.File) {
+					// both private, and the module's own methods call it on self (rubocop's Alignment#register_offense(node,
+					// message_node) under RedundantLineBreak's register_offense(node)): the includer answers the module's
+					// slot through an adapter, which needs both in the interface (decision 444)
+					m.Private, pm.Private = false, false
+					break
+				}
 			}
 		}
 	}

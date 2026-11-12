@@ -499,7 +499,12 @@ func (c *Compiler) copyIncluderTemplates() {
 			// module keeps its own beside the other includers' copies (decision 444)
 			supered := slices.ContainsFunc(incs, func(cls *Class) bool {
 				own := cls.Methods[mm.Name]
-				return own != nil && own.Node != nil && containsSuper(own.Node.Body)
+				if own == nil || own.Node == nil {
+					return false
+				}
+				// or overrides it with another parameter count (rubocop's RedundantLineBreak#register_offense(node) under
+				// Alignment's (node, message_node)): the module's stays, as the slot the includer's adapter answers
+				return containsSuper(own.Node.Body) || paramCount(own.Node) != paramCount(mm.Node)
 			})
 			for _, cls := range incs {
 				if cls.Methods[mm.Name] != nil {
@@ -547,4 +552,12 @@ func callsIncluderOnly(m *Method, mod, obj *Class, incs []*Class, top map[string
 	}
 	walk(m.Node.Body)
 	return found && !blocked
+}
+
+// paramCount is how many positional parameters a def writes.
+func paramCount(n *parser.DefNode) int {
+	if n == nil || n.Parameters == nil {
+		return 0
+	}
+	return len(n.Parameters.Requireds) + len(n.Parameters.Optionals) + len(n.Parameters.Posts)
 }
