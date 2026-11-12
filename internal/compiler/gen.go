@@ -41,10 +41,11 @@ type fctx struct {
 	lex              []*Class // lexical scope for constant lookup
 	selfType         Type
 	selfCode         string
-	selfClassObj     bool   // self is exactly a class constant (a class body)
-	argcPass         string // set while an adapter forwards its slot's arguments: the rbArgc to pass on
-	iterAsValue      bool   // inside callEntry's statement form of a gem iterator used as a value: no second try
-	missingCalls     int    // receiverless calls compiled to self's method_missing, so far: a DSL block that needs them is rebound (blockArg)
+	selfClassObj     bool     // self is exactly a class constant (a class body)
+	argcPass         string   // set while an adapter forwards its slot's arguments: the rbArgc to pass on
+	iterAsValue      bool     // inside callEntry's statement form of a gem iterator used as a value: no second try
+	selfInit         []string // gem locals whose assignment is being generated: a read of one not yet declared is nil
+	missingCalls     int      // receiverless calls compiled to self's method_missing, so far: a DSL block that needs them is rebound (blockArg)
 	ret              Type
 	iterator         bool
 	lastMatch        string // the Go variable of the frame's last match, when the body reads $~ or $1..$9 (decision 171)

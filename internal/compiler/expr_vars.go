@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -571,6 +572,9 @@ func (f *fctx) blockParamValue(n parser.Node) expr {
 func (f *fctx) genLocalRead(n *parser.LocalVariableReadNode) expr {
 	if f.isBlockParam(n) && f.m != nil && f.m.Block != nil && !f.m.Block.Optional && !f.m.Iterator {
 		return f.blockParamValue(n)
+	}
+	if slices.Contains(f.selfInit, n.Name) && f.visibleLocal(n.Name) == nil && f.sameScopeLocal(n.Name) == nil {
+		return expr{code: "nil", typ: TNil{}, lit: true}
 	}
 	v := f.readLocal(n)
 	out := expr{code: v.goName, typ: v.typ, view: v.view}

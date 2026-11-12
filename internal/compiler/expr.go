@@ -133,6 +133,10 @@ func (f *fctx) genExpr0(n parser.Node, expected Type) expr {
 }
 
 func (f *fctx) genLocalWrite(n *parser.LocalVariableWriteNode) expr {
+	if f.lenient() { // `lookahead = extend(lookahead)` as the local's first assignment: the read is nil, as Ruby defines the local at its `=` (parser's lexer-strings; decision 444)
+		f.selfInit = append(f.selfInit, n.Name)
+		defer func() { f.selfInit = f.selfInit[:len(f.selfInit)-1] }()
+	}
 	var ann Type
 	if t := f.f.trailingAnnotation(n); t != "" {
 		ann = f.parseTypeAnn(n, t)
