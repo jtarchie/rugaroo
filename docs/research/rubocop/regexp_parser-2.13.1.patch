@@ -1,6 +1,6 @@
 diff -ru a/lib/regexp_parser/expression/quantifier.rb b/lib/regexp_parser/expression/quantifier.rb
---- a/lib/regexp_parser/expression/quantifier.rb	2026-11-12 08:34:18
-+++ b/lib/regexp_parser/expression/quantifier.rb	2026-11-12 08:34:18
+--- a/lib/regexp_parser/expression/quantifier.rb	2026-11-12 09:21:05
++++ b/lib/regexp_parser/expression/quantifier.rb	2026-11-12 09:21:05
 @@ -35,7 +35,7 @@
          end
        RUBY
@@ -11,8 +11,8 @@ diff -ru a/lib/regexp_parser/expression/quantifier.rb b/lib/regexp_parser/expres
      def min
        derived_data[:min]
 diff -ru a/lib/regexp_parser/token.rb b/lib/regexp_parser/token.rb
---- a/lib/regexp_parser/token.rb	2026-11-12 08:34:18
-+++ b/lib/regexp_parser/token.rb	2026-11-12 08:34:18
+--- a/lib/regexp_parser/token.rb	2026-11-12 09:21:05
++++ b/lib/regexp_parser/token.rb	2026-11-12 09:21:05
 @@ -12,7 +12,7 @@
      conditional_level
    ].freeze

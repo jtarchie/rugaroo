@@ -1,6 +1,6 @@
 diff -ru a/lib/rubocop/ast/node/casgn_node.rb b/lib/rubocop/ast/node/casgn_node.rb
---- a/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 08:34:18
-+++ b/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 08:34:18
+--- a/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 09:21:05
++++ b/lib/rubocop/ast/node/casgn_node.rb	2026-11-12 09:21:05
 @@ -8,8 +8,8 @@
      class CasgnNode < Node
        include ConstantNode
@@ -13,8 +13,8 @@ diff -ru a/lib/rubocop/ast/node/casgn_node.rb b/lib/rubocop/ast/node/casgn_node.
        # The expression being assigned to the variable.
        #
 diff -ru a/lib/rubocop/ast/node/mixin/collection_node.rb b/lib/rubocop/ast/node/mixin/collection_node.rb
---- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 08:34:18
-+++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 08:34:18
+--- a/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 09:21:05
++++ b/lib/rubocop/ast/node/mixin/collection_node.rb	2026-11-12 09:21:05
 @@ -10,7 +10,9 @@
          (Array.instance_methods - Object.instance_methods - [:to_a]).freeze
        private_constant :ARRAY_METHODS
@@ -27,8 +27,8 @@ diff -ru a/lib/rubocop/ast/node/mixin/collection_node.rb b/lib/rubocop/ast/node/
    end
  end
 diff -ru a/lib/rubocop/ast/node_pattern.rb b/lib/rubocop/ast/node_pattern.rb
---- a/lib/rubocop/ast/node_pattern.rb	2026-11-12 08:34:18
-+++ b/lib/rubocop/ast/node_pattern.rb	2026-11-12 08:34:18
+--- a/lib/rubocop/ast/node_pattern.rb	2026-11-12 09:21:05
++++ b/lib/rubocop/ast/node_pattern.rb	2026-11-12 09:21:05
 @@ -36,6 +36,10 @@
          # If the node matches, and no block is provided, the new method will
          # return the captures, or `true` if there were none.
