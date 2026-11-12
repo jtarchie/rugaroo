@@ -24,6 +24,8 @@ require "strapish"
 require "prepish"
 require "shapish"
 require "redish"
+require "nodish"
+require "srcish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -134,3 +136,8 @@ p Shapish::Finder.new(true).targets_any(sh_st), Shapish::Finder.new(false).targe
 rd_a = Redish::Al.new
 rd_nodes = [Redish::Nd.new([Redish::Leaf.new("a"), Redish::Nd.new([])]), Redish::Nd.new([Redish::Leaf.new("q"), Redish::Leaf.new("r")])]
 rd_nodes.each { |n| p rd_a.for_args(n), rd_a.for_args(n) { |r| "!#{r.src}" } }
+# rubocop-ast's shapes (decision 444): a module's override of a method of the module it includes, match(re, pos) with
+# \G, \R, an Enumerator's to_enum, yield(*node), flat_map of a value or an Array, a Set splatted into arguments
+Nodish.demo.each { |v| p v }
+# a Range through `lines[*args]`, Set.new of an untyped list, to_enum(:scan, re).map { Regexp.last_match }, Module#<=>
+Srcish.demo.each { |v| p v }

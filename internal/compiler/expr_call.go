@@ -333,6 +333,18 @@ func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parse
 	if e, ok := f.nilSpaceship(n, recv, name, args, block); ok {
 		return e
 	}
+	if _, lit := block.(*parser.BlockNode); lit && name == "flat_map" && len(args) == 0 && f.lenient() && !f.heldAsAny(recv.typ) {
+		// a gem block that answers an Array or one value, known when it runs (rubocop-ast's MlhsNode#assignments answers a
+		// node or a nested list): the twin appends what is no Array, as MRI does (decision 444)
+		var typed expr
+		var err *compileError
+		f.probe(func() { err = catchCompileError(func() { typed = f.genMethodCall1(n, recv, name, args, block) }) })
+		if tc, ok := typed.typ.(TClass); err != nil || ok && len(tc.Args) == 1 && isAny(tc.Args[0]) {
+			if f.resolve(recv.typ, "__flat_map_untyped") != nil {
+				return f.genMethodCall1(n, recv, "__flat_map_untyped", args, block)
+			}
+		}
+	}
 	return f.genMethodCall1(n, recv, name, args, block)
 }
 

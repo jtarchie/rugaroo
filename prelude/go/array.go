@@ -340,6 +340,8 @@ func rbSplatAny(x any) []any {
 			out = append(out, &Array[any]{s: []any{k, hv}})
 		}
 		return out
+	case Set_Any: // `each_node(*OPERATOR_KEYWORDS)`, a frozen Set constant (decision 444)
+		return Set_ToA(v._ToAny()).s
 	}
 	return []any{x}
 }

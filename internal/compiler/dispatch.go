@@ -95,6 +95,14 @@ func (c *Compiler) moduleDispatchableOwner(owner *Class, m *Method) string {
 	case sigMentions(m, owner) || c.constraintNamesSelf(owner):
 		return "Self in signature or constraint"
 	}
+	for _, anc := range owner.ancestors()[1:] {
+		// a module owner includes self-calls the name, so its constraint declares it and every includer answers it
+		// with a Go method: owner's override of that module's method must be one (rubocop's EndKeywordAlignment
+		// #style_parameter_name under ConfigurableEnforcedStyle#style; decision 444)
+		if anc.IsModule && !anc.universal && c.selfCalls(anc)[m.Name] {
+			return "an included module's constraint declares it"
+		}
+	}
 	return "" // a module that includes owner and calls m on self reaches the dispatcher too (decision 234)
 }
 

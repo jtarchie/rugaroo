@@ -213,6 +213,18 @@ func rbDynKw(args []any, req int) (*Hash[Symbol, any], []any) {
 }
 
 // rbAt is xs[i], or nil past the end: a loose proc call's missing argument (decision 172).
+// rbYieldOne is a splatted yield's values for a block of one Go parameter: the value when there is one, nil for none,
+// else an Array, which a block of several parameters spreads (decision 444).
+func rbYieldOne(xs []any) any {
+	switch len(xs) {
+	case 0:
+		return nil
+	case 1:
+		return xs[0]
+	}
+	return &Array[any]{s: xs}
+}
+
 func rbAt(xs []any, i int) any {
 	if i < len(xs) {
 		return xs[i]

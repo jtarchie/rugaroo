@@ -539,6 +539,23 @@ module Enumerable
     out
   end
 
+  # A block that answers an Array or one value, known when it runs (gem code, decision 444).
+  # @dynamic
+  #: () { (E) -> untyped } -> Array[untyped]
+  def __flat_map_untyped
+    out = [] #: Array[untyped]
+    each do |x|
+      v = yield(x)
+      a = Array.try_convert(v)
+      if a.nil?
+        out << v
+      else
+        out.concat(a)
+      end
+    end
+    out
+  end
+
   #: () { (E) -> bool } -> Integer
   def __count_block
     n = 0

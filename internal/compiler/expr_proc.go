@@ -487,7 +487,7 @@ func (f *fctx) procInvokeLoose(recv expr, t TFunc, args []parser.Node) expr {
 		if sp, ok := a.(*parser.SplatNode); ok {
 			e := f.genExpr(sp.Expression, nil)
 			tmp := f.newTmp()
-			f.emit("%s := rbAs[*Array[any]](%s, \"Array\").s", tmp, f.coerce(sp, e, TAny{}))
+			f.emit("%s := rbSplatObj(%s)", tmp, f.coerce(sp, e, TAny{})) // an object's own to_a spreads (`yield(*pair)`, a Node; decision 444)
 			spread = tmp
 			continue
 		}
@@ -501,6 +501,11 @@ func (f *fctx) procInvokeLoose(recv expr, t TFunc, args []parser.Node) expr {
 	codes := make([]string, len(t.Params))
 	for i, p := range t.Params {
 		codes[i] = fmt.Sprintf("rbAs[%s](rbAt(%s, %d), %q)", f.c.goType(p), all, i, p.String())
+	}
+	if spread != "" && len(t.Params) == 1 && f.c.goType(t.Params[0]) == "any" {
+		// a splat's count is known when it runs, and the block has one Go parameter: several values go as the Array a
+		// block of several parameters spreads (`yield(*pair)` into `|key, value|`; decision 444)
+		codes[0] = "rbYieldOne(" + all + ")"
 	}
 	return expr{code: derefCode(recv.code) + "(" + strings.Join(codes, ", ") + ")", typ: t.Ret}
 }

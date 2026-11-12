@@ -118,6 +118,30 @@ class Module < Object
     return out
   }
 
+  # -1 when other is an ancestor, 1 when a descendant, 0 for itself, nil for an unrelated module or anything else.
+  #: (untyped) -> Integer?
+  def <=>(other) = %x{
+    o, ok := other.(interface{ _Ancestors() []any })
+    t, ok2 := any(self).(interface{ _Ancestors() []any })
+    if !ok || !ok2 {
+      return rbOpt[Integer]{}
+    }
+    if rbIdentical(self, other) {
+      return rbSome(Integer(0))
+    }
+    for _, k := range t._Ancestors() {
+      if rbIdentical(k, other) {
+        return rbSome(Integer(-1))
+      }
+    }
+    for _, k := range o._Ancestors() {
+      if rbIdentical(k, self) {
+        return rbSome(Integer(1))
+      }
+    }
+    return rbOpt[Integer]{}
+  }
+
   #: () -> Array[Module]
   def included_modules = %x{
     out := &Array[ModuleI]{}

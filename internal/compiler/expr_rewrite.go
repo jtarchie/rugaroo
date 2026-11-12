@@ -223,6 +223,7 @@ func (f *fctx) genCallForm(n *parser.CallNode, expected Type) (expr, bool) {
 	}
 	for _, form := range []func() (expr, bool){
 		func() (expr, bool) { return f.genToEnum(n) },
+		func() (expr, bool) { return f.genScanMatches(n, expected) },
 		func() (expr, bool) { return f.genRecvToEnum(n, expected) },
 		func() (expr, bool) { return f.genKernelCall(n, expected) },
 		func() (expr, bool) { return f.genMatchSet(n) },
@@ -413,4 +414,31 @@ func (f *fctx) genFoldOrLower(n *parser.CallNode) (expr, bool) {
 func (f *fctx) frozenFlagConst(n *parser.CallNode) bool {
 	return n.Name == "__frozen_flag?" && n.Receiver == nil && n.Arguments == nil && n.Block == nil && f.m != nil &&
 		!f.c.objFreeze() && slices.Contains(f.m.Owner.allAncestors(), f.c.classes["Struct"])
+}
+
+// genScanMatches is `str.to_enum(:scan, re).map { Regexp.last_match }`, Ruby's idiom for every match's MatchData
+// (rubocop's directive comments): String#__scan_matches, with no Enumerator or $~ between (decision 444).
+func (f *fctx) genScanMatches(n *parser.CallNode, expected Type) (expr, bool) {
+	b, ok := n.Block.(*parser.BlockNode)
+	if !ok || n.Name != "map" && n.Name != "collect" || len(callArgs(n)) != 0 || b.Parameters != nil {
+		return expr{}, false
+	}
+	st, ok := b.Body.(*parser.StatementsNode)
+	if !ok || len(st.Body) != 1 {
+		return expr{}, false
+	}
+	last, ok := st.Body[0].(*parser.CallNode)
+	if !ok || last.Name != "last_match" || len(callArgs(last)) != 0 || !isTopConst(last.Receiver, "Regexp") {
+		return expr{}, false
+	}
+	en, ok := n.Receiver.(*parser.CallNode)
+	if !ok || en.Name != "to_enum" && en.Name != "enum_for" || en.Receiver == nil || en.Block != nil {
+		return expr{}, false
+	}
+	args := callArgs(en)
+	if sym, ok := firstArg(args).(*parser.SymbolNode); !ok || len(args) != 2 || sym.Unescaped.Value != "scan" {
+		return expr{}, false
+	}
+	return f.genExpr(&parser.CallNode{Location: n.Location, Receiver: en.Receiver, Name: "__scan_matches", MessageLoc: n.MessageLoc,
+		Arguments: &parser.ArgumentsNode{Location: en.Arguments.Location, Arguments: args[1:]}}, expected), true
 }

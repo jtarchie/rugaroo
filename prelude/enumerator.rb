@@ -17,6 +17,13 @@ class Enumerator < Object
   #: () { (E) -> void } -> void
   def each = %x{ return func(yield func(E) bool) { self.seq(yield) } }
 
+  # An Enumerator's own enumerator is itself (rubocop-ast's `each_child_node(:pair).to_enum`; decision 444).
+  #: () -> Enumerator[E]
+  def to_enum = self
+
+  #: () -> Enumerator[E]
+  def enum_for = self
+
   #: () -> self
   def __each_enum = self
 

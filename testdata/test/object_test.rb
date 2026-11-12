@@ -6957,4 +6957,37 @@ module ObjectTests
       assert_equal([nil, 6], [f.call(1), f.call(3)])
     end
   end
+  # a module's override of a method of the module it includes, called from that module (decision 444)
+  module NestStyled
+    #: () -> Symbol
+    def nest_style = nest_style_name.to_sym
+
+    #: () -> String
+    def nest_style_name = "plain"
+  end
+
+  module NestAlign
+    include NestStyled
+
+    #: () -> String
+    def nest_style_name = "keyword"
+  end
+
+  class NestCopA
+    include NestAlign
+  end
+
+  class NestCopB
+    include NestStyled
+  end
+
+  class NestedModuleOverrideTest < Minitest::Test
+    def test_nearer_module_wins
+      assert_equal([:keyword, :plain], [NestCopA.new.nest_style, NestCopB.new.nest_style])
+    end
+
+    def test_module_spaceship
+      assert_equal([-1, 1, 0, nil, nil], [IOError <=> StandardError, StandardError <=> IOError, IOError <=> IOError, IOError <=> ArgumentError, IOError <=> 1])
+    end
+  end
 end

@@ -87,7 +87,15 @@ class Regexp < Object
     }
     from := len(string([]rune(str)[:pos]))
     var loc []int
-    if rbValidUTF8(str) {
+    if len(self.src) > 1 && self.src[0] == 92 && self.src[1] == 'G' { // a leading backslash-G is pos itself: the text from there, searched from its start (decision 444)
+      if loc = slices.Clone(rbFindLoc(self, str[from:])); loc != nil {
+        for i := range loc {
+          if loc[i] >= 0 {
+            loc[i] += from
+          }
+        }
+      }
+    } else if rbValidUTF8(str) {
       loc = slices.Clone(rbFindFrom(self, str)(from))
     } else if loc = rbFindLoc(self, str[from:]); loc != nil { // ponytail: a binary subject loses the context before pos
       for i := range loc {
@@ -493,6 +501,9 @@ class String
   #: (Regexp) -> MatchData?
   def match(re) = re.match(self)
 
+  #: (Regexp, Integer) -> MatchData?
+  def __match_2(re, pos) = re.match(self, pos)
+
   # match with a block: the block's value on a match, else nil (decision 444).
   #: [U] (Regexp) { (MatchData) -> U } -> U?
   def __match_block(re)
@@ -599,6 +610,17 @@ class String
 
   #: (Regexp) -> Array[Array[String?]]
   def __scan_groups(re) = %x{ return rbScanGroupLocs(self, rbFindAll(re, string(self), -1)) }
+
+  # Each match's MatchData: `str.to_enum(:scan, re).map { Regexp.last_match }`, which the compiler rewrites (decision 444).
+  #: (Regexp) -> Array[MatchData]
+  def __scan_matches(re) = %x{
+    s := string(self)
+    out := &Array[*MatchData]{}
+    for _, loc := range rbFindAll(re, s, -1) {
+      out.s = append(out.s, rbMatchAt(re, s, loc))
+    }
+    return out
+  }
 
   # MRI's rb_str_split_m (rbSplitLocs). Its searches are the matches of scan, so they come from FindAll.
   #: (Regexp, ?Integer) -> Array[String]

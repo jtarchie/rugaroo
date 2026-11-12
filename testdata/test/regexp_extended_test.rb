@@ -251,5 +251,14 @@ module RegexpExtendedTests
       assert_equal [true, false, 16, "/a/"], [/needle/u.fixed_encoding?, /needle/.fixed_encoding?, /a/u.options, /a/u.inspect]
       assert_equal false, /a/u == /a/
     end
+
+    def test_linebreak_and_match_position
+      assert_equal(["x", "y", "z"], "x\r\ny\nz".split(/\R/))
+      m = "ab cd".match(/\G\s/, 2)
+      assert_equal([" ", 2], [m.to_s, m.begin(0)])
+      assert_nil("ab cd".match(/\G\s/, 1))
+      assert_equal(" ", /\G\s/.match("ab cd", 2).to_s)
+      assert_equal("b", "abc".match(/b/, 1).to_s)
+    end
   end
 end

@@ -199,6 +199,7 @@ func (t *rxTranslator) escape(inClass bool) (string, error) {
 	}
 	_, n := utf8.DecodeRuneInString(t.src[t.i+1:])
 	esc := t.src[t.i : t.i+1+n]
+	escStart := t.i
 	t.i += len(esc)
 	class := func(body string) string {
 		if inClass {
@@ -259,7 +260,20 @@ func (t *rxTranslator) escape(inClass bool) (string, error) {
 		return `(?=\n?\z)`, nil
 	case 'g': // a subexpression call, which regexp2 would read as a literal g (decision 242)
 		return "", errors.New(`\g (a subexpression call) is not supported`)
-	case 'G', 'K', 'R', 'X':
+	case 'R': // a linebreak: \r\n as one, or any single line terminator
+		if inClass {
+			return "", errors.New(`\R inside a character class`)
+		}
+		return `(?:\r\n|[\n\x0b\x0c\r\x{85}\x{2028}\x{2029}])`, nil
+	case 'G':
+		// where the search began: for one match that is its start, which \A says of the text searched; Regexp#match(s, pos)
+		// searches the text from pos for such a pattern. A scan or gsub would match only once (ponytail: \G as the end of
+		// the previous match needs the engines to carry it)
+		if escStart == 0 {
+			return `\A`, nil
+		}
+		return "", fmt.Errorf(`%s is not supported by RE2`, esc)
+	case 'K', 'X':
 		return "", fmt.Errorf(`%s is not supported by RE2`, esc)
 	}
 	return esc, nil

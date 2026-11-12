@@ -733,14 +733,24 @@ func (c *Compiler) declareLatentIvars() {
 
 // staticallyIncludes reports whether cls's own body (or an earlier boot record) includes mod.
 func (c *Compiler) staticallyIncludes(cls *Class, mod *Class) bool {
+	return c.staticallyIncludesIn(cls, mod, map[*Class]bool{})
+}
+
+// staticallyIncludesIn also looks through the modules cls includes: one that includes mod already put it in cls's
+// ancestors, after itself, and a second include would put mod's methods before the nearer module's overrides
+// (rubocop's EndKeywordAlignment#style_parameter_name over ConfigurableEnforcedStyle's; decision 444).
+func (c *Compiler) staticallyIncludesIn(cls *Class, mod *Class, seen map[*Class]bool) bool {
+	if seen[cls] {
+		return false
+	}
+	seen[cls] = true
 	for _, inc := range cls.Includes {
-		if inc.Mod == mod {
-			return true
+		k := inc.Mod
+		if k == nil && inc.ref.node != nil {
+			_ = catchCompileError(func() { k, _ = c.lookupConst(inc.ref.file, inc.ref.node, inc.ref.scope) })
 		}
-		if inc.ref.node != nil {
-			if k, _ := c.lookupConst(inc.ref.file, inc.ref.node, inc.ref.scope); k == mod {
-				return true
-			}
+		if k == mod || k != nil && c.staticallyIncludesIn(k, mod, seen) {
+			return true
 		}
 	}
 	return false
