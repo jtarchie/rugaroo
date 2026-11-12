@@ -42,6 +42,7 @@ type loopFrame struct {
 type brokeTarget struct {
 	label string
 	used  bool
+	res   string // the loop's value: a `break value` assigns it before the jump (decision 444)
 }
 
 // pushLoop goes just before the `for`; a label sits above its //line directive so the `for` keeps its Ruby line.
@@ -232,13 +233,34 @@ func (f *fctx) genBreak(n *parser.BreakNode) {
 	if n.Arguments != nil && f.lenient() && len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopIter {
 		// a gem's `break v` out of an iterator whose value nothing reads (prime's each, yielding into a void block): v
 		// runs for its effects, and the call's value is nil, as a broken-out gem loop's is (decisions 233, 410)
+		l := f.loops[len(f.loops)-1]
+		if args := n.Arguments.Arguments; l.broke != nil && l.broke.res != "" && len(args) == 1 && f.begins <= l.begins {
+			f.emit("%s = %s", l.broke.res, f.coerce(n, f.genExpr(args[0], nil), TAny{})) // the loop is a value: the break's
+			f.emitBreak(l)
+			return
+		}
 		for _, a := range n.Arguments.Arguments {
 			if v := f.genExpr(a, nil); v.code != "" && !v.done && !pureNode(a) {
 				f.emit("_ = %s", v.code)
 			}
 		}
-		f.emitBreak(f.loops[len(f.loops)-1])
+		f.emitBreak(l)
 		return
+	}
+	if n.Arguments != nil && f.lenient() && len(f.loops) > 0 && f.loops[len(f.loops)-1].kind == loopClosure {
+		// a gem's `break result if result` out of a closure block (rubocop's `extractors.find do ... end`): the call's
+		// value is the break's (decision 444)
+		if bc := f.breakCatch; bc != nil && len(f.rbFrames) > 0 && f.rbFrames[len(f.rbFrames)-1].key == bc.block.Location.StartOffset {
+			var v expr
+			if args := n.Arguments.Arguments; len(args) == 1 {
+				v = f.genExpr(args[0], nil)
+			} else {
+				v = f.genExpr(&parser.ArrayNode{Location: n.Location, Elements: args}, nil)
+			}
+			bc.used = true
+			f.emit("panic(rbBreak{id: %q, val: %s})", bc.id, f.coerce(n, v, TAny{}))
+			return
+		}
 	}
 	if n.Arguments != nil {
 		f.errorf(n, "break with a value is not supported")
@@ -250,7 +272,7 @@ func (f *fctx) genBreak(n *parser.BreakNode) {
 	if l.kind == loopClosure {
 		if bc := f.breakCatch; bc != nil && len(f.rbFrames) > 0 && f.rbFrames[len(f.rbFrames)-1].key == bc.block.Location.StartOffset {
 			bc.used = true
-			f.emit("panic(rbBreak{%q})", bc.id)
+			f.emit("panic(rbBreak{id: %q})", bc.id)
 			return
 		}
 		f.errorf(n, "break inside a non-iterator block is not supported (only one whose call is a statement, decision 241)")
@@ -265,7 +287,7 @@ func (f *fctx) breakCatchStmt(n parser.Node, t tail) bool {
 		return false
 	}
 	b, ok := c.Block.(*parser.BlockNode)
-	if !ok || b.Body == nil || !blockBreaks(b.Body) {
+	if !ok || b.Body == nil || !blockBreaks(b.Body) && !(f.lenient() && blockBreaksValue(b.Body)) {
 		return false
 	}
 	if t.kind != tailNone { // a gem's `segment.each do ... break ... end` as a block's value (liquid's For#render_segment, decision 331)
@@ -295,7 +317,7 @@ func (f *fctx) genBreakCatchValue(c *parser.CallNode, b *parser.BlockNode, t tai
 	f.breakCatch, f.buf = saved, out
 	f.emit("var %s any", tmp)
 	f.emit("func() {")
-	f.emit("\tdefer rbBreakRecover(%q)", bc.id)
+	f.emit("\tdefer rbBreakRecoverTo(%q, &%s)", bc.id, tmp)
 	out.WriteString(body)
 	f.emit("}()")
 	f.applyTail(c, expr{code: tmp, typ: TAny{}}, t)
@@ -341,6 +363,19 @@ func blockBreaks(n parser.Node) bool {
 		switch x := x.(type) {
 		case *parser.BreakNode:
 			return x.Arguments == nil, false
+		case *parser.WhileNode, *parser.UntilNode, *parser.ForNode, *parser.BlockNode, *parser.LambdaNode:
+			return false, false
+		}
+		return false, !opensScope(x)
+	})
+}
+
+// blockBreaksValue is blockBreaks for a `break value`.
+func blockBreaksValue(n parser.Node) bool {
+	return walkNode(n, func(x parser.Node) (bool, bool) {
+		switch x := x.(type) {
+		case *parser.BreakNode:
+			return x.Arguments != nil, false
 		case *parser.WhileNode, *parser.UntilNode, *parser.ForNode, *parser.BlockNode, *parser.LambdaNode:
 			return false, false
 		}

@@ -869,7 +869,7 @@ func (f *fctx) iterCallValue(n *parser.CallNode, recv expr) (expr, bool) {
 		return expr{}, false
 	case !coreEach(e.M):
 		return f.iteratorValue(n), true
-	case f.lenient() && blockBreaks(b.Body):
+	case f.lenient() && (blockBreaks(b.Body) || blockBreaksValue(b.Body)):
 		return f.brokenIterValue(n, recv), true
 	}
 	return expr{}, false

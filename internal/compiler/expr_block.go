@@ -801,7 +801,7 @@ func (f *fctx) genSelfValueIter(n *parser.CallNode, e *entry, recv expr, t tail)
 	tmp := f.newTmp()
 	f.emit("var %s %s = %s", tmp, f.c.goType(recv.typ), recv.code) // typed: a literal receiver (`4.times`) is an Integer, not Go's int
 	recv.code = tmp
-	if f.lenient() && f.iterBreakValue {
+	if b, ok := n.Block.(*parser.BlockNode); f.lenient() && (f.iterBreakValue || ok && b.Body != nil && t.kind != tailNone && blockBreaksValue(b.Body)) {
 		f.iterBreakValue = false
 		f.genBrokenIterLoop(n, e, recv, t)
 		return
@@ -815,7 +815,7 @@ func (f *fctx) genSelfValueIter(n *parser.CallNode, e *entry, recv expr, t tail)
 func (f *fctx) genBrokenIterLoop(n *parser.CallNode, e *entry, recv expr, t tail) {
 	res := f.newTmp()
 	f.emit("var %s any", res) // above the loop: the goto may not jump over a declaration
-	bt := &brokeTarget{label: "broke" + res}
+	bt := &brokeTarget{label: "broke" + res, res: res}
 	f.iterBroke = bt
 	f.genIterLoop(n, e, recv)
 	f.iterBroke = nil

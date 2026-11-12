@@ -2107,7 +2107,21 @@ func rbPopBlock(args []any) (*rbBlockArg, []any) {
 
 // rbBreak unwinds a closure block's `break` to the call statement that passed the block (decision 241); rescue passes
 // it on, ensure runs.
-type rbBreak struct{ id string }
+type rbBreak struct {
+	id  string
+	val any // a gem block's `break value` (decision 444): the call's value
+}
+
+// rbBreakRecoverTo is rbBreakRecover for a call whose value is read: the break's value, nil for a valueless one.
+func rbBreakRecoverTo(id string, out *any) {
+	if r := recover(); r != nil {
+		b, ok := r.(rbBreak)
+		if !ok || b.id != id {
+			panic(r)
+		}
+		*out = b.val
+	}
+}
 
 // rbBreakRecover ends the call whose block broke with id, and lets any other panic through.
 func rbBreakRecover(id string) {
