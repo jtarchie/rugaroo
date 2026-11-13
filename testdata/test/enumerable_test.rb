@@ -91,4 +91,76 @@ module EnumerableTests
       end
     end
   end
+
+  class OptBag
+    include Enumerable #[Integer?]
+
+    #: (*Integer?) -> void
+    def initialize(*ns)
+      @ns = ns
+    end
+
+    #: () { (Integer?) -> void } -> void
+    def each(&block) = @ns.each(&block)
+  end
+
+  class StrBag
+    include Enumerable #[String]
+
+    #: (*String) -> void
+    def initialize(*ss)
+      @ss = ss
+    end
+
+    #: () { (String) -> void } -> void
+    def each(&block) = @ss.each(&block)
+  end
+
+  # The forms decision 450 adds (#145)
+  class MoreFormsTest < Minitest::Test
+    def test_to_h_and_uniq_blocks
+      assert_equal({ 3 => 6, 1 => 2, 2 => 4 }, Bag.new(3, 1, 2).to_h { |x| [x, x * 2] })
+      assert_equal [3, 2], Bag.new(3, 1, 2).uniq { |x| x % 2 }
+      assert_equal({ 1 => 1, 2 => 4 }, (1..2).to_h { |x| [x, x * x] })
+    end
+
+    def test_find_ifnone_and_compact
+      assert_equal 0, Bag.new(3, 1, 2).find(-> { 0 }) { |x| x > 5 }
+      assert_equal 3, Bag.new(3, 1, 2).find(-> { 0 }) { |x| x > 2 }
+      assert_equal 0, (1..4).find(-> { 0 }) { |x| x > 9 }
+      assert_equal [3, 1], OptBag.new(3, nil, 1, nil).compact
+    end
+
+    def test_slice_by_pattern
+      assert_equal [["a", "b"], ["x", "c"]], StrBag.new("a", "b", "x", "c").slice_before(/x/).to_a
+      assert_equal [["a", "b"], ["x", "c"]], StrBag.new("a", "b", "x", "c").slice_after(/b/).to_a
+    end
+
+    def test_sum_with_string_or_array_init_and_block
+      assert_equal "312", Bag.new(3, 1, 2).sum("") { |x| x.to_s }
+      assert_equal [3, 1], Bag.new(3, 1).sum([]) { |x| [x] }
+      assert_equal "123", (1..3).sum("") { |x| x.to_s }
+      assert_equal "ab", %w[a b].sum("") { |x| x }
+    end
+
+    def test_chain
+      assert_equal [3, 1, 7, 8], Bag.new(3, 1).chain([7], [8]).to_a
+      assert_equal [1, 2, 3], (1..2).chain([3]).to_a
+    end
+
+    def test_zip_block
+      out = [] #: Array[[Integer, Integer?]]
+      Bag.new(3, 1).zip([4]) { |pr| out << pr }
+      assert_equal [[3, 4], [1, nil]], out
+    end
+
+    def test_blockless_with_index
+      assert_equal [2, 1, 3], Bag.new(3, 1, 2).sort_by.with_index { |_x, i| -i }
+      assert_equal [2, 1, 3], [3, 1, 2].sort_by.each_with_index { |_x, i| -i }
+      assert_equal 2, [3, 1, 2].max_by.with_index { |_x, i| i }
+      assert_equal 3, [3, 1, 2].min_by.with_index(1) { |_x, i| i }
+      assert_equal({ true => [3, 2], false => [1] }, [3, 1, 2].group_by.with_index(1) { |_x, i| i.odd? })
+      assert_equal [[1, 3], [2, 4]], (1..4).partition.with_index { |_x, i| i.even? }
+    end
+  end
 end

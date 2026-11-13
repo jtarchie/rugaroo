@@ -37,6 +37,9 @@ func (f *fctx) genCallRewrite(n *parser.CallNode, expected Type) (expr, bool) {
 			return f.genExpr(&parser.OrNode{Location: n.Location, Left: isA, Right: &parser.NilNode{Location: n.Location}}, expected), true // nil when unrelated
 		}
 	}
+	if c := f.withIndexChain(n); c != nil {
+		return f.genCall(c, expected), true
+	}
 	if e, ok := f.genFoldOrLower(n); ok {
 		return e, true
 	}
@@ -146,7 +149,8 @@ func (f *fctx) callSugar(n *parser.CallNode, expected Type) (expr, bool) {
 // the method at compile time, so the fold is the block form's (#145). A Symbol only run time knows is a compile error.
 func (f *fctx) injectSymbol(n *parser.CallNode) *parser.CallNode {
 	args := callArgs(n)
-	if n.Name != "inject" && n.Name != "reduce" && (n.Name != "sum" || len(args) != 1) || n.Block != nil || len(args) == 0 || len(args) > 2 {
+	_, blockLit := n.Block.(*parser.BlockNode)
+	if n.Name != "inject" && n.Name != "reduce" && (n.Name != "sum" || len(args) != 1) || n.Block != nil && (n.Name != "sum" || !blockLit) || len(args) == 0 || len(args) > 2 {
 		return nil
 	}
 	recvT := f.selfType
@@ -155,11 +159,15 @@ func (f *fctx) injectSymbol(n *parser.CallNode) *parser.CallNode {
 		f.probe(func() { recv = f.genExpr(n.Receiver, nil) })
 		recvT = recv.typ
 	}
-	if e := f.resolve(recvT, n.Name); e == nil || e.M.Owner.RubyName != "Enumerable" {
+	e := f.resolve(recvT, n.Name)
+	if e == nil {
 		return nil
 	}
-	if n.Name == "sum" {
+	if n.Name == "sum" && sumOwners[e.M.Owner.RubyName] { // Range's and Array's own sum add numbers only, as Enumerable's
 		return f.sumPlus(n, args)
+	}
+	if e.M.Owner.RubyName != "Enumerable" {
+		return nil
 	}
 	last := args[len(args)-1]
 	sym, ok := last.(*parser.SymbolNode)
@@ -180,8 +188,11 @@ func (f *fctx) injectSymbol(n *parser.CallNode) *parser.CallNode {
 	return &c
 }
 
+// sumOwners are the classes whose sum sumPlus may rewrite.
+var sumOwners = map[string]bool{"Enumerable": true, "Range": true, "Array": true, "Set": true, "Hash": true}
+
 // sumPlus is `xs.sum("")` and `xs.sum([])`: MRI adds with `+` past the numeric tower, so a String or Array init is
-// `xs.inject(init, &:+)`.
+// `xs.inject(init, &:+)`, and with a block `xs.map { ... }.inject(init, &:+)` (#145).
 func (f *fctx) sumPlus(n *parser.CallNode, args []parser.Node) *parser.CallNode {
 	var a expr
 	f.probe(func() { a = f.genExpr(args[0], nil) })
@@ -189,6 +200,9 @@ func (f *fctx) sumPlus(n *parser.CallNode, args []parser.Node) *parser.CallNode 
 		return nil
 	}
 	c := *n
+	if n.Block != nil {
+		c.Receiver = &parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "map", Block: n.Block}
+	}
 	c.Name = "inject"
 	c.Block = &parser.BlockArgumentNode{Location: n.Location, Expression: &parser.SymbolNode{Location: n.Location, Unescaped: parser.RubyString{Value: "+"}}}
 	return &c
@@ -523,4 +537,35 @@ func (f *fctx) stringElements(n *parser.CallNode) bool {
 		})
 	})
 	return pt != nil && (f.heldAsAny(stripOpt(pt)) || isClass(stripOpt(pt), "String"))
+}
+
+// withIndexChains are the blockless Enumerable methods whose `.with_index { |x, i| }` feeds the block's value back.
+var withIndexChains = map[string]bool{"sort_by": true, "min_by": true, "max_by": true, "group_by": true, "partition": true}
+
+// withIndexChain is `xs.sort_by.with_index(off) { |x, i| }` (or `.each_with_index`) as `xs.__sort_by_with_index(off) { |x, i| }`:
+// the enumerator MRI builds is decided here, at compile time (#145).
+func (f *fctx) withIndexChain(n *parser.CallNode) *parser.CallNode {
+	inner, ok := n.Receiver.(*parser.CallNode)
+	if !ok || n.Name != "with_index" && n.Name != "each_with_index" || !withIndexChains[inner.Name] || inner.Block != nil || inner.Arguments != nil || inner.Receiver == nil {
+		return nil
+	}
+	if _, ok := n.Block.(*parser.BlockNode); !ok {
+		return nil
+	}
+	args := callArgs(n)
+	if n.Name == "each_with_index" && len(args) > 0 || len(args) > 1 {
+		return nil
+	}
+	var recv expr
+	f.probe(func() { recv = f.genExpr(inner.Receiver, nil) })
+	name := "__" + inner.Name + "_with_index"
+	if f.resolve(recv.typ, name) == nil {
+		return nil
+	}
+	off := parser.Node(&parser.IntegerNode{Location: parser.Location{StartOffset: n.Location.StartOffset}, Value: 0}) // no source text: the literal is its Value
+	if len(args) == 1 {
+		off = args[0]
+	}
+	return &parser.CallNode{Location: n.Location, Receiver: inner.Receiver, Name: name, Block: n.Block,
+		Arguments: &parser.ArgumentsNode{Location: n.Location, Arguments: []parser.Node{off}}}
 }
