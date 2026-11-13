@@ -416,6 +416,124 @@ module Enumerable
     return rbAs[N](s.result(), "numeric")
   }
 
+  # @rbs [K, V] () { (E) -> [K, V] } -> Hash[K, V]
+  def __to_h_block
+    out = {} #: Hash[K, V]
+    each do |x|
+      pair = yield(x)
+      out[pair[0]] = pair[1]
+    end
+    out
+  end
+
+  # uniq with a block: the first element for each block value, by eql?/hash (#145).
+  #: [K] () { (E) -> K } -> Array[E]
+  def __uniq_block
+    seen = {} #: Hash[K, bool]
+    out = [] #: Array[E]
+    each do |x|
+      k = yield(x)
+      next if seen.key?(k)
+
+      seen[k] = true
+      out << x
+    end
+    out
+  end
+
+  #: () -> Array[E]
+  def compact = to_a.compact
+
+  # find(ifnone): ifnone's value when no element matches (#145); it answers an element, as find's own type.
+  #: (^() -> E) { (E) -> boolish } -> E?
+  def __find_1(ifnone)
+    each { |x| return x if yield(x) }
+    ifnone.call
+  end
+
+  # slice_before(pattern): a slice starts at each element pattern === matches (#145).
+  # @dynamic
+  #: (untyped) -> Array[Array[E]]
+  def __slice_before_1(pattern) = slice_before { |x| !!(pattern === x) }
+
+  # @dynamic
+  #: (untyped) -> Array[Array[E]]
+  def __slice_after_1(pattern) = slice_after { |x| !!(pattern === x) }
+
+  # `xs.sort_by.with_index(off) { |x, i| }` and its siblings, rewritten to these (withIndexChain, #145): the block
+  # runs once per element in order, as MRI's enumerator feeds it, with the element's index.
+  #: [K] (Integer) { (E, Integer) -> K } -> Array[E]
+  def __sort_by_with_index(off)
+    i = off - 1
+    sort_by do |x|
+      i += 1
+      yield(x, i)
+    end
+  end
+
+  #: [K] (Integer) { (E, Integer) -> K } -> E?
+  def __min_by_with_index(off)
+    i = off - 1
+    min_by do |x|
+      i += 1
+      yield(x, i)
+    end
+  end
+
+  #: [K] (Integer) { (E, Integer) -> K } -> E?
+  def __max_by_with_index(off)
+    i = off - 1
+    max_by do |x|
+      i += 1
+      yield(x, i)
+    end
+  end
+
+  #: [K] (Integer) { (E, Integer) -> K } -> Hash[K, Array[E]]
+  def __group_by_with_index(off)
+    i = off - 1
+    group_by do |x|
+      i += 1
+      yield(x, i)
+    end
+  end
+
+  #: (Integer) { (E, Integer) -> boolish } -> [Array[E], Array[E]]
+  def __partition_with_index(off)
+    i = off - 1
+    partition do |x|
+      i += 1
+      yield(x, i)
+    end
+  end
+
+  #: () -> Enumerator::Map[E]
+  def __map_enum = Enumerator::Map.new(to_a)
+
+  #: () -> Enumerator::Select[E]
+  def __select_enum = Enumerator::Select.new(to_a, false, "select")
+
+  #: () -> Enumerator::Select[E]
+  def __filter_enum = Enumerator::Select.new(to_a, false, "filter")
+
+  #: () -> Enumerator::Select[E]
+  def __reject_enum = Enumerator::Select.new(to_a, true, "reject")
+
+  # zip with a block: each pair yielded, nil returned (#145); other is read once, before the first.
+  #: [U] (Array[U]) { ([E, U?]) -> void } -> void
+  def __zip_block(other)
+    i = 0
+    each do |x|
+      yield [x, other[i]]
+      i += 1
+    end
+  end
+
+  # chain: self's elements, then each other's (ponytail: an eager Array's Enumerator; MRI's Enumerator::Chain is lazy,
+  # which only an infinite or side-effecting source can tell).
+  #: (*Array[E]) -> Enumerator[E]
+  def chain(*others) = (to_a + others.flatten(1)).each
+
   #: () -> E?
   def __first_0
     each { |x| return x }

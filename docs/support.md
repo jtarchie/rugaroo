@@ -69,7 +69,7 @@ ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-10-30 (commit f393057d; 
 | `Range` | stable | 296 of 339 (87%) | 267 |  |
 | `Set` | stable | 69 of 79 (87%) | 97 | Core, as in MRI 4.0. |
 | `Struct`, `Data` | stable | 102 of 142 (72%) | 116 |  |
-| `Enumerable` | stable | 166 of 219 (76%) | 272 | Elements with equal keys can come out of `sort_by`, `max_by(n)` and `min_by(n)` in another order than MRI's, whose order depends on the platform's `qsort_r`. |
+| `Enumerable` | stable | 184 of 252 (73%) | 239 | Elements with equal keys can come out of `sort_by`, `max_by(n)` and `min_by(n)` in another order than MRI's, whose order depends on the platform's `qsort_r`. |
 | `Enumerator`, `Enumerator::Lazy`, arithmetic sequences | stable | 47 of 70 (67%) | 278 | `next`/`peek`, `Enumerator.new` generators. |
 | `Comparable` | stable | 0 of 46 (0%) | 8 | ruby/spec's fixture class doesn't compile, so every example errors; covered by rugaroo's own tests. |
 | `Regexp`, `MatchData` | stable | 253 of 342 (74%) | 98 | Ruby syntax translated to Go's regexp engines. |
