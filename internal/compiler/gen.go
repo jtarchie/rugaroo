@@ -447,7 +447,7 @@ func (f *fctx) applyTail(n parser.Node, e expr, t tail) {
 			f.emitExprStmt(n, e)
 			return
 		}
-		code := ""
+		var code string
 		if f.m != nil && f.m.inherited != nil && f.block == "" && f.lenient() && isAny(e.typ) && !isAny(t.typ) && typeEq(t.typ, f.m.Ret) {
 			// a gem override's untyped value under the return type it inherits: what fits, else its zero, as an adapter's
 			// (rubocop's ProgressFormatter#started ends in `output.puts` under SimpleTextFormatter#started's `@count = 0`;
