@@ -1,0 +1,27 @@
+#!/bin/bash
+# usage: ./bench file|dir...   (paths relative to $W; see setup)
+# Median of 5 wall-clock runs of MRI's rubocop and $W/rubocop on each path, interleaved so machine load hits both.
+# Build without DEBUG=1 first: a -N -l binary is slower than MRI on large files.
+cd "$(dirname "$0")"
+. ./setup
+cd "$W"
+cp "$here/main.rb" main.rb
+python3 - "$W" $I -- "$@" <<'EOF'
+import statistics, subprocess, sys, time
+argv = sys.argv[1:]
+w, sep = argv[0], argv.index("--")
+inc, files = argv[1:sep], argv[sep + 1:]
+def run(cmd):
+    t = time.perf_counter()
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return time.perf_counter() - t
+for f in files:
+    mri = ["ruby", *inc, "main.rb", "--cache", "false", "--no-parallel", f]
+    rg = [w + "/rubocop", "--cache", "false", "--no-parallel", f]
+    m, r = [], []
+    for _ in range(5):
+        m.append(run(mri))
+        r.append(run(rg))
+    mm, rr = statistics.median(m), statistics.median(r)
+    print(f"{f}: mri {mm:.2f}s  compiled {rr:.2f}s  ({mm / rr:.1f}x)", flush=True)
+EOF

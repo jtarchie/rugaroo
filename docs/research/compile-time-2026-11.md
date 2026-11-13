@@ -124,7 +124,7 @@ Ranked by likely cost: `refineIvars`/`dryRunIvarUsers` (gen_ivars.go:17-115, up 
 
 ## Rubocop CLI gen profile (2026-10-31, main 3a2aa775 + attrTarget memo)
 
-Repro: `docs/research/rubocop/run.sh <rugaroo>` (rubocop 1.92.1, rubocop-ast 1.50.0, regexp_parser 2.13.1; patches: `Struct.new(*TOKEN_KEYS)` and an alias of a class_eval'd method in regexp_parser, the two tokenize rubocop-ast rewrites, three `define_predicate ..., child_index: 1..-2` Range captures (decision 198), and the Psych tree API (`YAMLDuplicationChecker` stubbed, config loaded with `YAML.safe_load(permitted_classes: [Regexp, Symbol], aliases: true)`); `main.rb` is exe/rubocop's non-server path, since exe/rubocop stops at `RuboCop::Server::CLI`, an autoload named only from the main file (compiler bug, not filed). MRI on the patched copies prints the unpatched result: "1 file inspected, 1 offense detected, 1 offense autocorrectable".
+Repro: `docs/research/rubocop/run.sh <rugaroo>` (now `overrides/rubocop/build`) (rubocop 1.92.1, rubocop-ast 1.50.0, regexp_parser 2.13.1; patches: `Struct.new(*TOKEN_KEYS)` and an alias of a class_eval'd method in regexp_parser, the two tokenize rubocop-ast rewrites, three `define_predicate ..., child_index: 1..-2` Range captures (decision 198), and the Psych tree API (`YAMLDuplicationChecker` stubbed, config loaded with `YAML.safe_load(permitted_classes: [Regexp, Symbol], aliases: true)`); `main.rb` is exe/rubocop's non-server path, since exe/rubocop stops at `RuboCop::Server::CLI`, an autoload named only from the main file (compiler bug, not filed). MRI on the patched copies prints the unpatched result: "1 file inspected, 1 offense detected, 1 offense autocorrectable".
 
 | measure | value |
 |---|---|
@@ -146,7 +146,7 @@ CPU profile: flat (top leaf 3.6%, map access). Stacks are deeper than the profil
 |---|---|---|---|---|
 | 124 liquid | 8 s | 4 s | 0 | identical |
 | 123 kramdown | 27 s | 10 s | 0 | identical |
-| rubocop (`RUBOCOP_WORK=dir docs/research/rubocop/run.sh`) | 3 m 37 s | **41 s** | 0 | identical |
+| rubocop (`RUBOCOP_WORK=dir docs/research/rubocop/run.sh`, now `overrides/rubocop/build`) | 3 m 37 s | **41 s** | 0 | identical |
 
 The rubocop hit: infer 15 s (nearly all `refineIvars`), format 10.6 s, gocheck 8.7 s, emit 2.6 s, trace+boot 2 s. This repro compiles a smaller program than the scratchpad run above (44.7 MB and 993 cached keys against 86 MB and 1,612; it runs from a different directory, so rubocop resolves its config and cop set differently, not investigated), so its cold time is not comparable to the 6 m 28 s there; the cold/hit ratio is.
 

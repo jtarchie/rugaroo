@@ -1,0 +1,23 @@
+#!/bin/bash
+# usage: ./check file|dir...   (paths relative to $W; see setup)
+# Runs MRI's rubocop and $W/rubocop (./build first) on each path. rubocop reads the .rubocop.yml above each input,
+# so copy inputs into $W rather than pointing at files inside a project with its own config. SAME needs equal stdout,
+# equal exit status and no "An error occurred while" line from the compiled run; DIFF lists the cops that raised.
+cd "$(dirname "$0")"
+. ./setup
+cd "$W"
+cp "$here/main.rb" main.rb
+[ -x "$W/rubocop" ] || { echo "check: no $W/rubocop: ./build first" >&2; exit 1; }
+status=0
+for f in "$@"; do
+  ruby $I main.rb --cache false --no-parallel "$f" > mri.out 2>/dev/null; me=$?
+  "$W/rubocop" --cache false --no-parallel "$f" > rg.out 2> rg.err; re=$?
+  if cmp -s mri.out rg.out && [ $me = $re ] && ! grep -q "An error occurred while" rg.err; then
+    echo "$f: SAME (exit $me) $(tail -1 mri.out)"
+  else
+    status=1
+    echo "$f: DIFF mri[$me]: $(tail -1 mri.out) | compiled[$re]: $(tail -1 rg.out)"
+    grep "An error occurred while" rg.err | sed 's/ cop was inspecting.*//; s/An error occurred while /  cop: /' | sort -u
+  fi
+done
+exit $status

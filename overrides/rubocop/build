@@ -1,0 +1,20 @@
+#!/bin/bash
+# usage: ./build [rugaroo]   (default: this checkout's cmd/rugaroo)
+# Traces main.rb (rubocop on $W/a.rb) under MRI and builds the compiled rubocop to $W/rubocop (see setup for $W).
+# Every registered cop is compiled, not only those the trace loaded (decision 444). DEBUG=1 builds with
+# -gcflags='-N -l' (faster build, slower binary).
+set -e
+cd "$(dirname "$0")"
+. ./setup
+rugaroo=${1:-}
+if [ -z "$rugaroo" ]; then
+  go build -o "$W/rugaroo" "$here/../../cmd/rugaroo"
+  rugaroo=$W/rugaroo
+fi
+flags=()
+[ -n "$DEBUG" ] && flags=(-gcflags '-N -l')
+cd "$W"
+cp "$here/main.rb" main.rb
+echo "MRI:      $(ruby $I main.rb --cache false --no-parallel a.rb 2>/dev/null | tail -1)"
+time "$rugaroo" build "${flags[@]}" $I -o "$W/rubocop" -trace main.rb --cache false --no-parallel a.rb
+echo "compiled: $("$W/rubocop" --cache false --no-parallel a.rb 2>/dev/null | tail -1)"

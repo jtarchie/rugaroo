@@ -1,0 +1,22 @@
+#!/bin/bash
+# usage: . ./setup   (sourced by build, check and bench)
+# Copies the installed rubocop 1.92.1, rubocop-ast 1.50.0 and regexp_parser 2.13.1 into $W/gems once, applies
+# gem-patches/<gem>.patch to each, and writes $W/a.rb (a 2-line input). Sets W (work dir), I (the -I flags) and
+# RUBOCOP_LIB (main.rb's load path). GEM_DIR overrides where the installed gems are ($(ruby -e 'print Gem.dir')/gems).
+# W is RUBOCOP_WORK, else $TMPDIR/rugaroo-rubocop: outside this repository, whose .rubocop.yml rubocop would otherwise
+# find above every input (it loads Bundler, which is not compiled).
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+W=${RUBOCOP_WORK:-${TMPDIR:-/tmp}/rugaroo-rubocop}
+G=${GEM_DIR:-$(ruby -e 'print Gem.dir')/gems}
+mkdir -p "$W/gems"
+W=$(cd "$W" && pwd -P) # the real path: MRI's trace records resolved paths, and macOS's $TMPDIR is under the /var symlink
+I=""
+for g in regexp_parser-2.13.1 rubocop-ast-1.50.0 rubocop-1.92.1; do
+  if [ ! -d "$W/gems/$g" ]; then
+    [ -d "$G/$g" ] || { echo "setup: $G/$g not installed (gem install ${g%-*} -v ${g##*-})" >&2; return 1 2>/dev/null || exit 1; }
+    cp -R "$G/$g" "$W/gems/" && patch -s -p1 -d "$W/gems/$g" < "$here/gem-patches/$g.patch"
+  fi
+  I="$I -I $W/gems/$g/lib"
+done
+printf 'x = 1\nputs x\n' > "$W/a.rb"
+export RUBOCOP_LIB=$W/gems/rubocop-1.92.1/lib

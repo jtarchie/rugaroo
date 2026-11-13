@@ -104,6 +104,9 @@ itself parses with. No installed gem or `ruby` is needed. Proof:
 
 ## Large programs: Homebrew
 
+[`overrides/rubocop`](../overrides/rubocop/README.md) does the same for the rubocop CLI (three small gem patches,
+every cop, decision 444).
+
 [`overrides/brew`](../overrides/brew/README.md) compiles Homebrew's `brew` and
 compares its output with MRI's. It is the proving ground for the routes above
 and the pattern for any large upstream program: pin the upstream commit, trace
