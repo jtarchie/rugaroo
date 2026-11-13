@@ -418,6 +418,52 @@ func TestPGO(t *testing.T) {
 	}
 }
 
+// -profile-out builds a binary that writes its own CPU profile on exit; -pgo with it rebuilds the same program, both printing what MRI prints (decision 449).
+func TestProfileOutThenPGO(t *testing.T) {
+	cli, err := cliBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	src := "def fib(n) = n < 2 ? n : fib(n - 1) + fib(n - 2)\nputs fib(24)\n"
+	err = os.WriteFile(filepath.Join(dir, "main.rb"), []byte(src), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := exec.CommandContext(t.Context(), "ruby", "-e", src).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range [][]string{
+		{"build", "-profile-out", "cpu.pprof", "-o", "prof", "main.rb"},
+		{"./prof"},
+		{"build", "-pgo", "cpu.pprof", "-o", "opt", "main.rb"},
+		{"./opt"},
+	} {
+		name, args := cli, step
+		if strings.HasPrefix(step[0], "./") {
+			name, args = filepath.Join(dir, step[0]), nil
+		}
+		cmd := exec.CommandContext(t.Context(), name, args...) //nolint:gosec // built by cliBinary, or the binary it built
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v %s", step, err, out)
+		}
+		if name != cli && string(out) != string(want) {
+			t.Errorf("%v printed %q, MRI %q", step, out, want)
+		}
+	}
+	fi, err := os.Stat(filepath.Join(dir, "cpu.pprof"))
+	if err != nil || fi.Size() == 0 {
+		t.Errorf("no profile written: %v", err)
+	}
+	opts, _, err := testBuildFlags([]string{"-profile-out", "p.out", "--pgo=" + filepath.Join(dir, "cpu.pprof"), "-v"})
+	if err != nil || opts.profile != "p.out" || opts.pgo != filepath.Join(dir, "cpu.pprof") {
+		t.Errorf("rugaroo test flags: %+v %v", opts, err)
+	}
+}
+
 // -compiler tinygo refuses gc's build flags and unbuildable libs before building, and builds with tinygo when it is on PATH (decision 443).
 func TestCompilerTinyGo(t *testing.T) {
 	t.Setenv("RUGAROO_COMPILER", "")
@@ -425,7 +471,7 @@ func TestCompilerTinyGo(t *testing.T) {
 	if os.Getenv("RUGAROO_COMPILER") != "tinygo" || err == nil || !strings.Contains(err.Error(), "-race") {
 		t.Errorf("-compiler tinygo -race: env %q, err %v", os.Getenv("RUGAROO_COMPILER"), err)
 	}
-	for _, o := range []buildOpts{{gcflags: "-e"}, {pgo: "/p/cpu.pprof"}} {
+	for _, o := range []buildOpts{{gcflags: "-e"}, {pgo: "/p/cpu.pprof"}, {profile: "cpu.pprof"}} {
 		if checkCompiler(o) == nil {
 			t.Errorf("%+v: want an error under -compiler tinygo", o)
 		}

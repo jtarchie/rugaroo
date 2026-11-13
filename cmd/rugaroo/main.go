@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,10 +21,10 @@ import (
 	"github.com/jtarchie/rugaroo"
 )
 
-const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [traced args...]
-       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-work] main.rb [args...]
+const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [traced args...]
+       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [args...]
        rugaroo gen [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] main.rb [traced args...] > main.go
-       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
+       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
        rugaroo web [-addr 127.0.0.1:8080]
        rugaroo web -static dir -assets https://host/path/`
 
@@ -60,18 +61,11 @@ func main() {
 	fs.BoolVar(&opts.race, "race", false, "build with the race detector")
 	fs.StringVar(&opts.gcflags, "gcflags", "", "passed to go build (e.g. -e for every error)")
 	fs.BoolVar(&opts.debug, "debug", false, "keep Go's debug info (DWARF), for a debugger on the generated Go (decision 437)")
-	fs.Func("pgo", "a CPU profile (pprof) of this program, passed to go build -pgo for profile-guided optimization", func(p string) error {
-		abs, err := filepath.Abs(p)
-		if err != nil {
-			return err //nolint:wrapcheck // names the path
-		}
-		f, err := os.Open(abs) //nolint:gosec // the user's own profile
-		if err != nil {
-			return err //nolint:wrapcheck // the *PathError names the path
-		}
-		opts.pgo = abs
-		return f.Close()
+	fs.Func("pgo", "a CPU profile (pprof) of this program, passed to go build -pgo for profile-guided optimization", func(p string) (err error) {
+		opts.pgo, err = pgoPath(p)
+		return err
 	})
+	fs.StringVar(&opts.profile, "profile-out", "", "the binary records a CPU profile of its run and writes it to this file when it exits, for a later -pgo build")
 	fs.BoolVar(&opts.work, "work", false, "keep the temp module (main.go, go.mod) and print its path")
 	fs.StringVar(&opts.main, "main", "", "the file is a traced entry (the requires MRI loaded) and this is the program it runs (decisions 197, 288)")
 	fs.BoolVar(&opts.trace, "trace", false, "run the program once under MRI with its args (it EXECUTES) and compile what it loaded (decision 296)")
@@ -211,6 +205,7 @@ type buildOpts struct {
 	gcflags  string
 	debug    bool   // -debug: keep DWARF (decision 437)
 	pgo      string // -pgo: a CPU profile's absolute path, as the temp module's go build needs
+	profile  string // -profile-out: the binary writes its CPU profile here when it exits (decision 449)
 	work     bool
 	main     string     // -main: the file is a traced entry and this its program (decision 288)
 	trace    bool       // -trace: compile what a run of the file with args loaded (decision 296)
@@ -369,6 +364,9 @@ func buildModule(ctx context.Context, code []byte, warnings []string, err error,
 	if err == nil {
 		err = os.WriteFile(filepath.Join(dir, "main.go"), code, 0o600)
 	}
+	if err == nil && opts.profile != "" {
+		err = os.WriteFile(filepath.Join(dir, "profile.go"), profileGo(opts.profile), 0o600)
+	}
 	if err != nil {
 		return dir, fmt.Errorf("temp module: %w", err)
 	}
@@ -419,6 +417,8 @@ func checkCompiler(opts buildOpts) error {
 		return errors.New("rugaroo: -gcflags is a gc flag; -compiler tinygo has no equivalent")
 	case opts.pgo != "":
 		return errors.New("rugaroo: -pgo is a gc flag; -compiler tinygo has no equivalent")
+	case opts.profile != "":
+		return errors.New("rugaroo: -profile-out records a profile for -pgo, a gc flag; -compiler tinygo has no equivalent")
 	}
 	return nil
 }
@@ -442,6 +442,45 @@ func buildFlags(opts buildOpts) []string {
 		args = append(args, "-pgo="+opts.pgo)
 	}
 	return args
+}
+
+// pgoPath is -pgo's profile by absolute path (the temp module's go build runs elsewhere), checked readable before the compile.
+func pgoPath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err //nolint:wrapcheck // names the path
+	}
+	f, err := os.Open(abs) //nolint:gosec // the user's own profile
+	if err != nil {
+		return "", err //nolint:wrapcheck // the *PathError names the path
+	}
+	return abs, f.Close() //nolint:wrapcheck // a close of a file only opened
+}
+
+// profileGo is the temp module's second file under -profile-out: CPU profiling from init to rbFinish (decision 449).
+func profileGo(path string) []byte {
+	return []byte(`package main
+
+import (
+	"os"
+	"runtime/pprof"
+)
+
+func init() {
+	f, err := os.Create(` + strconv.Quote(path) + `)
+	if err != nil {
+		panic(err)
+	}
+	if err := pprof.StartCPUProfile(f); err != nil {
+		panic(err)
+	}
+	rbProfileStop = func() {
+		pprof.StopCPUProfile()
+		_ = f.Close()
+		rbProfileStop = nil
+	}
+}
+`)
 }
 
 func cleanup(dir string, opts buildOpts) {
