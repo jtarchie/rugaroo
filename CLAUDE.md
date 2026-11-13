@@ -50,6 +50,7 @@ scripts/rubyspec-coverage --missing   # ruby/spec core method files the prelude 
 go run ./cmd/rubyspec -reasons 20 core/integer   # run ruby/spec directories under rugaroo (decision 127); `core` runs each core/* dir, -v lists every skip; the pinned checkout lives in `os.UserCacheDir()/rugaroo-rubyspec`
 go run ./cmd/rubyspec library/matrix              # a library spec's gems come from the repo Gemfile (-gems dir; decision 409): add the gem there before measuring it
 bundle exec tyda path/to/file.rb        # inferred RBS for unannotated Ruby (dev aid, see below); --diagnostics for JSON Lines
+bundle exec scripts/prelude-untyped-audit [--summary]   # the prelude's untyped signatures beside rbs core/stdlib's, with a verdict (#106)
 ```
 
 `go test` fails fast unless `ruby` is the release `.mri-version` names (decision 413: moving releases is one commit with the Gemfile pins), `bundle install` has been run, and `golangci-lint` is on PATH. Gem executables are not on PATH on this machine, so use `bundle exec rbs-inline ...` for manual runs. Stderr lines like rdoc "already initialized constant" warnings are noise.
