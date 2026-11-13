@@ -28,6 +28,14 @@ def string_greet(opts) = "hi #{opts[:name]}"
 #: (untyped) -> untyped
 def string_ident(v) = v
 
+# replace and clear on a String the method appends to: the caller's String takes them (decision 455)
+def string_refill(buf)
+  buf << "a"
+  buf.replace("z")
+  buf << "q"
+  nil
+end
+
 # An out parameter passed on to a callee whose other parameter is a mixed-value Hash (decision 447 types it): #128's
 # untyped-callee case, which compiles now
 def string_mixed_inner(buf, h)
@@ -2909,6 +2917,32 @@ module StringTests
       sc = StrIvarScanner.new("0123456789" * 10)
       sizes = Array.new(4) { Thread.new { (1..50).sum { sc.size } } }.map(&:value)
       assert_equal [5000, 5000, 5000, 5000], sizes
+    end
+  end
+
+  class StringRebindTest < Minitest::Test
+    def test_replace_and_clear_on_a_local
+      s = +"k"
+      s << "a"
+      s.replace("m")
+      s << "n"
+      assert_equal "mn", s
+      c = +"k"
+      c << "b"
+      c.clear
+      c << "c"
+      assert_equal "c", c
+      other = "keep"
+      t = +""
+      t.replace(other)
+      t << "!"
+      assert_equal ["keep", "keep!"], [other, t]
+    end
+
+    def test_replace_through_an_out_parameter
+      x = +"w"
+      string_refill(x)
+      assert_equal "zq", x
     end
   end
 end

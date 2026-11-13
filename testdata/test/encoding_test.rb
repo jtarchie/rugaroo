@@ -587,4 +587,35 @@ module EncodingTests
       end
     end
   end
+
+  # primitive_convert fills the caller's dst and empties its src (decision 455)
+  class ConverterPrimitiveTest < Minitest::Test
+    def test_primitive_convert
+      ec = Encoding::Converter.new("UTF-8", "ISO-8859-1")
+      src = +"café"
+      dst = +""
+      assert_equal :finished, ec.primitive_convert(src, dst)
+      assert_equal [99, 97, 102, 233], dst.bytes
+      assert_equal "", src
+    end
+
+    def test_primitive_convert_error_keeps_prefix
+      ec = Encoding::Converter.new("UTF-8", "US-ASCII")
+      src = +"aé"
+      dst = +"x"
+      assert_equal :undefined_conversion, ec.primitive_convert(src, dst)
+      assert_equal "xa", dst
+      assert_equal :undefined_conversion, ec.primitive_errinfo[0]
+    end
+
+    def test_primitive_convert_partial_input
+      ec = Encoding::Converter.new("UTF-8", "UTF-16LE")
+      src = "a\xE3".b
+      dst = +""
+      assert_equal :source_buffer_empty, ec.primitive_convert(src, dst, nil, nil, Encoding::Converter::PARTIAL_INPUT)
+      more = "\x81\x82".b
+      assert_equal :finished, ec.primitive_convert(more, dst)
+      assert_equal [97, 0, 66, 48], dst.bytes
+    end
+  end
 end
