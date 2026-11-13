@@ -537,4 +537,54 @@ module EncodingTests
       assert_equal "日本\n", line
     end
   end
+
+  # Encoding::Converter on encode's transcoder (decision 452)
+  class ConverterTest < Minitest::Test
+    def test_convert_and_inspect
+      ec = Encoding::Converter.new("UTF-8", "ISO-8859-1")
+      assert_equal "caf\xE9".b, ec.convert("café").b
+      assert_equal "#<Encoding::Converter: UTF-8 to ISO-8859-1>", ec.inspect
+      assert_equal Encoding::UTF_8, ec.source_encoding
+      assert_equal Encoding::ISO_8859_1, ec.destination_encoding
+      assert_equal "", ec.finish
+    end
+
+    def test_incomplete_tail_waits
+      ec = Encoding::Converter.new("UTF-8", "UTF-16LE")
+      assert_equal [97, 0], ec.convert("a\xE3".b).bytes
+      assert_equal [66, 48], ec.convert("\x81\x82".b).bytes
+      assert_equal "", ec.finish
+    end
+
+    def test_errors_and_last_error
+      ec = Encoding::Converter.new("UTF-8", "US-ASCII")
+      begin
+        ec.convert("aé")
+        flunk "no error"
+      rescue Encoding::UndefinedConversionError => err
+        assert_equal "é", err.error_char
+        assert_equal "UTF-8", err.source_encoding_name
+      end
+      assert_equal Encoding::UndefinedConversionError, ec.last_error.class
+      assert_equal :undefined_conversion, ec.primitive_errinfo[0]
+      assert_equal "?", ec.replacement
+      assert_equal "\uFFFD", Encoding::Converter.new("ISO-8859-1", "UTF-8").replacement
+      r = Encoding::Converter.new("UTF-8", "US-ASCII", undef: :replace, replace: "*")
+      assert_equal "a*", r.convert("aé")
+    end
+
+    def test_convpath
+      assert_equal [[Encoding::UTF_8, Encoding::EUC_JP]], Encoding::Converter.new("UTF-8", "EUC-JP").convpath
+      assert_equal [[Encoding::ISO_8859_1, Encoding::UTF_8], [Encoding::UTF_8, Encoding::EUC_JP], "universal_newline"],
+                   Encoding::Converter.search_convpath("ISO-8859-1", "EUC-JP", newline: :universal)
+      assert_equal Encoding::UTF_8, Encoding::Converter.asciicompat_encoding("UTF-16BE")
+      assert_nil Encoding::Converter.asciicompat_encoding("UTF-8")
+      begin
+        Encoding::Converter.new("UTF-8", "nope")
+        flunk "no error"
+      rescue Encoding::ConverterNotFoundError => nf
+        assert_equal "code converter not found (UTF-8 to nope)", nf.message
+      end
+    end
+  end
 end
