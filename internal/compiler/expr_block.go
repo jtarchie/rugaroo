@@ -54,7 +54,10 @@ func (f *fctx) blockParamList(b parser.Node) blockParams {
 			return nil
 		}
 		ps := p.Parameters
-		if len(ps.Optionals) > 0 || len(ps.Posts) > 0 || len(ps.Keywords) > 0 || ps.KeywordRest != nil || ps.Block != nil {
+		if len(ps.Keywords) > 0 || ps.KeywordRest != nil || ps.Block != nil {
+			f.errorf(b, "unsupported block parameter form: keyword and &block parameters work on a proc or lambda literal assigned once to a local that is only called (.call, .(), .yield, []) with its required arguments (decision 456)")
+		}
+		if len(ps.Optionals) > 0 || len(ps.Posts) > 0 {
 			f.errorf(b, "unsupported block parameter form")
 		}
 		var names blockParams

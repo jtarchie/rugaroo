@@ -945,6 +945,9 @@ func joinUses(uses []paramUse, noUnion bool) (Type, string) {
 				t = j
 			}
 		}
+		if t != nil && isNil(t) && slices.ContainsFunc(uses, func(u paramUse) bool { return u.typ != nil && holdsAny(u.typ) }) {
+			return nil, "" // nil and a value not typed yet: not NilClass, which would fold `x ? ... : ...` to its else (decision 456)
+		}
 		if t != nil {
 			return t, at
 		}

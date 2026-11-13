@@ -106,6 +106,7 @@ func parseFile(ctx context.Context, p *parser.Parser, name string, src []byte, o
 		lowerBlockParamWrites(f.Root)
 		lowerMainIvars(f.Root)
 		lowerLastLine(f.Root)
+		lowerProcParams(f.Root)
 	}
 	f.indexComments(res.Comments)
 	if origin != originPrelude {

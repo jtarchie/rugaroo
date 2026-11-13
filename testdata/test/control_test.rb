@@ -6181,4 +6181,25 @@ module ControlTests
       assert_equal 2, calls
     end
   end
+
+  # Proc literals with keyword or &block parameters, held in a local that is only called (decision 456)
+  class ProcParamsTest < Minitest::Test
+    def test_keywords
+      scale = ->(x, by: 2) { x * by }
+      assert_equal [2, 15], [scale.call(1), scale.(3, by: 5)]
+      req = ->(a, name:) { "#{a}:#{name}" }
+      assert_equal "1:n", req.call(1, name: "n")
+      bag = ->(*xs, **opts) { [xs, opts] }
+      assert_equal [[1, 2], { k: 3 }], bag.call(1, 2, k: 3)
+      assert_equal [[], {}], bag.call
+    end
+
+    def test_block_parameter
+      twice = proc { |a, &b| b.call(b.call(a)) }
+      assert_equal 12, twice.call(3) { |x| x * 2 }
+      maybe = ->(a, &b) { b ? b.call(a) : :none }
+      assert_equal :none, maybe.call(1)
+      assert_equal 2, maybe.call(1) { |x| x + 1 }
+    end
+  end
 end
