@@ -282,7 +282,7 @@ func (f *fctx) emptyRefinements() map[localKey]Type {
 			}
 			continue
 		}
-		if t := refineContainer(li.typ, li.open, li.elems); t != nil {
+		if t := refineContainer(li.typ, li.open, li.elems, f.lenient()); t != nil {
 			out[k] = t
 		}
 		if r, ok := f.refined[k]; ok && li.open {
@@ -373,7 +373,7 @@ func (f *fctx) searchLocals(order []localKey, refined map[localKey]Type, try fun
 // was put in it, or nil: still typed, or no typed evidence to join.
 // Untyped evidence is skipped (`h[k] = h[k] + 1` is untyped only because h
 // is): if it really is untyped, the typed run converts it and is rejected.
-func refineContainer(t Type, open bool, elems [2][]Type) Type {
+func refineContainer(t Type, open bool, elems [2][]Type, gem bool) Type {
 	c, ok := stripOpt(t).(TClass)
 	if !open || !ok || !slices.ContainsFunc(c.Args, isAny) {
 		return nil
@@ -384,9 +384,15 @@ func refineContainer(t Type, open bool, elems [2][]Type) Type {
 			args[i] = c.Args[i]
 			continue
 		}
-		// an untyped value says nothing yet; a container of untyped (parser's `@stack << Set.new` beside a String?) is
-		// evidence of a class the element type must hold, and no element type holding it is typed (decision 444)
-		typed := slices.DeleteFunc(slices.Clone(elems[i]), func(t Type) bool { return isAny(stripOpt(t)) })
+		// an untyped value says nothing yet. In gem code a container of untyped too is evidence (parser's `@stack <<
+		// Set.new` beside a String?): of a class the element type must hold, and no element type holding it is typed
+		// (decision 444). User code skips it as any untyped evidence: a tuple stack's `[k, :open]`, k untyped only while
+		// the search runs, would untype the stack (decision 384)
+		skip := holdsAny
+		if gem {
+			skip = func(t Type) bool { return isAny(stripOpt(t)) }
+		}
+		typed := slices.DeleteFunc(slices.Clone(elems[i]), skip)
 		if args[i] = joinOrAny(typed); len(typed) == 0 || holdsAny(args[i]) {
 			return nil
 		}

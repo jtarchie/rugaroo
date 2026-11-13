@@ -105,6 +105,7 @@ type Compiler struct {
 	gemSigs               fs.FS                     // vendored gem `.rbs` signatures (decision 160), or nil
 	autoloaded            map[string]bool           // boot-resolved autoload files: loaded where their autoload registers (decision 175)
 	lazyAutoloads         map[string]bool           // autoload files boot registered and never loaded (decision 444)
+	droppedLazy           map[string]bool           // of those, the ones that did not compile (options.droppedLazy)
 	constNamed            map[string]bool           // names the kept files read as constants (neededAutoloads)
 	pruneGems             bool                      // a gem program: unreached gem methods are dropped (decision 169)
 	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
@@ -406,6 +407,7 @@ type options struct {
 	refineOut    map[string]*refineRecord // out: this compile's, for the cache
 	roundRefine  map[string]*refineRecord // the previous inference round's candidates and kept typings, tried first by the next (decision 444)
 	widenRedo    int                      // final passes rerun by noteWidenPending
+	droppedLazy  map[string]bool          // lazy autoload files that did not compile: left out (collectLazy)
 }
 
 // ErrInternal marks an error that is a compiler bug (a panic that was neither a compile error nor an inference request), not a fault in the user's program.
@@ -439,6 +441,14 @@ func compileFresh(ctx context.Context, preludeFS fs.FS, sources []Source, opts *
 	for range maxInstanceRestarts {
 		opts.round, opts.inferDone = false, false
 		out, err := compileOnce(ctx, preludeFS, sources, opts)
+		var drop lazyDrop
+		if errors.As(err, &drop) && !opts.droppedLazy[drop.path] { // compile again without it
+			if opts.droppedLazy == nil {
+				opts.droppedLazy = map[string]bool{}
+			}
+			opts.droppedLazy[drop.path] = true
+			continue
+		}
 		if !errors.Is(err, errNeedInstances) {
 			if opts.instRestarts > 0 && opts.env.Timing {
 				fmt.Fprintf(os.Stderr, "rugaroo: %d compiles restarted for generic instances (%d instances)\n", opts.instRestarts, len(opts.instances))
@@ -448,6 +458,31 @@ func compileFresh(ctx context.Context, preludeFS fs.FS, sources []Source, opts *
 		opts.instRestarts++
 	}
 	return nil, fmt.Errorf("generic instances still missing after %d compiles: %s", maxInstanceRestarts, strings.Join(opts.instances, ", "))
+}
+
+// lazyDrop: a file only an autoload the traced run never resolved would load (decision 444) does not compile. It is
+// optional, so the compile runs again without it, and its constant raises NameError if the program ever names it, as
+// before such files were offered (kramdown's Unidecoder, whose module body branches on a run-time `if`).
+type lazyDrop struct {
+	path string
+	err  compileError
+}
+
+func (d lazyDrop) Error() string { return d.err.Error() }
+
+// collectLazy is collect, with a lazily offered file's compile error a lazyDrop.
+func (c *Compiler) collectLazy(ctx context.Context, path string, uf *File) {
+	if !c.lazyAutoloads[path] {
+		c.collect(ctx, uf)
+		return
+	}
+	kept := len(c.kept)
+	if err := catchCompileError(func() { c.collect(ctx, uf) }); err != nil {
+		panic(lazyDrop{path: path, err: *err})
+	}
+	if len(c.kept) > kept {
+		panic(lazyDrop{path: path, err: compileError{msg: c.kept[kept]}})
+	}
 }
 
 // errWidenRedo: the final pass widened parameters the rounds typed too narrowly; it runs again (decision 444).
@@ -571,6 +606,8 @@ func panicToError(r any, sources []Source, mainLast, errStack bool) error {
 		return errNeedInfer
 	case needInstances:
 		return errNeedInstances
+	case lazyDrop:
+		return r
 	default:
 		ie := internalError{val: r}
 		if len(sources) > 0 {
@@ -628,7 +665,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		return nil, perr
 	}
 	c.parsed = parsed
-	c.lazyAutoloads = opts.lazyAutoloads()
+	c.lazyAutoloads, c.droppedLazy = opts.lazyAutoloads(), opts.droppedLazy
 	c.autoloaded = c.neededAutoloads(ctx, c.bundledAutoloads(ctx, opts.autoloaded))
 	var dms []boot.MethodInfo
 	if opts.boot != nil {
@@ -660,7 +697,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		uf := parsed[path]
 		c.files = append(c.files, uf)
 		c.userFiles = append(c.userFiles, uf)
-		c.collect(ctx, uf)
+		c.collectLazy(ctx, path, uf)
 	}
 	for _, uf := range c.userFiles {
 		c.keepGoing(func() { c.collectERB(ctx, uf) }) // templates need every constant collected (decision 111)

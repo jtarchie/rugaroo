@@ -223,7 +223,7 @@ func (c *Compiler) neededAutoloads(ctx context.Context, consts map[string][]stri
 			// a file boot never loaded is kept as a loaded one is: by a constant reference, or by a Symbol naming it
 			// (`register_cop :ClassStructure, path`). A directive comment or a configuration can name any registered cop,
 			// and one left out raised NameError for the whole run (decision 444)
-			if !needed[path] && slices.ContainsFunc(ks, func(k string) bool { return by[k] }) && c.parsed[path] != nil {
+			if !needed[path] && !c.droppedLazy[path] && slices.ContainsFunc(ks, func(k string) bool { return by[k] }) && c.parsed[path] != nil {
 				needed[path], changed = true, true
 				note(c.parsed[path])
 			}

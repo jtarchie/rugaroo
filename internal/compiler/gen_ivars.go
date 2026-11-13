@@ -22,7 +22,7 @@ func (c *Compiler) refineIvars() {
 		for _, cls := range c.classList {
 			for _, name := range slices.Sorted(maps.Keys(cls.Ivars)) {
 				iv := cls.Ivars[name]
-				if t := refineContainer(iv.Type, iv.open, iv.elems); t != nil && typed[iv] == nil {
+				if t := refineContainer(iv.Type, iv.open, iv.elems, iv.Owner != nil && c.gemFile(iv.Owner.File)); t != nil && typed[iv] == nil {
 					cands = append(cands, iv)
 					typed[iv], orig[iv] = t, iv.Type
 					iv.Type = t
