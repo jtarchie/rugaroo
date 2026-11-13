@@ -7010,3 +7010,46 @@ module ObjectTests
     end
   end
 end
+
+# A class statement inside a block is declared at compile time, in the block's constant scope (decision 451)
+module ObjectHoistTests
+  [1, 2].each do
+    class Counter
+      attr_reader :n
+
+      def initialize(n) = @n = n
+      def double = n * 2
+    end
+
+    module Greet
+      def greet = "hi #{name}"
+    end
+  end
+
+  class Named
+    def name = "named"
+  end
+
+  HOIST_VALUES = [1].map do
+    class Named
+      include Greet
+    end
+
+    class ExtraHoisted
+      def extra = 1
+    end
+  end
+
+  class HoistTest < Minitest::Test
+    def test_class_in_block
+      assert_equal 6, Counter.new(3).double
+      assert_equal ObjectHoistTests::Counter, Counter
+    end
+
+    def test_module_in_block_and_value
+      assert_equal [:extra], HOIST_VALUES
+      assert_equal "hi named", Named.new.greet
+      assert_equal 1, ExtraHoisted.new.extra
+    end
+  end
+end

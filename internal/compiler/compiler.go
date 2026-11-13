@@ -110,6 +110,8 @@ type Compiler struct {
 	pruneGems             bool                      // a gem program: unreached gem methods are dropped (decision 169)
 	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
 	gemNilIvars           []gemNilIvar              // gem ivars discovery saw only nil assigned to (decision 169)
+	inBlockScan           int                       // scanAnon is inside a block or def body: a class statement there is hoisted (decision 451)
+	hoisted               map[parser.Node]bool      // those class and module statements: each compiles to nil where it stands
 	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
 	uncalledWriters       map[*Method]ivarKey       // attr writers no call types, by the ivar they write (decision 445)
 	writerReach           map[string]bool           // writerReachable's memo

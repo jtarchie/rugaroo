@@ -46,7 +46,13 @@ func (c *Compiler) scanAnon(ctx context.Context, f *File, n parser.Node, scope [
 	}
 	switch n := n.(type) {
 	case *parser.ClassNode, *parser.ModuleNode:
+		if c.inBlockScan > 0 && !c.gemFile(f) {
+			c.hoistClass(ctx, f, n, scope)
+		}
 		return
+	case *parser.BlockNode, *parser.LambdaNode:
+		c.inBlockScan++
+		defer func() { c.inBlockScan-- }()
 	case *parser.CallNode:
 		if call, kind := valueClass(n); call != nil && len(callArgs(call)) > 0 && c.anonClasses[call] == nil {
 			name := c.anonName(f, call)

@@ -86,7 +86,7 @@ func (c *Compiler) collectBody(ctx context.Context, f *File, cls *Class, body pa
 // collectBodyDef is a def in a class body: its method, its visibility (a bare `private` does not reach `def self.x`),
 // and the class's `method_added(:name)` hook where the def is (rubocop-ast's Subcompiler registry).
 func (c *Compiler) collectBodyDef(ctx context.Context, f *File, cls *Class, n *parser.DefNode, vis *visibility, scope []*Class, loadTime bool) {
-	c.scanAnon(ctx, f, n.Body, scope)
+	c.scanDefBody(ctx, f, n.Body, scope)
 	c.addMethod(f, cls, n, (vis.private || vis.moduleFunction) && n.Receiver == nil, scope)
 	if n.Receiver != nil {
 		return

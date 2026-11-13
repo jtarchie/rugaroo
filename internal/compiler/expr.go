@@ -94,6 +94,14 @@ func (f *fctx) genExpr0(n parser.Node, expected Type) expr {
 		return f.genRegexp(n)
 	case *parser.MatchWriteNode:
 		return f.genMatchWrite(n)
+	case *parser.ClassNode, *parser.ModuleNode:
+		if f.c.hoisted[n] { // declared at compile time (decision 451): the value is a last def's name, else nil
+			if d, ok := lastStmt(hoistedBody(n)).(*parser.DefNode); ok {
+				return f.genExpr(&parser.SymbolNode{Location: parser.Location{StartOffset: d.Location.StartOffset}, Unescaped: parser.RubyString{Value: d.Name}}, expected)
+			}
+			return expr{code: "nil", typ: TNil{}}
+		}
+		f.c.unsupported(f.f, n)
 	case *parser.LocalVariableOrWriteNode, *parser.InstanceVariableOrWriteNode, *parser.CallOrWriteNode, *parser.IndexOrWriteNode,
 		*parser.InstanceVariableAndWriteNode, *parser.LocalVariableAndWriteNode:
 		return f.genOrWrite(n)
