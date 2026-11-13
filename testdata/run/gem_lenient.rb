@@ -39,6 +39,7 @@ require "hookish"
 require "scanish"
 require "readyish"
 require "matchish"
+require "sockish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -180,3 +181,6 @@ Scanish.demo(__dir__).each { |v| p v }
 Readyish.demo.each { |v| p v }
 # rubocop-ast's generated matcher for a nested any-order pattern, as the condition of `return unless` (decision 444)
 p Matchish.demo
+# an untyped parameter written over a placeholder ivar widens it, as a typed one of another class does (decision 458)
+s = Sockish.new
+p s.connect("h"), s.reuse

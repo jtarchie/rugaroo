@@ -59,7 +59,7 @@ func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
 	if !fitsValue(val, iv.Type) && f.lenient() && isUnion(val.typ) { // a gem's union into a narrower ivar converts where it lands, as untyped does (decision 320): Homebrew's `@name = owner.name` of a Formula | Cask
 		val = expr{code: val.code, typ: TAny{}}
 	}
-	if !fitsValue(val, iv.Type) && f.discover && f.lenient() && !isVoid(val.typ) && (iv.Owner != f.owner || isClassObj(val.typ) && isClassObj(iv.Type)) {
+	if !fitsValue(val, iv.Type) && f.discover && f.lenient() && !isVoid(val.typ) && (iv.Owner != f.owner || isClassObj(val.typ) && isClassObj(iv.Type)) || f.discover && f.lenient() && f.untypedParamOver(n.Value, val, iv) {
 		// a gem subclass storing another class in its parent's ivar (liquid's Raw: a String @body over Block's BlockBody,
 		// decision 331), or a class's own of an unrelated class (net-ftp's NullSocket placeholder, then a Socket, decision 416)
 		iv.Type = TAny{}
@@ -79,6 +79,13 @@ func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
 	f.storing--
 	f.markIvar(iv)
 	return f.ivarWritten(n, iv, val, code)
+}
+
+// untypedParamOver: an untyped gem param's class is unknown, so the ivar can't keep its placeholder's (net-ftp @sock, decision 458).
+func (f *fctx) untypedParamOver(v parser.Node, val expr, iv *Ivar) bool {
+	r, ok := v.(*parser.LocalVariableReadNode)
+	return ok && isAny(val.typ) && isClassObj(iv.Type) && f.m != nil &&
+		slices.ContainsFunc(f.m.Params, func(p Param) bool { return p.Name == r.Name })
 }
 
 // joinIvar widens a user ivar its first write declared to the join of its writes, as a local is (decisions 15, 150);
