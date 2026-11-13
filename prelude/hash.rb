@@ -180,12 +180,21 @@ class Hash < Object
     %x{
     self.rbCheckFrozen()
     var h uint64
-    byValue := false
+    byValue, str := false, false
     if !self.idx.plain {
-      k, h, byValue = self.idx.find(k)
+      if str = self.idx.str; str {
+        if i := rbHashFindStr(self, k); i >= 0 {
+          self.ents[i].v = v
+          return v
+        }
+      } else {
+        k, h, byValue = self.idx.find(k)
+      }
     }
     var hv uint64
-    if self.slots != nil {
+    if str {
+      hv = rbHashOf(k) // rbHashFindStr found none: a new key
+    } else if self.slots != nil {
       var i int
       if i, hv = rbHashFind(self, k); i >= 0 {
         self.ents[i].v = v
@@ -288,7 +297,7 @@ class Hash < Object
   #: () -> self
   def compare_by_identity = %x{
     self.rbCheckFrozen()
-    self.idx.plain, self.idx.ident = true, true
+    self.idx.plain, self.idx.ident, self.idx.str = true, true, false
     clear(self.idx.byHash)
     return self
   }
@@ -311,13 +320,19 @@ class Hash < Object
   #: (K) -> V?
   def delete(k) = %x{
     self.rbCheckFrozen()
+    i, str := -1, false
     if !self.idx.plain {
-      k, _, _ = self.idx.find(k)
+      if str = self.idx.str; str {
+        i = rbHashFindStr(self, k)
+      } else {
+        k, _, _ = self.idx.find(k)
+      }
     }
-    i := -1
-    if self.slots != nil {
+    switch {
+    case str: // found by its bytes above
+    case self.slots != nil:
       i, _ = rbHashFind(self, k)
-    } else {
+    default:
       for j := range self.ents {
         if self.ents[j].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, j)) {
           i = j

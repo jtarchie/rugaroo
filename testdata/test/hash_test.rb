@@ -2786,4 +2786,27 @@ module HashTests
       assert_equal(5, hash_default_read(h))
     end
   end
+
+  # String? keys hash and compare by their bytes (decision 448): nil is one key, equal Strings from different reads are one
+  class HashStringOptKeyTest < Minitest::Test
+    def test_string_opt_keys
+      words = "a b a c b a".split.map { |w| w + "" } #: Array[String?]
+      words << nil
+      words << nil
+      freq = {} #: Hash[String?, Integer]
+      words.each { |w| freq[w] = (freq.key?(w) ? (freq[w] || 0) + 1 : 1) }
+      assert_equal({ "a" => 3, "b" => 2, "c" => 1, nil => 2 }, freq)
+      k = "a".dup #: String?
+      assert_equal 3, freq[k]
+      assert_equal 2, freq[nil]
+      assert_equal 3, freq.delete("a".dup)
+      assert_nil freq["a"]
+      (1..20).each { |i| freq["k#{i}"] = i }
+      assert_equal 7, freq["k" + "7"]
+      assert_equal 2, freq[nil]
+      freq.delete(nil)
+      assert_nil freq[nil]
+      assert_equal 22, freq.size
+    end
+  end
 end
