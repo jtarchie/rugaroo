@@ -49,10 +49,6 @@ puts h.fetch("a", 1, 2)
 # error: main.rb:3: Hash#[]: wrong number of arguments (given 2, expected 1)
 h = { "a" => 1 } #: Hash[String, Integer]
 puts h["a", "b"]
--- map_without_block.rb --
-# error: main.rb:3: map requires a block
-h = { "a" => 1 } #: Hash[String, Integer]
-puts h.map.inspect
 -- each_too_many_params.rb --
 # error: main.rb:3: block takes 3 params but the tuple has 2 elements
 h = { "a" => 1 } #: Hash[String, Integer]

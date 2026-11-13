@@ -76,21 +76,6 @@ def keep(s)
 end
 s = +"abc"
 keep(s)
--- out_param_untyped_callee.rb --
-# error: `buf` is passed to inner (whose `buf` parameter it appends to is untyped, not String: annotate it `# @rbs buf: String`) on line 9
-def inner(buf, h)
-  buf << h[:a].to_s
-  nil
-end
-
-def outer(buf, items)
-  buf << "["
-  items.each { |h| inner(buf, h) }
-  nil
-end
-s = +""
-outer(s, [{ a: 1, b: "x" }])
-puts s
 -- shovel_passed.rb --
 # error: `s` is passed to keep on line 8 before its last append
 # rbs_inline: enabled

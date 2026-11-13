@@ -2809,4 +2809,13 @@ module HashTests
       assert_equal 22, freq.size
     end
   end
+
+  # A blockless map shows its receiver, as MRI's Enumerator (decision 450)
+  class HashBlocklessMapTest < Minitest::Test
+    def test_blockless_map
+      h = { "a" => 1 } #: Hash[String, Integer]
+      assert_equal '#<Enumerator: {"a" => 1}:map>', h.map.inspect
+      assert_equal [["a", 1, 0]], h.map.with_index { |(k, v), i| [k, v, i] }
+    end
+  end
 end

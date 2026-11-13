@@ -28,6 +28,19 @@ def string_greet(opts) = "hi #{opts[:name]}"
 #: (untyped) -> untyped
 def string_ident(v) = v
 
+# An out parameter passed on to a callee whose other parameter is a mixed-value Hash (decision 447 types it): #128's
+# untyped-callee case, which compiles now
+def string_mixed_inner(buf, h)
+  buf << h[:a].to_s
+  nil
+end
+
+def string_mixed_outer(buf, items)
+  buf << "["
+  items.each { |h| string_mixed_inner(buf, h) }
+  nil
+end
+
 #: (Object) -> String
 def string_kind(o) = o.class.name
 
@@ -2833,4 +2846,12 @@ module StringTests
     end
   end
 
+
+  class StringOutMixedHashTest < Minitest::Test
+    def test_out_param_through_mixed_hash
+      s = +""
+      string_mixed_outer(s, [{ a: 1, b: "x" }])
+      assert_equal "[1", s
+    end
+  end
 end

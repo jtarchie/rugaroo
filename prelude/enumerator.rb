@@ -122,10 +122,17 @@ class Enumerator < Object
 
   # Blockless map/select/reject: their with_index maps or filters, as MRI's does.
   # @rbs generic E
-  # @go_type struct { items *Array[E]; ext rbExt[E] }
+  # @go_type struct { items *Array[E]; ext rbExt[E]; shown string }
   class Map < Object
     #: [X] (Array[X]) -> Map[X]
     def self.new(items) = %x{ return &Enumerator_Map[X]{items: items} }
+
+    # An Enumerable's blockless map: the elements, and the receiver's inspect, which MRI's shows (decision 450).
+    #: [X] (Array[X], String) -> Map[X]
+    def self.__of(items, shown) = %x{ return &Enumerator_Map[X]{items: items, shown: string(shown)} }
+
+    #: () -> String
+    def __shown = %x{ return String(self.shown) }
 
     #: [U] (?Integer) { (E, Integer) -> U } -> Array[U]
     def with_index(offset = 0) = %x{
@@ -167,17 +174,23 @@ class Enumerator < Object
     def _to_any = %x{ return &Enumerator_Map[any]{items: self.items._ToAny()} }
 
     #: () -> String
-    def inspect = "#<Enumerator: #{to_a.inspect}:map>"
+    def inspect = "#<Enumerator: #{__shown.empty? ? to_a.inspect : __shown}:map>"
 
     #: () -> String
     def to_s = inspect
   end
 
   # @rbs generic E
-  # @go_type struct { items *Array[E]; negate bool; name string; ext rbExt[E] }
+  # @go_type struct { items *Array[E]; negate bool; name string; ext rbExt[E]; shown string }
   class Select < Object
     #: [X] (Array[X], bool, String) -> Select[X]
     def self.new(items, negate, name) = %x{ return &Enumerator_Select[X]{items: items, negate: bool(negate), name: string(name)} }
+
+    #: [X] (Array[X], bool, String, String) -> Select[X]
+    def self.__of(items, negate, name, shown) = %x{ return &Enumerator_Select[X]{items: items, negate: bool(negate), name: string(name), shown: string(shown)} }
+
+    #: () -> String
+    def __shown = %x{ return String(self.shown) }
 
     #: (?Integer) { (E, Integer) -> bool } -> Array[E]
     def with_index(offset = 0) = %x{
@@ -223,7 +236,7 @@ class Enumerator < Object
     def _to_any = %x{ return &Enumerator_Select[any]{items: self.items._ToAny(), negate: self.negate, name: self.name} }
 
     #: () -> String
-    def inspect = "#<Enumerator: #{to_a.inspect}:#{__name}>"
+    def inspect = "#<Enumerator: #{__shown.empty? ? to_a.inspect : __shown}:#{__name}>"
 
     #: () -> String
     def to_s = inspect

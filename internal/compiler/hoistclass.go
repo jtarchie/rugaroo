@@ -89,3 +89,11 @@ func lastStmt(body parser.Node) parser.Node {
 	}
 	return nil
 }
+
+// genHoisted is a class statement hoistClass declared (decision 451): its value, a last def's name, else nil.
+func (f *fctx) genHoisted(n parser.Node, expected Type) expr {
+	if d, ok := lastStmt(hoistedBody(n)).(*parser.DefNode); ok {
+		return f.genExpr(&parser.SymbolNode{Location: parser.Location{StartOffset: d.Location.StartOffset}, Unescaped: parser.RubyString{Value: d.Name}}, expected)
+	}
+	return expr{code: "nil", typ: TNil{}}
+}

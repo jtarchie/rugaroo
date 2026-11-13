@@ -37,10 +37,7 @@ func (f *fctx) genCallRewrite(n *parser.CallNode, expected Type) (expr, bool) {
 			return f.genExpr(&parser.OrNode{Location: n.Location, Left: isA, Right: &parser.NilNode{Location: n.Location}}, expected), true // nil when unrelated
 		}
 	}
-	if c := f.withIndexChain(n); c != nil {
-		return f.genCall(c, expected), true
-	}
-	if e, ok := f.genFoldOrLower(n); ok {
+	if e, ok := f.genFoldOrLower(n, expected); ok {
 		return e, true
 	}
 	if e, ok := f.symbolToProc(n, expected); ok {
@@ -418,7 +415,13 @@ func (f *fctx) genStringLowering(n *parser.CallNode) (expr, bool) {
 }
 
 // genFoldOrLower is a Struct writer's __frozen_flag? as a constant, else a String lowering.
-func (f *fctx) genFoldOrLower(n *parser.CallNode) (expr, bool) {
+func (f *fctx) genFoldOrLower(n *parser.CallNode, expected Type) (expr, bool) {
+	if c := f.withIndexChain(n); c != nil {
+		return f.genCall(c, expected), true
+	}
+	if c := slicePattern(n); c != nil {
+		return f.genCall(c, expected), true
+	}
 	if f.frozenFlagConst(n) {
 		return expr{code: "Boolean(false)", typ: f.cls("Boolean")}, true
 	}
@@ -568,4 +571,29 @@ func (f *fctx) withIndexChain(n *parser.CallNode) *parser.CallNode {
 	}
 	return &parser.CallNode{Location: n.Location, Receiver: inner.Receiver, Name: name, Block: n.Block,
 		Arguments: &parser.ArgumentsNode{Location: n.Location, Arguments: []parser.Node{off}}}
+}
+
+// slicePattern is `xs.slice_before(pat)` / `slice_after(pat)` as the block form `{ |x| pat === x }` (#145), for a pat
+// that reads the same each time (a literal, a local, a constant): no `__slice_*` twin, whose name a `slice` call's
+// overload scan would also match.
+func slicePattern(n *parser.CallNode) *parser.CallNode {
+	if n.Name != "slice_before" && n.Name != "slice_after" || n.Block != nil || len(callArgs(n)) != 1 {
+		return nil
+	}
+	pat := callArgs(n)[0]
+	switch pat.(type) {
+	case *parser.RegularExpressionNode, *parser.StringNode, *parser.IntegerNode, *parser.SymbolNode, *parser.RangeNode,
+		*parser.LocalVariableReadNode, *parser.ConstantReadNode, *parser.ConstantPathNode:
+	default:
+		return nil
+	}
+	loc := n.Location
+	x := "slice_pattern_x_"
+	body := &parser.CallNode{Location: loc, Receiver: pat, Name: "===", Arguments: &parser.ArgumentsNode{Location: loc, Arguments: []parser.Node{&parser.LocalVariableReadNode{Location: loc, Name: x}}}}
+	blk := &parser.BlockNode{Location: loc, Locals: []string{x},
+		Parameters: &parser.BlockParametersNode{Location: loc, Parameters: &parser.ParametersNode{Location: loc, Requireds: []parser.Node{&parser.RequiredParameterNode{Location: loc, Name: x}}}},
+		Body:       &parser.StatementsNode{Location: loc, Body: []parser.Node{body}}}
+	c := *n
+	c.Arguments, c.Block = nil, blk
+	return &c
 }

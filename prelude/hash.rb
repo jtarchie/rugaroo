@@ -192,15 +192,16 @@ class Hash < Object
       }
     }
     var hv uint64
-    if str {
+    switch {
+    case str:
       hv = rbHashOf(k) // rbHashFindStr found none: a new key
-    } else if self.slots != nil {
+    case self.slots != nil:
       var i int
       if i, hv = rbHashFind(self, k); i >= 0 {
         self.ents[i].v = v
         return v
       }
-    } else {
+    default:
       for i := range self.ents {
         if self.ents[i].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
           self.ents[i].v = v

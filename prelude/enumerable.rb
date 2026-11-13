@@ -451,15 +451,6 @@ module Enumerable
     ifnone.call
   end
 
-  # slice_before(pattern): a slice starts at each element pattern === matches (#145).
-  # @dynamic
-  #: (untyped) -> Array[Array[E]]
-  def __slice_before_1(pattern) = slice_before { |x| !!(pattern === x) }
-
-  # @dynamic
-  #: (untyped) -> Array[Array[E]]
-  def __slice_after_1(pattern) = slice_after { |x| !!(pattern === x) }
-
   # `xs.sort_by.with_index(off) { |x, i| }` and its siblings, rewritten to these (withIndexChain, #145): the block
   # runs once per element in order, as MRI's enumerator feeds it, with the element's index.
   #: [K] (Integer) { (E, Integer) -> K } -> Array[E]
@@ -508,16 +499,16 @@ module Enumerable
   end
 
   #: () -> Enumerator::Map[E]
-  def __map_enum = Enumerator::Map.new(to_a)
+  def __map_enum = Enumerator::Map.__of(to_a, inspect)
 
   #: () -> Enumerator::Select[E]
-  def __select_enum = Enumerator::Select.new(to_a, false, "select")
+  def __select_enum = Enumerator::Select.__of(to_a, false, "select", inspect)
 
   #: () -> Enumerator::Select[E]
-  def __filter_enum = Enumerator::Select.new(to_a, false, "filter")
+  def __filter_enum = Enumerator::Select.__of(to_a, false, "filter", inspect)
 
   #: () -> Enumerator::Select[E]
-  def __reject_enum = Enumerator::Select.new(to_a, true, "reject")
+  def __reject_enum = Enumerator::Select.__of(to_a, true, "reject", inspect)
 
   # zip with a block: each pair yielded, nil returned (#145); other is read once, before the first.
   #: [U] (Array[U]) { ([E, U?]) -> void } -> void

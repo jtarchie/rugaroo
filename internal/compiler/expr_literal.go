@@ -127,6 +127,10 @@ func (f *fctx) genLiteral(n parser.Node) (expr, bool) {
 		return f.genMethodCall(n, n.recv, n.name, nil, nil), true
 	case *exprNode:
 		return n.e, true
+	case *parser.ClassNode, *parser.ModuleNode:
+		if f.c.hoisted[n] { // declared at compile time (decision 451)
+			return f.genHoisted(n, nil), true
+		}
 	}
 	return expr{}, false
 }

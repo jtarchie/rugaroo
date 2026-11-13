@@ -785,7 +785,7 @@ func (c *Compiler) updateInference(inf *inference) {
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
-		if pt, at := c.partlyTypedUse(uses); pt != nil && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+		if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
 			next[key], from[key] = pt, at
 			continue
 		}
