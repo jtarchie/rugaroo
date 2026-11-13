@@ -624,6 +624,16 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 		return
 	}
 	pc, ok := stripOpt(p.Type).(TClass)
+	if ok && isAny(a.typ) && c.typedContainer(pc) {
+		// an untyped value where the rounds typed a container (liquid's For#render_segment(context, segment), its segment
+		// Array[String] in the rounds and untyped in the final pass): converting it copies the elements and raises on the
+		// first that does not fit, where MRI runs on, so the parameter is untyped and the final pass runs again
+		if c.widenPending == nil {
+			c.widenPending = map[pendingKey]Type{}
+		}
+		c.widenPending[p.Pending] = TAny{}
+		return
+	}
 	ac, ok2 := stripOpt(a.typ).(TClass)
 	if ok && ok2 && c.otherCoreClass(pc, ac) {
 		// a core value of another class than the rounds typed the parameter (rubocop-ast's `ProcessedSource#[](*args)`, typed
@@ -649,6 +659,15 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 		t = TOpt{Elem: ac}
 	}
 	c.widenPending[p.Pending] = t
+}
+
+// typedContainer reports an Array, Hash or Set with a typed element (or key/value) type.
+func (c *Compiler) typedContainer(t TClass) bool {
+	switch t.C.RubyName {
+	case "Array", "Hash", "Set":
+		return slices.ContainsFunc(t.Args, func(a Type) bool { return !isAny(a) })
+	}
+	return false
 }
 
 // otherCoreClass reports two unrelated core value classes (Integer and Range), neither a module nor a number.
