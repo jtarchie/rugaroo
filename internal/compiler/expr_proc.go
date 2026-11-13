@@ -106,7 +106,7 @@ func (f *fctx) procBlock(ba *parser.BlockArgumentNode) *parser.BlockNode {
 	if tc, ok := pt.(TClass); ok && tc.C.RubyName == yielderClass {
 		return yielderBlock(ba)
 	}
-	if kind, _, typed := methodFn(pt); f.lenient() && (f.heldAsAny(pt) || kind == "Method" && !typed) {
+	if kind, _, typed := methodFn(pt); f.lenient() && !isNil(pt) && (f.heldAsAny(pt) || kind == "Method" && !typed) { // `&nil` passes no block
 		// a gem's untyped callable as a block (rubocop's `aligned_with_any_line_range?(ranges, range, &predicate)`, where
 		// predicate is one of two Method objects): `{ |*xs| predicate.call(*xs) }`, called when it runs (decision 444)
 		loc := ba.Location
