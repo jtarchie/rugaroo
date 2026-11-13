@@ -141,6 +141,8 @@ spinel, Crystal, hand-written Go) and where rugaroo trails. On spinel's own
 73-program suite it builds 65 unmodified (47 by default, 18 more with
 `--nil-check=runtime`) and runs them 18.0x faster than MRI (spinel: 23.8x on
 the same programs).
+A hot program can go a further 0-15% with a profile of its own run
+(`-profile-out`, then `-pgo`: [docs/cli.md](docs/cli.md#make-a-hot-program-faster)).
 
 Correctness is measured against MRI: every [example](examples/), minitest
 suite and compile-error archive runs against `ruby` under `go test`. As a

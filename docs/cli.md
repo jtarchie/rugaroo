@@ -30,12 +30,25 @@ For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, 
 | `-race` | stable | Build with Go's race detector. |
 | `-gcflags flags` | stable | Passed to `go build`, after the default `-dwarf=false`; `-gcflags=-e` shows every Go error when generated code fails to build (please report those). |
 | `-debug` | stable | Keep Go's debug info (DWARF) for a debugger such as Delve on the generated Go. By default programs are built without it (`-gcflags=-dwarf=false -ldflags=-w`): smaller binaries and a quarter less compile memory; `RUGAROO_BACKTRACE=1` and panic traces do not need it ([decision 437](decisions/437.md)). |
-| `-pgo profile` | experimental | `build` and `run`: a CPU profile (pprof format) recorded from this same program, passed to `go build -pgo` so the Go compiler inlines more at the program's hot call sites (profile-guided optimization; 0-15% faster in our benchmarks). A profile only helps the program it came from, and goes stale as the Ruby source changes. A missing or unreadable file is an error naming it. |
+| `-pgo profile` | experimental | `build`, `run` and `test`: a CPU profile (pprof format) recorded from this same program, passed to `go build -pgo` so the Go compiler inlines more at the program's hot call sites (profile-guided optimization; 0-15% faster in our benchmarks). A profile only helps the program it came from, and goes stale as the Ruby source changes. A missing or unreadable file is an error naming it. |
+| `-profile-out file` | experimental | `build`, `run` and `test`: the binary records a CPU profile of its own run (from start to exit, at_exit handlers included; `exit!` skips it) and writes it to `file`, relative to where it runs, for a later `-pgo` build. It prints exactly what the normal build prints. See [Make a hot program faster](#make-a-hot-program-faster) ([decision 449](decisions/449.md)). |
 | `-work` | stable | Keep the temporary module (`main.go`, `go.mod`) and print its path as `WORK=...`. |
 | `-trace` | experimental | Run the program once under MRI, with the arguments after the file, and compile every file that run loaded. For gems that `require` files by computed name. **The run executes the program.** |
 | `-trace-also "args"` | experimental | With `-trace`: one more traced run with these arguments, merged into the same binary, for a program that serves several commands. Repeatable. |
 | `-rubyopt opt` | experimental | With `-trace`: an option for the MRI run, as the program's own launcher would pass it. Repeatable. |
 | `-main file` | experimental | Compile from a traced entry file (the requires an MRI run loaded) instead of tracing again; `file` is the program that entry runs. |
+
+## Make a hot program faster
+
+Go's compiler can use a CPU profile of a program to inline more at the call sites that are actually hot (profile-guided optimization, PGO). It only helps when the profile comes from **the same program**: a shared profile of rugaroo's core library measured as noise on programs it had not seen ([#116](https://github.com/jtarchie/rugaroo/issues/116)). The loop:
+
+```sh
+rugaroo build -profile-out cpu.pprof -o prog main.rb   # a binary that profiles itself
+./prog typical-input.txt                                # run it on representative input; cpu.pprof is written at exit
+rugaroo build -pgo cpu.pprof -o prog main.rb           # rebuild with the profile
+```
+
+Our benchmarks ran 0-15% fewer instructions with their own profile. Record the profile again after changing the Ruby source: a stale one still builds, but the hot spots it names move.
 
 ## `rugaroo test`
 

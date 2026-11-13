@@ -62,8 +62,16 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 			if err != nil {
 				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
 			}
-		case a == "-gcflags", a == "-I":
+		case want == "-pgo":
+			opts.pgo, want = a, ""
+		case want == "-profile-out":
+			opts.profile, want = a, ""
+		case a == "-gcflags", a == "-I", a == "-pgo", a == "-profile-out":
 			want = a
+		case strings.HasPrefix(a, "-pgo="), strings.HasPrefix(a, "--pgo="):
+			_, opts.pgo, _ = strings.Cut(a, "=")
+		case strings.HasPrefix(a, "-profile-out="), strings.HasPrefix(a, "--profile-out="):
+			_, opts.profile, _ = strings.Cut(a, "=")
 		case a == "-compiler", a == "--compiler":
 			want = "-compiler"
 		case strings.HasPrefix(a, "-compiler="), strings.HasPrefix(a, "--compiler="):
@@ -94,6 +102,13 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 	}
 	if want != "" {
 		return opts, nil, fmt.Errorf("rugaroo test: %s needs a value", want)
+	}
+	if opts.pgo != "" {
+		p, err := pgoPath(opts.pgo)
+		if err != nil {
+			return opts, nil, fmt.Errorf("rugaroo test: -pgo: %w", err)
+		}
+		opts.pgo = p
 	}
 	return opts, rest, checkCompiler(opts)
 }

@@ -469,6 +469,9 @@ func rbTopRecover() {
 // rbFullReport: RUGAROO_BACKTRACE set prints an uncaught exception as MRI does, `file:line:in 'x': msg (Class)` and its `from` lines, where the default is `msg (Class)` alone (decision 106).
 var rbFullReport = os.Getenv("RUGAROO_BACKTRACE") != ""
 
+// rbProfileStop writes the CPU profile a `-profile-out` build records (decision 449); nil in every other build.
+var rbProfileStop func()
+
 // rbFinish runs the at_exit handlers, prints main (an uncaught exception
 // or nil) and exits with the resulting status; it returns only for 0.
 func rbFinish(status int, main any) {
@@ -488,6 +491,9 @@ func rbFinish(status int, main any) {
 		}()
 	}
 	rbFlush()
+	if rbProfileStop != nil {
+		rbProfileStop()
+	}
 	if main != nil {
 		rbPrintUncaught(main)
 		if se, ok := main.(interface{ Signo() Integer }); ok { // an uncaught Interrupt ends the program by its signal, as in MRI
