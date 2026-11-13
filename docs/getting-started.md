@@ -202,7 +202,7 @@ Every message below is what rugaroo prints today, prefixed by `file:line`.
 | `define_method is not supported` | Methods must exist at compile time. | `def`, or `method_missing` with a signature. |
 | `non-local return from a block is not supported` | A `return` inside a block that is stored as a closure (`map`, `select`, ...) can't unwind the method in Go. | Use `find`/`any?`/`each_with_object`, or loop with `each`, where `return` works. |
 | `break with a value is not supported` / `next with a value is not supported` | `break v`, and `next v` where the value is thrown away. | Compute the value first (`find`, `index`), then plain `break`/`next`. |
-| `blocks on untyped receivers are not supported` | A block passed to a method called on an `untyped` value. | Give the receiver a type: a signature on the method it came in through, or `list = value #: Array[Integer]`. |
+| `blocks on untyped receivers are not supported` | A block passed to a method called on an `untyped` value. | Give the receiver a type: a signature on the method it came in through, or `list = value #: Array[Integer]`.  When the receiver is a parameter, the message names it: `parameter x of f is untyped, ...`. |
 | `overloaded signatures (#\|) are not supported` | Inline overloads. | Put them in a `.rbs` file under `sig/`. |
 | `require_relative must be a top-level statement: rugaroo loads files at compile time` | A `require_relative` inside a method or condition. | Move it to the top of the file. |
 | `encoding ISO-2022-JP is not supported` | 60 encodings are known; the others are listed in [support](support.md#encodings) with why. | Convert at the program's edges. |

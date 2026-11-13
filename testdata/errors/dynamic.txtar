@@ -348,3 +348,10 @@ class Calc
   def run = eval("1")
 end
 Calc.new.run
+-- block_on_untyped_param.rb --
+# error: main.rb:3: blocks on untyped receivers are not supported: parameter x of f is untyped, as no call gives it one type; annotate it (`# @rbs x: T`)
+def f(x)
+  x.each { |y| p y }
+end
+v = [1] #: untyped
+f(v)

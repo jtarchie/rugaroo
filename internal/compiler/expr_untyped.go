@@ -145,6 +145,14 @@ func (f *fctx) universalBlockCall(n parser.Node, recv expr, name string, args []
 			return e
 		}
 	}
+	if c, ok := n.(*parser.CallNode); ok && f.m != nil {
+		if lv, ok := c.Receiver.(*parser.LocalVariableReadNode); ok {
+			if i := slices.IndexFunc(f.m.Params, func(p Param) bool { return p.Name == lv.Name }); i >= 0 && f.m.Params[i].Pending != "" {
+				// the parameter no call typed is the root (decision 447): name it and the annotation that fixes it
+				f.errorf(n, "blocks on untyped receivers are not supported: parameter %s of %s is untyped, as no call gives it one type; annotate it (`# @rbs %s: T`)", lv.Name, f.m.Name, lv.Name)
+			}
+		}
+	}
 	f.errorf(n, "blocks on untyped receivers are not supported")
 	return expr{}
 }
