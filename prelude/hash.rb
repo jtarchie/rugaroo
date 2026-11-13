@@ -193,7 +193,7 @@ class Hash < Object
       }
     } else {
       for i := range self.ents {
-        if self.ents[i].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
+        if (self.ents[i].k == k || self.idx.str && rbStrPEq(self.ents[i].k, k)) && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
           self.ents[i].v = v
           return v
         }
@@ -288,7 +288,7 @@ class Hash < Object
   #: () -> self
   def compare_by_identity = %x{
     self.rbCheckFrozen()
-    self.idx.plain, self.idx.ident = true, true
+    self.idx.plain, self.idx.ident, self.idx.str = true, true, false
     clear(self.idx.byHash)
     return self
   }
@@ -319,7 +319,7 @@ class Hash < Object
       i, _ = rbHashFind(self, k)
     } else {
       for j := range self.ents {
-        if self.ents[j].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, j)) {
+        if (self.ents[j].k == k || self.idx.str && rbStrPEq(self.ents[j].k, k)) && (int(self.live) == len(self.ents) || !rbGone(self.gone, j)) {
           i = j
           break
         }

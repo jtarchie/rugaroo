@@ -30,13 +30,14 @@ func rbInspectPair(k, v any, seen *rbSeen) string {
 type rbKeyIndex[K comparable] struct {
 	plain  bool
 	ident  bool // compare_by_identity: plain was set by it
+	str    bool // a Hash's String? keys: hashed and compared by their bytes, not canonicalized through byHash (decision 448)
 	byHash map[uint64][]K
 }
 
 // find is the map key Ruby's eql? gives k: the stored key eql? to k, or
 // k itself. Keys that do not match by value are their own map keys.
 func (idx *rbKeyIndex[K]) find(k K) (key K, h uint64, byValue bool) {
-	if idx.plain {
+	if idx.plain || idx.str {
 		return k, 0, false
 	}
 	if p, ok := any(&k).(**String); ok && *p != nil { // String? keys: String#hash and ==, not boxed through rbValueKey (decision 397)
@@ -57,6 +58,12 @@ func (idx *rbKeyIndex[K]) find(k K) (key K, h uint64, byValue bool) {
 		}
 	}
 	return k, h, true
+}
+
+// rbStrPEq: two String? keys (K is *String) are eql? when both are nil or their Strings are equal.
+func rbStrPEq[K comparable](a, b K) bool {
+	pa, pb := any(&a).(**String), any(&b).(**String)
+	return *pa == *pb || *pa != nil && *pb != nil && **pa == **pb
 }
 
 // rbIdxHash is the bucket find files k under: a String? key's String#hash, as find's fast path, else rbValueKey's.
@@ -146,7 +153,7 @@ func (self *Hash[K, V]) rbGet(k K) (V, bool) {
 		}
 	} else {
 		for i := range self.ents { // the scan is repeated in []= and delete rather than shared: one less function per instantiation
-			if self.ents[i].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
+			if (self.ents[i].k == k || self.idx.str && rbStrPEq(self.ents[i].k, k)) && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
 				return self.ents[i].v, true
 			}
 		}
@@ -175,7 +182,7 @@ func rbGone(gone []uint64, i int) bool {
 // rbHashScan finds k (canonical: idx.find) in a Hash small enough to have no slots.
 func rbHashScan[K, V comparable](h *Hash[K, V], k K) (int, bool) {
 	for i := range h.ents {
-		if h.ents[i].k == k && (int(h.live) == len(h.ents) || !rbGone(h.gone, i)) {
+		if (h.ents[i].k == k || h.idx.str && rbStrPEq(h.ents[i].k, k)) && (int(h.live) == len(h.ents) || !rbGone(h.gone, i)) {
 			return i, true
 		}
 	}
@@ -241,7 +248,7 @@ func rbHashDropAt[K, V comparable](h *Hash[K, V], i int) {
 			h.slots[j] = -1
 		}
 	}
-	if !h.idx.plain {
+	if !h.idx.plain && !h.idx.str {
 		if hv, byValue := rbIdxHash(k); byValue {
 			h.idx.remove(k, hv)
 		}
@@ -487,7 +494,7 @@ func rbHashFind[K, V comparable](h *Hash[K, V], k K) (int, uint64) {
 		if s == 0 {
 			return -1, hv
 		}
-		if s > 0 && h.ents[s-1].k == k {
+		if s > 0 && (h.ents[s-1].k == k || h.idx.str && rbStrPEq(h.ents[s-1].k, k)) {
 			return int(s - 1), hv
 		}
 	}
@@ -555,6 +562,11 @@ func rbHashOfAny[K comparable](k K) uint64 {
 		return rbHashString(string(x))
 	case Symbol:
 		return rbHashString(string(x))
+	case *String: // a String? key by its bytes, as rbStrPEq compares it (decision 448)
+		if x == nil {
+			return rbMixHash(0)
+		}
+		return rbHashString(string(*x))
 	case Float:
 		if x == 0 {
 			x = 0 // -0.0 == 0.0
