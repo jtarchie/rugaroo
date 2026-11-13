@@ -42,9 +42,11 @@ type needInfer struct{}
 
 const maxInferRounds = 8
 
-// settledRounds is how many settled rounds in a row end the rounds early (inferRounds). 2 is too few: on rubocop it
-// left a parameter of Layout/IndentationWidth typed narrower than a later round would, and that cop raised on every
-// input (2026-11-12; 3 matches MRI on all 15 test inputs).
+// settledRounds is how many settled rounds in a row end the rounds early (inferRounds). 2 is too few: untyping spreads
+// one call level per round (Layout/IndentationWidth's indentation_to_check?(base_loc) untyped in one, then the
+// skip_check?(base_loc) it calls in the next), so stopping a round sooner left skip_check? asserting a Range it is not
+// always passed, and the cop raised on every input; untyping the parameters still changing at the stop did not help.
+// 3 matches MRI on all 15 test inputs (2026-11-12).
 const settledRounds = 3
 
 // inference is what the rounds learned: each parameter key's type, from
