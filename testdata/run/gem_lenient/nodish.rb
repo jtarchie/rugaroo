@@ -145,6 +145,7 @@ module Nodish
 
     def first_def(node) = node.each_ancestor.find { |a| a.type == :def }&.type
   end
+
   def self.demo
     out = []
     out.push(CopA.new.check(1), CopB.new.style)

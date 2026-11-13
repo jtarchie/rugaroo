@@ -145,6 +145,7 @@ module Dynish
 
     def first_def(node) = node.each_ancestor.find { |a| a.type == :def }&.type
   end
+
   class CopD
     ANY = Object.new
     def ANY.==(_)
@@ -194,4 +195,3 @@ module Dynish
     out
   end
 end
-

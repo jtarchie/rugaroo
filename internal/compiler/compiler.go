@@ -478,7 +478,8 @@ func (c *Compiler) collectLazy(ctx context.Context, path string, uf *File) {
 		return
 	}
 	kept := len(c.kept)
-	if err := catchCompileError(func() { c.collect(ctx, uf) }); err != nil {
+	err := catchCompileError(func() { c.collect(ctx, uf) })
+	if err != nil {
 		panic(lazyDrop{path: path, err: *err})
 	}
 	if len(c.kept) > kept {

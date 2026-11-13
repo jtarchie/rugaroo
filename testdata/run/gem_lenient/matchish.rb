@@ -1,3 +1,4 @@
+# rubocop:disable Layout, Style -- rubocop-ast's generated matcher code, kept as it emits it (the shape under test)
 module Matchish
   class Nd
     attr_reader :type, :children

@@ -6957,6 +6957,7 @@ module ObjectTests
       assert_equal([nil, 6], [f.call(1), f.call(3)])
     end
   end
+
   # a module's override of a method of the module it includes, called from that module (decision 444)
   module NestStyled
     #: () -> Symbol

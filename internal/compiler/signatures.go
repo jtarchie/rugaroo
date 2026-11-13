@@ -25,6 +25,20 @@ func (c *Compiler) markCalleeDefaults() {
 		}
 	}
 	c.markOtherDefaults(names)
+	c.spreadCalleeDefaults(names)
+	for _, cls := range c.classList {
+		if cls.metaOf == nil {
+			continue
+		}
+		if m, init := cls.Methods["new"], cls.metaOf.lookup("initialize"); m != nil && m.Kind == kindSynth && init != nil {
+			m.calleeDefaults = init.M.calleeDefaults
+		}
+	}
+}
+
+// spreadCalleeDefaults gives callee-side defaults to every def of a marked name an ancestor or descendant also defines,
+// until nothing changes: they share one Go signature (decision 444's override defaults).
+func (c *Compiler) spreadCalleeDefaults(names map[string]bool) {
 	for changed := len(names) > 0; changed; {
 		changed = false
 		for _, cls := range c.classList {
@@ -44,14 +58,6 @@ func (c *Compiler) markCalleeDefaults() {
 					m.calleeDefaults, a.calleeDefaults, changed = true, true, true
 				}
 			}
-		}
-	}
-	for _, cls := range c.classList {
-		if cls.metaOf == nil {
-			continue
-		}
-		if m, init := cls.Methods["new"], cls.metaOf.lookup("initialize"); m != nil && m.Kind == kindSynth && init != nil {
-			m.calleeDefaults = init.M.calleeDefaults
 		}
 	}
 }
