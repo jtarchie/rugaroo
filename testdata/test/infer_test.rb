@@ -11,6 +11,17 @@ def infer_bigger(e) = e.select { |x| x > 1 }
 
 def infer_kwrest_size(**opts) = opts.size
 
+# an Array of Hash literals whose values mix classes: the parameter is Array[Hash[Symbol, untyped]], so its block compiles (decision 447)
+def infer_mixed_rows(items)
+  out = []
+  items.each_with_index { |x, i| out << "#{i}:#{x[:title]}:#{x[:price] * 2}" }
+  out
+end
+
+def infer_mixed_opts(o)
+  o.map { |k, v| "#{k}=#{v}" }
+end
+
 #: (Integer, ?Integer, ?Integer) -> Array[Integer]
 def infer_three(a, b = 10, c = 20) = [a, b, c]
 
@@ -722,6 +733,13 @@ module InferTests
       rescue TypeError => e
         assert_equal TypeError, e.class
       end
+    end
+  end
+
+  class MixedLiteralTest < Minitest::Test
+    def test_array_of_mixed_hashes
+      assert_equal ["0:a:2", "1:b:4"], infer_mixed_rows([{ title: "a", price: 1 }, { title: "b", price: 2 }])
+      assert_equal ["a=1", "b=s"], infer_mixed_opts({ a: 1, b: "s" })
     end
   end
 end

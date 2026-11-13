@@ -785,6 +785,10 @@ func (c *Compiler) updateInference(inf *inference) {
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
+		if pt, at := c.partlyTypedUse(uses); pt != nil && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+			next[key], from[key] = pt, at
+			continue
+		}
 		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
 			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 		}
@@ -946,6 +950,34 @@ func joinUses(uses []paramUse, noUnion bool) (Type, string) {
 		}
 	}
 	return nil, ""
+}
+
+// partlyTypedUse is the join of a program parameter's uses when each is a container holding untyped (a mixed Hash
+// literal's `Array[Hash[Symbol, untyped]]`): the container's methods stay typed, not the whole value (decision 447).
+func (c *Compiler) partlyTypedUse(uses []paramUse) (Type, string) {
+	var t Type
+	at := ""
+	for _, u := range uses {
+		if u.typ == nil || isAny(stripOpt(u.typ)) || mentionsVar(u.typ) || u.file == nil || c.gemFile(u.file) || u.dyn || u.widen || u.anyRest {
+			return nil, ""
+		}
+		if _, void := u.typ.(TVoid); void {
+			return nil, ""
+		}
+		if ct, ok := stripOpt(u.typ).(TClass); !ok || len(ct.Args) == 0 {
+			return nil, ""
+		}
+		if t == nil {
+			t, at = u.typ, u.at().String()
+			continue
+		}
+		j, ok := join(t, u.typ)
+		if !ok || isAny(j) || isUnion(j) {
+			return nil, ""
+		}
+		t = j
+	}
+	return t, at
 }
 
 // coercePending is coerceArg's check for a parameter typed from use: a
