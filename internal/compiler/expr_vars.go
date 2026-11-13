@@ -2,9 +2,9 @@ package compiler
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
-	"regexp"
 	"strings"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
