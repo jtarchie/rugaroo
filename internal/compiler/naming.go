@@ -119,6 +119,9 @@ func goLocalName(name string) string {
 	if strings.HasPrefix(name, "@") { // main's ivar as a local (decision 362)
 		return "iv_" + name[1:] + "_m_" // ends in one `_`, the compiler-local shape no Ruby name can reach
 	}
+	if name == lastLineLocal { // $_ as a frame's local (decision 446)
+		return "lastLine_"
+	}
 	if goKeywords[name] || name != "_" && strings.HasSuffix(name, "_") {
 		return name + "_"
 	}

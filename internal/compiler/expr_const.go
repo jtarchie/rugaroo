@@ -373,7 +373,7 @@ func (c *Compiler) constTypeOf(cls *Class, k *Const) Type {
 }
 
 // englishGlobals are English.rb's aliases of the globals genGlobalRead knows (Homebrew's `$CHILD_STATUS`; library/English,
-// decision 414; `$NR` for $., decision 425). $_ ($LAST_READ_LINE) is not: rugaroo's gets keeps no last line.
+// decision 414; `$NR` for $., decision 425). $_ ($LAST_READ_LINE) is a frame's local: lowerLastLine (decision 446).
 var englishGlobals = map[string]string{
 	"$CHILD_STATUS": "$?", "$PROCESS_ID": "$$", "$PID": "$$", "$LAST_MATCH_INFO": "$~",
 	"$INPUT_RECORD_SEPARATOR": "$/", "$RS": "$/", "$ERROR_INFO": "$!", "$ERROR_POSITION": "$@",

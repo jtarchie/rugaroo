@@ -602,6 +602,9 @@ func (f *fctx) truthy(n parser.Node, e expr) string {
 	if iv, ok := n.(*parser.InstanceVariableReadNode); ok && f.scope.lookup(ivarNarrowKey(iv.Name)) != nil {
 		return "true" // narrowed (decision 148): the check is the program's, not a mistake
 	}
+	if lv, ok := n.(*parser.LocalVariableReadNode); ok && lv.Name == lastLineLocal {
+		return "true" // `~ /re/`'s own check of $_ (decision 446), not the program's
+	}
 	if f.lenient() {
 		// a gem's object may hold nil its type does not say (Homebrew's `if (inheritance = @sandbox_inheritance)`, an IO
 		// attr_writer's ivar never set): tested at run time, where Go can compare it to nil (decision 257)

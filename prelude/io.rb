@@ -1002,6 +1002,10 @@ module Kernel
     Warning.warn(s, category: category)
   end
 
+  # $_ before a frame's first gets: nil, typed as gets' line (decision 446).
+  #: () -> String?
+  def __no_line = nil
+
   # The user-code frame uplevel frames up from warn's caller (decision 129).
   #: (Integer) -> String
   def __caller_loc(n) = %x{ return String(rbCallerLocN(int(n))) }
