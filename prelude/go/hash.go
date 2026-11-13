@@ -145,6 +145,13 @@ func (self *Hash[K, V]) rbEachAny(yield func(k, v any) bool) {
 //go:noinline
 func (self *Hash[K, V]) rbGet(k K) (V, bool) {
 	if !self.idx.plain {
+		if self.idx.str {
+			if i := rbHashFindStr(self, k); i >= 0 {
+				return self.ents[i].v, true
+			}
+			var zero V
+			return zero, false
+		}
 		k, _, _ = self.idx.find(k)
 	}
 	if self.slots != nil {
@@ -153,7 +160,7 @@ func (self *Hash[K, V]) rbGet(k K) (V, bool) {
 		}
 	} else {
 		for i := range self.ents { // the scan is repeated in []= and delete rather than shared: one less function per instantiation
-			if (self.ents[i].k == k || self.idx.str && rbStrPEq(self.ents[i].k, k)) && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
+			if self.ents[i].k == k && (int(self.live) == len(self.ents) || !rbGone(self.gone, i)) {
 				return self.ents[i].v, true
 			}
 		}
@@ -182,7 +189,7 @@ func rbGone(gone []uint64, i int) bool {
 // rbHashScan finds k (canonical: idx.find) in a Hash small enough to have no slots.
 func rbHashScan[K, V comparable](h *Hash[K, V], k K) (int, bool) {
 	for i := range h.ents {
-		if (h.ents[i].k == k || h.idx.str && rbStrPEq(h.ents[i].k, k)) && (int(h.live) == len(h.ents) || !rbGone(h.gone, i)) {
+		if h.ents[i].k == k && (int(h.live) == len(h.ents) || !rbGone(h.gone, i)) {
 			return i, true
 		}
 	}
@@ -223,6 +230,12 @@ func rbHashKeys[K, V comparable](h *Hash[K, V]) []K {
 // rbHashSlot is k's value in place (nil when absent) for the fused `h[k] op= v`: one lookup; valid only until the next insertion.
 func rbHashSlot[K, V comparable](h *Hash[K, V], k K) *V {
 	if !h.idx.plain {
+		if h.idx.str {
+			if i := rbHashFindStr(h, k); i >= 0 {
+				return &h.ents[i].v
+			}
+			return nil
+		}
 		k, _, _ = h.idx.find(k)
 	}
 	if h.slots != nil {
@@ -494,8 +507,30 @@ func rbHashFind[K, V comparable](h *Hash[K, V], k K) (int, uint64) {
 		if s == 0 {
 			return -1, hv
 		}
-		if s > 0 && (h.ents[s-1].k == k || h.idx.str && rbStrPEq(h.ents[s-1].k, k)) {
+		if s > 0 && h.ents[s-1].k == k {
 			return int(s - 1), hv
+		}
+	}
+}
+
+// rbHashFindStr is k's entry index (-1 if absent) in a Hash of String? keys, compared by their bytes (decision 448).
+func rbHashFindStr[K, V comparable](h *Hash[K, V], k K) int {
+	if h.slots == nil {
+		for i := range h.ents {
+			if rbStrPEq(h.ents[i].k, k) && (int(h.live) == len(h.ents) || !rbGone(h.gone, i)) {
+				return i
+			}
+		}
+		return -1
+	}
+	m := uint64(len(h.slots) - 1)
+	for i := rbHashOf(k) & m; ; i = (i + 1) & m {
+		s := h.slots[i]
+		if s == 0 {
+			return -1
+		}
+		if s > 0 && rbStrPEq(h.ents[s-1].k, k) {
+			return int(s - 1)
 		}
 	}
 }

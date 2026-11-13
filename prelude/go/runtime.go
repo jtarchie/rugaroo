@@ -1038,6 +1038,13 @@ func rbPlainKey[K comparable]() bool {
 	return false
 }
 
+// rbStrPKey reports whether K is String? (decision 448).
+func rbStrPKey[K comparable]() bool {
+	var z K
+	_, ok := any(z).(*String)
+	return ok
+}
+
 type rbEqlHash interface {
 	EqlQ(other any) Boolean
 	Hash() Integer
@@ -1531,9 +1538,7 @@ func rbStopped() {
 }
 
 func NewHash[K, V comparable]() *Hash[K, V] {
-	var z K
-	_, str := any(&z).(**String)
-	return &Hash[K, V]{idx: rbKeyIndex[K]{plain: rbPlainKey[K](), str: str}} // slots are made by the ninth key (decision 388): an empty Hash allocates no index
+	return &Hash[K, V]{idx: rbKeyIndex[K]{plain: rbPlainKey[K](), str: rbStrPKey[K]()}} // slots are made by the ninth key (decision 388): an empty Hash allocates no index
 }
 
 // `when Array` / `when Hash` in a type switch can't match a generic
