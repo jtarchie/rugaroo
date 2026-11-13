@@ -14,11 +14,11 @@ func outParamName(p Param, i int) string { return goParamName(p.Name, i) + "_out
 func (c *Compiler) markOutParams() {
 	var cands []*Method
 	add := func(m *Method) {
-		if m.Node == nil || m.File == nil || m.File.isPrelude() {
+		if m.Node == nil || m.File == nil {
 			return
 		}
 		if m.Owner != nil && m.Owner.metaOf == nil { // an instance method: an override or a dynamic call would pass a String where a *String is taken
-			if !c.gemFile(m.File) || m.Owner.IsModule || m.Owner.descendantDefines(m.Name, true) || !m.Private && overridesAncestor(m) {
+			if !c.gemFile(m.File) && !m.File.isPrelude() || m.Owner.IsModule || m.Owner.descendantDefines(m.Name, true) || !m.Private && overridesAncestor(m) {
 				return
 			}
 		}
@@ -133,7 +133,7 @@ func appendsTo(body parser.Node, name string, passes func(*parser.CallNode, int)
 	walkNode(body, func(n parser.Node) (bool, bool) {
 		switch t := n.(type) {
 		case *parser.CallNode:
-			if lv, ok := t.Receiver.(*parser.LocalVariableReadNode); ok && lv.Name == name && strAppendNames[t.Name] {
+			if lv, ok := t.Receiver.(*parser.LocalVariableReadNode); ok && lv.Name == name && (strAppendNames[t.Name] || strRebindNames[t.Name]) {
 				appends = true
 			}
 			for j, a := range callArgs(t) {

@@ -13,6 +13,10 @@ import (
 // `append_as_bytes` (each argument's bytes, an Integer's low byte; prism's translation lexer builds unescaped strings with it).
 var strAppendNames = setOf("<<", "concat", "append_as_bytes")
 
+// strRebindNames are the String edits rugaroo compiles as rebinding a proven local (or an out parameter) to new
+// contents: `s.replace(t)`, `s.clear` (decision 455). Their value is the String itself, as an append's.
+var strRebindNames = setOf("replace", "clear")
+
 // readOnlyStrMethods neither keep, return nor change their receiver, so calling one is not an alias (decision 382).
 var readOnlyStrMethods = setOf("size", "length", "bytesize", "empty?", "include?", "start_with?", "end_with?",
 	"getbyte", "[]", "byteslice", "slice", "==", "!=", "eql?", "hash", "=~", "match", "match?", "index", "rindex",
@@ -459,7 +463,7 @@ func (p *appendProof) read(n parser.Node, stack []parser.Node) {
 			if why := p.use(c, stack[:len(stack)-1]); why != "" {
 				p.leak(c, why)
 			}
-		case strAppendNames[c.Name] && !p.ivar:
+		case (strAppendNames[c.Name] || strRebindNames[c.Name]) && !p.ivar:
 			p.appendAt(c, stack[:len(stack)-1])
 		case p.strict:
 			if !scalarStrMethods[c.Name] || c.Block != nil {
@@ -705,6 +709,9 @@ func (p *appendProof) argSafe(g *parser.CallNode) bool {
 // userAppend compiles user code's `s << x` (and chains of it), `s.concat(a, ...)` or `s.append_as_bytes(a, ...)` on a
 // String local (decision 382).
 func (f *fctx) userAppend(n *parser.CallNode) (expr, bool) {
+	if e, ok := f.userRebind(n); ok {
+		return e, true
+	}
 	if f.lenient() || !strAppendNames[n.Name] || n.Block != nil || n.IsSAFE_NAVIGATION() || f.c.classes["String"].lookup(n.Name) != nil {
 		return expr{}, false
 	}
@@ -843,3 +850,27 @@ func (f *fctx) proofErrorf(n parser.Node, format string, args ...any) {
 }
 
 func endOf(n parser.Node) int { l := n.GetLocation(); return l.StartOffset + l.Length }
+
+// userRebind is `s.replace(t)` / `s.clear` on a String local decision 382's proof allows, or an out parameter
+// (decision 405): the local is rebound to t, or "", and a later append's buffer check copies (decision 455).
+func (f *fctx) userRebind(n *parser.CallNode) (expr, bool) {
+	if f.lenient() || !strRebindNames[n.Name] || n.Block != nil || n.IsSAFE_NAVIGATION() || f.c.classes["String"].lookup(n.Name) != nil {
+		return expr{}, false
+	}
+	lv, ok := n.Receiver.(*parser.LocalVariableReadNode)
+	if !ok || !typeEq(f.probeType(lv, nil), f.cls("String")) {
+		return expr{}, false
+	}
+	if why := f.appendWhy(lv.Name); why != "" {
+		f.proofErrorf(n, "undefined method %s for String: Strings are immutable in rugaroo, and %s (decision 382)", n.Name, why)
+	}
+	_, write, _ := f.stringBangTarget(n, lv)
+	if li := f.localInfo(lv.Name); li != nil {
+		li.appended = true
+	}
+	e, ok := f.stringReplaceBang(n, callArgs(n), func() string { return f.genExpr(lv, nil).code }, write)
+	if !ok {
+		f.errorf(n, "wrong number of arguments for String#%s", n.Name)
+	}
+	return e, true
+}

@@ -409,8 +409,7 @@ class Encoding < Object
 
     #: (String) -> String
     def __run(src)
-      out = @out_prefix + src.encode(@destination, @source, invalid: @invalid, undef: @undef, replace: @replace, xml: @xml,
-                                                           universal_newline: @universal, crlf_newline: @crlf, cr_newline: @cr)
+      out = @out_prefix + __encode(src)
       @out_prefix = +""
       @last_error = nil
       @errinfo = [:finished, nil, nil, nil, nil]
@@ -423,6 +422,22 @@ class Encoding < Object
       @last_error = ue
       @errinfo = [:undefined_conversion, ue.source_encoding_name, ue.destination_encoding_name, ue.error_char, ""]
       raise ue
+    end
+
+    #: (String) -> String
+    def __encode(s) = s.encode(@destination, @source, invalid: @invalid, undef: @undef, replace: @replace, xml: @xml,
+                                                      universal_newline: @universal, crlf_newline: @crlf, cr_newline: @cr)
+
+    # The converted characters of s before the first that does not convert, as MRI's converter has written them by then.
+    #: (String) -> String
+    def __prefix(s)
+      done = +""
+      s.each_char do |ch|
+        done << __encode(ch)
+      rescue EncodingError
+        break
+      end
+      done
     end
 
     # Bytes at s's end that start a character the encoding needs more bytes for (UTF-8 only; other sources
@@ -442,6 +457,33 @@ class Encoding < Object
         k += 1
       end
       0
+    end
+
+    # primitive_convert: src converted onto the end of dst and src emptied, as MRI's with room to spare (its offset and
+    # size limits aside); an error leaves dst as it was. With PARTIAL_INPUT, a cut UTF-8 character waits (decision 455).
+    #: (String, String, ?Integer?, ?Integer?, ?Integer?) -> Symbol
+    def primitive_convert(src, dst, _off = nil, _size = nil, opt = 0)
+      partial = (opt || 0) & PARTIAL_INPUT != 0
+      input = @pending + src
+      @pending = +""
+      keep = partial ? __incomplete_tail(input) : 0
+      body = keep > 0 ? (input.byteslice(0, input.bytesize - keep) || "") : input
+      out = +""
+      begin
+        out = __run(body)
+      rescue InvalidByteSequenceError
+        dst << __prefix(body)
+        src.clear
+        return :invalid_byte_sequence
+      rescue UndefinedConversionError
+        dst << __prefix(body)
+        src.clear
+        return :undefined_conversion
+      end
+      dst << out
+      src.clear
+      @pending = input.byteslice(input.bytesize - keep, keep) || "" if keep > 0
+      partial ? :source_buffer_empty : :finished
     end
 
     #: () -> Array[untyped]
