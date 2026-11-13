@@ -42,7 +42,9 @@ type needInfer struct{}
 
 const maxInferRounds = 8
 
-// settledRounds is how many settled rounds in a row end the rounds early (inferRounds).
+// settledRounds is how many settled rounds in a row end the rounds early (inferRounds). 2 is too few: on rubocop it
+// left a parameter of Layout/IndentationWidth typed narrower than a later round would, and that cop raised on every
+// input (2026-11-12; 3 matches MRI on all 15 test inputs).
 const settledRounds = 3
 
 // inference is what the rounds learned: each parameter key's type, from
