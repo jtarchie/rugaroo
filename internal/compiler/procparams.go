@@ -63,14 +63,26 @@ func lowerProcFrame(body parser.Node) {
 		return
 	}
 	writes := map[string][]*parser.LocalVariableWriteNode{}
+	other := map[string]bool{} // `pr ||= ...`, `pr += ...`, `a, pr = ...`: another value the calls might reach
 	frameNodes(body, func(n, _ parser.Node, depth int) {
-		if w, ok := n.(*parser.LocalVariableWriteNode); ok && int(w.Depth) == depth {
-			writes[w.Name] = append(writes[w.Name], w)
+		switch w := n.(type) {
+		case *parser.LocalVariableWriteNode:
+			if int(w.Depth) == depth {
+				writes[w.Name] = append(writes[w.Name], w)
+			}
+		case *parser.LocalVariableOrWriteNode:
+			other[w.Name] = true
+		case *parser.LocalVariableAndWriteNode:
+			other[w.Name] = true
+		case *parser.LocalVariableOperatorWriteNode:
+			other[w.Name] = true
+		case *parser.LocalVariableTargetNode:
+			other[w.Name] = true
 		}
 	})
 	for name, ws := range writes {
 		ps := procLitParams(ws[0].Value)
-		if len(ws) != 1 || ps == nil || len(ps.Keywords) == 0 && ps.KeywordRest == nil && ps.Block == nil {
+		if len(ws) != 1 || other[name] || ps == nil || len(ps.Keywords) == 0 && ps.KeywordRest == nil && ps.Block == nil {
 			continue
 		}
 		if len(ps.Optionals) > 0 || len(ps.Posts) > 0 {

@@ -14,22 +14,24 @@ const lastLineLocal = "$_"
 var lastLineNames = map[string]bool{"$_": true, "$LAST_READ_LINE": true}
 
 // lowerLastLine: MRI keeps $_ per frame, so a frame that uses it gets a local its gets calls assign (decision 446).
-func lowerLastLine(root parser.Node) {
+func lowerLastLine(root parser.Node) map[*parser.CallNode]bool {
 	prog, ok := root.(*parser.ProgramNode)
 	if !ok {
-		return
+		return nil
 	}
-	lowerFrame(reflect.ValueOf(&prog.Statements).Elem(), &prog.Locals)
+	prints := map[*parser.CallNode]bool{}
+	lowerFrame(reflect.ValueOf(&prog.Statements).Elem(), &prog.Locals, prints)
+	return prints
 }
 
 // lowerFrame lowers one frame's body (held in slot) when it uses $_, then each frame nested in it.
-func lowerFrame(slot reflect.Value, locals *[]string) {
+func lowerFrame(slot reflect.Value, locals *[]string, prints map[*parser.CallNode]bool) {
 	body, _ := slot.Interface().(parser.Node)
 	if body == nil || reflect.ValueOf(body).IsNil() {
 		return
 	}
 	if usesLastLine(body) {
-		walkLastLine(slot, 0)
+		walkLastLine(slot, 0, prints)
 		loc := body.GetLocation()
 		init := &parser.LocalVariableWriteNode{Location: loc, Name: lastLineLocal, NameLoc: loc, Value: &parser.CallNode{Location: loc, Name: "__no_line"}}
 		if st, ok := body.(*parser.StatementsNode); ok {
@@ -41,23 +43,23 @@ func lowerFrame(slot reflect.Value, locals *[]string) {
 			*locals = append(*locals, lastLineLocal)
 		}
 	}
-	eachFrame(reflect.ValueOf(body))
+	eachFrame(reflect.ValueOf(body), prints)
 }
 
 // eachFrame lowers the frames (defs, class and module bodies) nested in the node v points to.
-func eachFrame(v reflect.Value) {
+func eachFrame(v reflect.Value, prints map[*parser.CallNode]bool) {
 	forNodeChildren(v, func(child reflect.Value) {
 		switch x := child.Interface().(type) {
 		case *parser.DefNode:
-			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals)
+			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
 		case *parser.ClassNode:
-			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals)
+			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
 		case *parser.ModuleNode:
-			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals)
+			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
 		case *parser.SingletonClassNode:
-			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals)
+			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
 		default:
-			eachFrame(child)
+			eachFrame(child, prints)
 		}
 	})
 }
@@ -109,14 +111,14 @@ func lastLineCall(c *parser.CallNode) bool {
 }
 
 // walkLastLine stops at nested frames; depth counts blocks up to the frame, as a local read's Depth does.
-func walkLastLine(slot reflect.Value, depth uint32) {
+func walkLastLine(slot reflect.Value, depth uint32, prints map[*parser.CallNode]bool) {
 	n, _ := slot.Interface().(parser.Node)
 	if n == nil || reflect.ValueOf(n).IsNil() || opensFrame(n) {
 		return
 	}
 	switch x := n.(type) {
 	case *parser.BlockNode, *parser.LambdaNode:
-		forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth+1) })
+		forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth+1, prints) })
 		return
 	case *parser.GlobalVariableReadNode:
 		if lastLineNames[x.Name] {
@@ -127,15 +129,16 @@ func walkLastLine(slot reflect.Value, depth uint32) {
 		if lastLineNames[x.Name] {
 			w := &parser.LocalVariableWriteNode{Location: x.Location, Name: lastLineLocal, NameLoc: x.NameLoc, Value: x.Value, OperatorLoc: x.OperatorLoc, Depth: depth}
 			slot.Set(reflect.ValueOf(parser.Node(w)))
-			walkLastLine(reflect.ValueOf(&w.Value).Elem(), depth)
+			walkLastLine(reflect.ValueOf(&w.Value).Elem(), depth, prints)
 		}
 		return
 	case *parser.CallNode:
-		forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth) })
+		forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth, prints) })
 		read := &parser.LocalVariableReadNode{Location: x.Location, Name: lastLineLocal, Depth: depth}
 		switch {
-		case lastLineCall(x) && x.Name == "print":
+		case lastLineCall(x) && x.Name == "print": // its argument is added where the call resolves to Kernel#print
 			x.Arguments = &parser.ArgumentsNode{Location: x.Location, Arguments: []parser.Node{read}}
+			prints[x] = true
 		case lastLineCall(x): // `~ /re/` is `$_ ? /re/ =~ $_ : nil`: nil before any line, as MRI's
 			x.Name, x.Arguments = "=~", &parser.ArgumentsNode{Location: x.Location, Arguments: []parser.Node{read}}
 			l := x.Location
@@ -147,7 +150,7 @@ func walkLastLine(slot reflect.Value, depth uint32) {
 		}
 		return
 	}
-	forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth) })
+	forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth, prints) })
 }
 
 // forNodeChildren calls fn with a settable slot for each Node child (fields and slice elements) of the struct v points to.
@@ -177,4 +180,20 @@ func forNodeChildren(v reflect.Value, fn func(reflect.Value)) {
 			}
 		}
 	}
+}
+
+// lastLinePrint is a bare `print` lowerLastLine gave $_ when it does not reach Kernel#print (a program's own print
+// method): the call as written, with no argument (decision 446).
+func (f *fctx) lastLinePrint(n *parser.CallNode) *parser.CallNode {
+	if !f.f.lastLinePrints[n] {
+		return nil
+	}
+	if d := f.c.topDefs["print"]; d == nil || d.File == nil || d.File.isPrelude() { // a top-level def print is a private method of every object
+		if e := f.resolve(f.selfType, "print"); e == nil || e.M.Owner == nil || e.M.Owner.RubyName == "Kernel" {
+			return nil
+		}
+	}
+	c := *n
+	c.Arguments = nil
+	return &c
 }

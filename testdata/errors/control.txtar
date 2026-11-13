@@ -206,3 +206,8 @@ m { |a, (x, y)| p a }
 # error: main.rb:2: unsupported block parameter form: keyword and &block parameters work on a proc or lambda literal assigned once to a local that is only called
 pr = proc { |a, &b| b.call(a) }
 p [pr].size
+-- proc_keyword_local_reassigned.rb --
+# error: main.rb:2: unsupported block parameter form: keyword and &block parameters work on a proc or lambda literal assigned once to a local that is only called
+pr = ->(x, by: 2) { x * by }
+a, pr = 1, ->(x) { x }
+p a, pr.call(1)

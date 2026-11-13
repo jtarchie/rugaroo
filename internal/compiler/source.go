@@ -19,6 +19,9 @@ type File struct {
 	lines     []int                      // byte offset of each line start
 	origin    Origin                     // set at construction for the prelude; a source file's gem-or-user answer is gemFile's, once asked
 	lambdaOpt map[*parser.LambdaNode]int // a gem lambda's optional params, made required with nil defaults (optionalLambdaParams)
+	// lastLinePrints are the bare `print` calls of frames that keep $_ (decision 446): Kernel#print's prints $_, a
+	// program's own `print` is called as written (lastLinePrint)
+	lastLinePrints map[*parser.CallNode]bool
 	valueGen  bool                       // a Struct/Data's generated members (valueClassSource), which may mark @dynamic
 	goBody    bool                       // generated with a %x{} Go body, as a prelude method's (an extern's typed twin, decision 442)
 	pinLine   int                        // every position reports this line: generated source, whose errors belong to its declaration
@@ -105,7 +108,7 @@ func parseFile(ctx context.Context, p *parser.Parser, name string, src []byte, o
 		lowerSingletonDefs(f.Root)
 		lowerBlockParamWrites(f.Root)
 		lowerMainIvars(f.Root)
-		lowerLastLine(f.Root)
+		f.lastLinePrints = lowerLastLine(f.Root)
 		lowerProcParams(f.Root)
 	}
 	f.indexComments(res.Comments)
