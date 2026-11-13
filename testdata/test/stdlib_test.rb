@@ -584,6 +584,16 @@ module StdlibTests
 
   # Was testdata/run/stringio_mid.rb.
   class StringIOTest < Minitest::Test
+    # writes from several threads all land: each StringIO call holds the object's lock, as MRI's GVL makes it atomic (decision 461)
+    def test_concurrent_writes
+      20.times do
+        io = StringIO.new
+        threads = 8.times.map { |i| Thread.new { 50.times { io.write(i.to_s) } } }
+        threads.each(&:join)
+        assert_equal 400, io.string.size
+      end
+    end
+
     # Kernel#printf with an IO first writes there (#78's printf specs)
     def test_printf_to_io
       io = StringIO.new(+"")

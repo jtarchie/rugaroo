@@ -1,6 +1,6 @@
 # rbs_inline: enabled
 
-# @go_type struct { buf []byte; pos int; lineno int; readOpen bool; writeOpen bool; canWrite bool; appendMode bool; oum *rbOpenURIMeta }
+# @go_type struct { mu sync.Mutex; buf []byte; pos int; lineno int; readOpen bool; writeOpen bool; canWrite bool; appendMode bool; oum *rbOpenURIMeta }
 class StringIO < Object
   #: (?String, ?String) -> StringIO
   def self.new(s = "", mode = "r+") = %x{
@@ -31,11 +31,15 @@ class StringIO < Object
   }
 
   #: () -> String
-  def string = %x{ String(self.buf) }
+  def string = %x{
+    self.mu.Lock(); defer self.mu.Unlock() // MRI's GVL makes each call atomic; a goroutine per Thread needs a lock per object
+    return String(self.buf)
+  }
 
   #: (String) -> String
   def string=(s)
     %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.buf, self.pos, self.lineno = []byte(string(s)), 0, 0
     return s}
   end
@@ -49,6 +53,7 @@ class StringIO < Object
 
   #: (untyped) -> Integer
   def write(x) = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbWritable()
     s := string(rbToS(x))
     if self.appendMode {
@@ -103,6 +108,7 @@ class StringIO < Object
 
   #: () -> String
   def read = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     s := String(self.buf[min(self.pos, len(self.buf)):])
     self.pos = max(self.pos, len(self.buf))
@@ -112,6 +118,7 @@ class StringIO < Object
   # @binary
   #: (Integer) -> String?
   def __read_1(n) = %x{ // nil at EOF, as MRI's read(n)
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     if self.pos >= len(self.buf) && n > 0 {
       return nil
@@ -124,6 +131,7 @@ class StringIO < Object
 
   #: () -> String?
   def gets = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     if self.pos >= len(self.buf) {
       return nil
@@ -141,6 +149,7 @@ class StringIO < Object
 
   #: () -> String?
   def getc = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     if self.pos >= len(self.buf) {
       return nil
@@ -153,6 +162,7 @@ class StringIO < Object
 
   #: () -> Integer?
   def getbyte = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     if self.pos >= len(self.buf) {
       return rbOpt[Integer]{}
@@ -202,6 +212,7 @@ class StringIO < Object
 
   #: (untyped) -> nil
   def ungetc(c) = %x{ // replaces the last-read char's bytes at pos with c, or prepends c at pos 0
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     var s string
     switch v := c.(type) {
@@ -243,22 +254,28 @@ class StringIO < Object
 
   #: () -> bool
   def eof? = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbReadable()
     return Boolean(self.pos >= len(self.buf))
   }
 
   #: () -> Integer
   def rewind = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.pos, self.lineno = 0, 0
     return 0
   }
 
   #: () -> Integer
-  def pos = %x{ Integer(self.pos) }
+  def pos = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
+    return Integer(self.pos)
+  }
 
   #: (Integer) -> Integer
   def pos=(n)
     %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     if n < 0 {
       panic(NewErrno_EINVAL(Ref(String("Invalid argument"))))
     }
@@ -267,16 +284,23 @@ class StringIO < Object
   end
 
   #: () -> Integer
-  def lineno = %x{ Integer(self.lineno) }
+  def lineno = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
+    return Integer(self.lineno)
+  }
 
   #: () -> Integer
-  def size = %x{ Integer(len(self.buf)) }
+  def size = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
+    return Integer(len(self.buf))
+  }
 
   #: () -> Integer
   def length = size
 
   #: (Integer, ?Integer) -> Integer
   def seek(offset, whence = IO::SEEK_SET) = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     if !self.readOpen && !self.writeOpen {
       panic(NewIOError(Ref[String]("closed stream")))
     }
@@ -305,13 +329,20 @@ class StringIO < Object
   def binmode = self
 
   #: () -> nil
-  def close = %x{ self.readOpen, self.writeOpen = false, false }
+  def close = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
+    self.readOpen, self.writeOpen = false, false
+  }
 
   #: () -> bool
-  def closed? = %x{ Boolean(!self.readOpen && !self.writeOpen) }
+  def closed? = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
+    return Boolean(!self.readOpen && !self.writeOpen)
+  }
 
   #: () -> nil
   def close_write = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     if !self.canWrite {
       panic(NewIOError(Ref[String]("closing non-duplex IO for writing")))
     }
@@ -320,6 +351,7 @@ class StringIO < Object
 
   #: (Integer) -> Integer
   def truncate(newlen) = %x{
+    self.mu.Lock(); defer self.mu.Unlock()
     self.rbWritable()
     if newlen < 0 {
       panic(NewErrno_EINVAL(Ref(String("Invalid argument - negative length"))))
