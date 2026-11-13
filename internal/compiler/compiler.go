@@ -95,30 +95,30 @@ type Compiler struct {
 	files                 []*File
 	preludeFS             fs.FS
 	parser                *parser.Parser
-	loaded                map[string]bool           // prelude names, and user files' real paths
-	parsed                map[string]*File          // user files by real path, parsed by scanRequires before the prelude loads
-	resolvingAliases      []string                  // sig `type` aliases being resolved, innermost last: a recursive one is untyped
-	promote               bool                      // the flag or some file's comment is int_overflow promote: Bignum is loaded (decision 381)
-	loadPath              []string                  // -I directories (decision 131)
-	gemDirs               []string                  // installed gems' lib dirs, searched after loadPath: their files are gem code (decision 173)
-	sigs                  map[string]*rbs.ClassDecl // .rbs signatures by qualified class name (decision 160)
-	gemSigs               fs.FS                     // vendored gem `.rbs` signatures (decision 160), or nil
-	autoloaded            map[string]bool           // boot-resolved autoload files: loaded where their autoload registers (decision 175)
-	lazyAutoloads         map[string]bool           // autoload files boot registered and never loaded (decision 444)
-	droppedLazy           map[string]bool           // of those, the ones that did not compile (options.droppedLazy)
-	constNamed            map[string]bool           // names the kept files read as constants (neededAutoloads)
-	pruneGems             bool                      // a gem program: unreached gem methods are dropped (decision 169)
-	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
-	gemNilIvars           []gemNilIvar              // gem ivars discovery saw only nil assigned to (decision 169)
-	inBlockScan           int                       // scanAnon is inside a block or def body: a class statement there is hoisted (decision 451)
-	hoisted               map[parser.Node]bool      // those class and module statements: each compiles to nil where it stands
-	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
+	loaded                map[string]bool            // prelude names, and user files' real paths
+	parsed                map[string]*File           // user files by real path, parsed by scanRequires before the prelude loads
+	resolvingAliases      []string                   // sig `type` aliases being resolved, innermost last: a recursive one is untyped
+	promote               bool                       // the flag or some file's comment is int_overflow promote: Bignum is loaded (decision 381)
+	loadPath              []string                   // -I directories (decision 131)
+	gemDirs               []string                   // installed gems' lib dirs, searched after loadPath: their files are gem code (decision 173)
+	sigs                  map[string]*rbs.ClassDecl  // .rbs signatures by qualified class name (decision 160)
+	gemSigs               fs.FS                      // vendored gem `.rbs` signatures (decision 160), or nil
+	autoloaded            map[string]bool            // boot-resolved autoload files: loaded where their autoload registers (decision 175)
+	lazyAutoloads         map[string]bool            // autoload files boot registered and never loaded (decision 444)
+	droppedLazy           map[string]bool            // of those, the ones that did not compile (options.droppedLazy)
+	constNamed            map[string]bool            // names the kept files read as constants (neededAutoloads)
+	pruneGems             bool                       // a gem program: unreached gem methods are dropped (decision 169)
+	usedBundled           bool                       // a bundled gem's lib joined the gem dirs (decision 427)
+	gemNilIvars           []gemNilIvar               // gem ivars discovery saw only nil assigned to (decision 169)
+	inBlockScan           int                        // scanAnon is inside a block or def body: a class statement there is hoisted (decision 451)
+	hoisted               map[parser.Node]bool       // those class and module statements: each compiles to nil where it stands
+	untypedIvars          map[ivarKey]*pendingIvar   // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
 	strCacheIvars         map[*Class]map[string]bool // per class, the String ivars its methods index (strCached, decision 454)
-	uncalledWriters       map[*Method]ivarKey       // attr writers no call types, by the ivar they write (decision 445)
-	writerReach           map[string]bool           // writerReachable's memo
-	nilIvars              map[ivarKey]bool          // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)
-	autoloads             map[string]bool           // `autoload :X` constants by qualified name: defined? answers for them (decision 167)
-	pendingAutoloads      []pendingAutoload         // gem autoloads whose path is computed: placed by the constant's file once every file is collected (decision 175)
+	uncalledWriters       map[*Method]ivarKey        // attr writers no call types, by the ivar they write (decision 445)
+	writerReach           map[string]bool            // writerReachable's memo
+	nilIvars              map[ivarKey]bool           // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)
+	autoloads             map[string]bool            // `autoload :X` constants by qualified name: defined? answers for them (decision 167)
+	pendingAutoloads      []pendingAutoload          // gem autoloads whose path is computed: placed by the constant's file once every file is collected (decision 175)
 	out                   strings.Builder
 	convs                 map[string]bool // conversion sites emitted during a refineIvars dry run
 	Warnings              []string
