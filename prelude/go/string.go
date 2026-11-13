@@ -945,12 +945,12 @@ func rbStrCacheLenA(c *unsafe.Pointer, s String) (Integer, uint64) {
 	if len(s) < 32 {
 		return rbStrLenA(s)
 	}
-	p := unsafe.StringData(string(s))
-	if e := (*rbStrCacheEnt)(atomic.LoadPointer(c)); e != nil && e.p == p && e.n == len(s) {
+	p := unsafe.StringData(string(s))                                                        //nolint:gosec // the key: the String's data pointer, compared only
+	if e := (*rbStrCacheEnt)(atomic.LoadPointer(c)); e != nil && e.p == p && e.n == len(s) { //nolint:gosec // c holds only *rbStrCacheEnt
 		return e.ln, e.lim
 	}
 	ln, lim := rbStrLenA(s)
-	atomic.StorePointer(c, unsafe.Pointer(&rbStrCacheEnt{p: p, n: len(s), ln: ln, lim: lim}))
+	atomic.StorePointer(c, unsafe.Pointer(&rbStrCacheEnt{p: p, n: len(s), ln: ln, lim: lim})) //nolint:gosec // a whole new entry, swapped in
 	return ln, lim
 }
 
