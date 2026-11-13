@@ -26,6 +26,8 @@ RUGAROO_INFER_DEBUG=1 go run ./cmd/rugaroo run x.rb    # what each parameter-inf
 RUGAROO_PRUNE_DEBUG=1 go test -run TestBootAutoload .  # gem programs: why each method name was reached, live gem classes (decision 169)
 RUGAROO_DISPATCH_DEBUG=1 go run ./cmd/rugaroo build x.rb   # why a Kernel/Object name keeps a Go method instead of a type-switch dispatcher (decisions 212-213); =all for every owner
 RUGAROO_GEM_WARNINGS=1 go run ./cmd/rugaroo gen ...       # also print gem files' warnings (skipped statements, nil constants: decision 205)
+RUGAROO_ARM_DEBUG=1 go run ./cmd/rugaroo gen ...          # why an untyped receiver's block call has no arm for a class (it raises NoMethodError there; decision 444)
+RUGAROO_NO_EARLY_ROUNDS=1 go run ./cmd/rugaroo gen ...    # run inference rounds to the cap instead of stopping after 3 settled ones (A/B for decision 444)
 RUGAROO_GEM_WARNINGS=1 RUGAROO_UNTYPED_WHY=1 go run ./cmd/rugaroo gen ...  # each dynamic-call warning names the root of its untyped receiver (sig untyped, widened local, unannotated return, ...)
 RUGAROO_BACKTRACE=1 ./prog                       # a built program reports an uncaught exception as MRI does, file:line and from lines (decision 178)
 RUGAROO_GO_STACK=1 ./prog                        # a Go runtime panic turned into a Ruby exception carries its Go stack (decision 324)
