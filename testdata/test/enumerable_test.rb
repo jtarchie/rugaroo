@@ -163,4 +163,27 @@ module EnumerableTests
       assert_equal [[1, 3], [2, 4]], (1..4).partition.with_index { |_x, i| i.even? }
     end
   end
+
+  # Blockless enumerator objects (decision 453, #155)
+  class BlocklessEnumTest < Minitest::Test
+    def test_blockless_by_methods
+      a = [3, 1, 2]
+      assert_equal Enumerator, a.min_by.class
+      assert_equal Enumerator, a.group_by.class
+      assert_equal 3, a.sort_by.size
+      assert_equal Enumerator, Bag.new(1, 2).partition.class
+    end
+
+    def test_map_with_index_without_block
+      assert_equal [[3, 1], [1, 2], [2, 3]], [3, 1, 2].map.with_index(1).to_a
+      assert_equal "#<Enumerator: 1..3:map>", (1..3).map.inspect
+      assert_equal [0, 2, 6], (1..3).map.with_index { |x, i| x * i }
+    end
+
+    def test_hash_select_with_index
+      h = { "a" => 1, "b" => 2 }
+      assert_equal({ "a" => 1 }, h.select.with_index { |(_k, _v), i| i == 0 })
+      assert_equal({ "b" => 2 }, h.reject.with_index { |(_k, _v), i| i == 0 })
+    end
+  end
 end

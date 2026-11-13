@@ -451,6 +451,22 @@ module Enumerable
     ifnone.call
   end
 
+  # Blockless: an Enumerator over the elements, as MRI's (#155); a chained `.with_index { }` is withIndexChain's.
+  #: () -> Enumerator[E]
+  def __sort_by_enum = %x{ return rbEnumOf(self.Each(), any(self), "sort_by", rbCountSize(any(self)), nil) }
+
+  #: () -> Enumerator[E]
+  def __min_by_enum = %x{ return rbEnumOf(self.Each(), any(self), "min_by", rbCountSize(any(self)), nil) }
+
+  #: () -> Enumerator[E]
+  def __max_by_enum = %x{ return rbEnumOf(self.Each(), any(self), "max_by", rbCountSize(any(self)), nil) }
+
+  #: () -> Enumerator[E]
+  def __group_by_enum = %x{ return rbEnumOf(self.Each(), any(self), "group_by", rbCountSize(any(self)), nil) }
+
+  #: () -> Enumerator[E]
+  def __partition_enum = %x{ return rbEnumOf(self.Each(), any(self), "partition", rbCountSize(any(self)), nil) }
+
   # `xs.sort_by.with_index(off) { |x, i| }` and its siblings, rewritten to these (withIndexChain, #145): the block
   # runs once per element in order, as MRI's enumerator feeds it, with the element's index.
   #: [K] (Integer) { (E, Integer) -> K } -> Array[E]

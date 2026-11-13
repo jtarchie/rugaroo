@@ -16,6 +16,10 @@ class Range < Object
     return func(yield func(E) bool) { rbRangeEach(self, yield) }
   }
 
+  # Blockless: Enumerable's (Range has its own map, so Enumerable's twin does not reach it; #155).
+  #: () -> Enumerator::Map[E]
+  def __map_enum = Enumerator::Map.__of(to_a, inspect)
+
   # Enumerable's, with an Integer range's result sized up front, at most 2^20 (a block may break early; decision 342).
   #: [U] () { (E) -> U } -> Array[U]
   def map = %x{

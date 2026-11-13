@@ -127,6 +127,16 @@ class Enumerator < Object
     #: [X] (Array[X]) -> Map[X]
     def self.new(items) = %x{ return &Enumerator_Map[X]{items: items} }
 
+    # map.with_index(off) without a block: an Enumerator of [element, index] pairs (#155).
+    #: (?Integer) -> Enumerator[[E, Integer]]
+    def __with_index_enum(offset = 0) = %x{
+      meth := "with_index"
+      if offset != 0 {
+        meth += "(" + string(rbInspect(offset)) + ")"
+      }
+      return rbEnumOf(rbWithIndex(Array_Each(self.items), offset), any(self), meth, func() *Integer { n := Integer(len(self.items.s)); return &n }, nil)
+    }
+
     # An Enumerable's blockless map: the elements, and the receiver's inspect, which MRI's shows (decision 450).
     #: [X] (Array[X], String) -> Map[X]
     def self.__of(items, shown) = %x{ return &Enumerator_Map[X]{items: items, shown: string(shown)} }

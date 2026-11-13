@@ -360,6 +360,28 @@ class Hash < Object
 
   alias filter select
 
+  # `h.select.with_index(off) { |(k, v), i| }` (withIndexChain, #155): a Hash, as MRI's.
+  #: (Integer) { ([K, V], Integer) -> boolish } -> Hash[K, V]
+  def __select_with_index(off)
+    i = off - 1
+    select do |k, v|
+      i += 1
+      yield([k, v], i)
+    end
+  end
+
+  #: (Integer) { ([K, V], Integer) -> boolish } -> Hash[K, V]
+  def __filter_with_index(off) = __select_with_index(off) { |kv, i| yield(kv, i) }
+
+  #: (Integer) { ([K, V], Integer) -> boolish } -> Hash[K, V]
+  def __reject_with_index(off)
+    i = off - 1
+    reject do |k, v|
+      i += 1
+      yield([k, v], i)
+    end
+  end
+
   #: () { (K, V) -> bool } -> Hash[K, V]
   def reject
     out = {} #: Hash[K, V]

@@ -543,7 +543,8 @@ func (f *fctx) stringElements(n *parser.CallNode) bool {
 }
 
 // withIndexChains are the blockless Enumerable methods whose `.with_index { |x, i| }` feeds the block's value back.
-var withIndexChains = map[string]bool{"sort_by": true, "min_by": true, "max_by": true, "group_by": true, "partition": true}
+var withIndexChains = map[string]bool{"sort_by": true, "min_by": true, "max_by": true, "group_by": true, "partition": true,
+	"select": true, "filter": true, "reject": true} // these three only where the class has the twin: Hash's (#155)
 
 // withIndexChain is `xs.sort_by.with_index(off) { |x, i| }` (or `.each_with_index`) as `xs.__sort_by_with_index(off) { |x, i| }`:
 // the enumerator MRI builds is decided here, at compile time (#145).
