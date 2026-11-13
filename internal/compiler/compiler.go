@@ -262,6 +262,7 @@ type refineState struct {
 	roundRefine         map[string]*refineRecord // options.roundRefine (decision 444)
 	inDryRun            bool                     // inside dryRunIvarUsers
 	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
+	baseFailed          map[*Method]bool         // gem methods that fail in refineIvars' untyped baseline: their failure vetoes nothing
 	widenPending        map[pendingKey]Type      // noteWidenPending's parameters (decision 444)
 	loadedFeatures      bool                     // some gem code reads $LOADED_FEATURES: emit rbLoadedFeatures
 	localSeeds          map[*Method]localSeed    // decision 444

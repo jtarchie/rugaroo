@@ -50,6 +50,7 @@ func (c *Compiler) refineIvars() {
 	if !c.round {
 		snap = c.takeRefineSnap()
 	}
+	c.baseFailed = nil
 	base, _ := c.dryRunIvarUsers(cands)
 	attempt := func(d *nilDeferral) (*compileError, bool) {
 		c.nilDefer = d

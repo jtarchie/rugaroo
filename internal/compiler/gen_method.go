@@ -115,8 +115,21 @@ func (f *fctx) genBody(body parser.Node, params []*local, t tail, prologue func(
 // vetoDryTry: while refineIvars tries an ivar typing, a gem method it stops compiling vetoes the typing, as a user
 // method's error does, instead of being poisoned for good (rubocop's `@options = {}` typed Hash[Symbol, Boolean] by its
 // one typed store; decision 444).
+//
+// Only a failure the typing causes: a method that fails in refineIvars' untyped baseline too (pairing_heap's) fails
+// whatever the ivars are, and would veto every typing.
 func (f *fctx) vetoDryTry(err *compileError) {
-	if err != nil && f.c.dryTry {
+	if err == nil || !f.c.inDryRun {
+		return
+	}
+	if !f.c.dryTry { // the baseline run
+		if f.c.baseFailed == nil {
+			f.c.baseFailed = map[*Method]bool{}
+		}
+		f.c.baseFailed[f.m] = true
+		return
+	}
+	if !f.c.baseFailed[f.m] {
 		panic(*err)
 	}
 }
