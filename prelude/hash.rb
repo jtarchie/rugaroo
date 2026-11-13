@@ -771,7 +771,7 @@ class Hash < Object
       } else {
         vh = rbKeyHash(v)
       }
-      h += rbKeyHash(k)*31 ^ vh
+      h += rbMixHash(rbMixHash(rbKeyHash(k)) ^ vh) // mixed: Symbol and Integer hashes are small, and `hk*31 ^ vh` let pairs cancel (decision 460)
     }
     return Integer(h)
   }

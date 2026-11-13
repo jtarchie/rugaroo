@@ -281,6 +281,8 @@ func rbPack(items []any, format string) string {
 			if nilOK {
 				return ""
 			}
+		case I_ToStr: // a program's object with to_str, as MRI's implicit conversion
+			return string(x.ToStr())
 		}
 		panic(rbConvError(v, "String"))
 	}
@@ -293,6 +295,8 @@ func rbPack(items []any, format string) string {
 				panic(NewRangeError(Ref(String("float " + string(rbToS(x)) + " out of range of integer"))))
 			}
 			return int(x)
+		case I_ToInt: // a program's object with to_int, as MRI's implicit conversion
+			return int(x.ToInt())
 		default:
 			panic(rbConvError(x, "Integer"))
 		}

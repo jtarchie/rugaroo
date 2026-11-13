@@ -862,6 +862,8 @@ func rbConvError(a any, want string) any {
 }
 
 type I_ToS interface{ ToS() String }
+type I_ToStr interface{ ToStr() String }
+type I_ToInt interface{ ToInt() Integer }
 type I_Inspect interface{ Inspect() String }
 
 // rbToS, rbInspect, rbEq and rbCmp take E = T? values from generic

@@ -40,6 +40,7 @@ require "scanish"
 require "readyish"
 require "matchish"
 require "sockish"
+require "buildish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -184,3 +185,6 @@ p Matchish.demo
 # an untyped parameter written over a placeholder ivar widens it, as a typed one of another class does (decision 458)
 s = Sockish.new
 p s.connect("h"), s.reuse
+# a call with a block takes Matrix.build's value, not its Enumerator (decision 460)
+bl = Buildish.build(2) { |i, j| i >= j ? 1 : 0 }
+p bl.lower?, bl.to_s

@@ -271,7 +271,11 @@ class Range < Object
   # untyped too, since `[E?, untyped]` renders E? as *E in the generic body but rbOpt[E] at an Integer call.
   #: () -> [untyped, untyped]
   def minmax
-    return [min, Float::INFINITY] if __to_infinity?
+    if __to_infinity?
+      raise TypeError, "cannot exclude non Integer end value" if exclude_end?
+
+      return [min, Float::INFINITY]
+    end
 
     [min, max]
   end

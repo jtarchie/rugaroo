@@ -2541,6 +2541,9 @@ module HashTests
       d.delete("new")
       assert_equal h, d
       assert h.hash == d.hash
+      # pairs with equal values must not cancel out of the hash (decision 460)
+      refute({ a: 2, b: 2 }.hash == { a: 7, b: 7 }.hash)
+      refute({ a: :a }.hash == { b: :b }.hash)
       assert_equal "{\"k20\" => 20, \"k21\" => 21}", h.first(2).to_h.inspect
       m = h.merge({ "k25" => 0, "z" => 9 }) { |_k, a, b| a + b }
       assert_equal 25, m["k25"]

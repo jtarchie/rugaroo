@@ -785,7 +785,7 @@ func (c *Compiler) updateInference(inf *inference) {
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
-		if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+		if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
 			next[key], from[key] = pt, at
 			continue
 		}
@@ -953,6 +953,18 @@ func joinUses(uses []paramUse, noUnion bool) (Type, string) {
 		}
 	}
 	return nil, ""
+}
+
+// lambdaArgKey is a lambda's or stored block's argument by position, which decision 447 leaves to joinUses: a spec's
+// `-> format, *args { ... }` is called with an Array at one position by one call and an Integer by another (decision 460).
+func lambdaArgKey(k pendingKey) bool {
+	s := string(k)
+	i := strings.LastIndexAny(s, "#&")
+	if i < 0 || i == len(s)-1 {
+		return false
+	}
+	_, err := strconv.Atoi(s[i+1:])
+	return err == nil
 }
 
 // partlyTypedUse is the join of a program parameter's uses when each is a container holding untyped (a mixed Hash
