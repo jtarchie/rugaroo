@@ -1,13 +1,13 @@
 Compile errors and warnings for Regexp, MatchData and JSON (docs/design.md decisions 24, 25).
 -- g_anchor.rb --
-# error: main.rb:2: regexp /\Ga/ is not supported: \G is not supported by RE2
-puts "ab".match?(/\Ga/)
+# error: main.rb:2: regexp /a\Gb/ is not supported: \G is not supported by RE2
+puts "ab".match?(/a\Gb/)
 -- keep.rb --
 # error: main.rb:2: regexp /a\Kb/ is not supported: \K is not supported by RE2
 puts "ab".match?(/a\Kb/)
 -- linebreak.rb --
-# error: main.rb:2: regexp /\R/ is not supported: \R is not supported by RE2
-puts "a\nb".match?(/\R/)
+# error: main.rb:2: regexp /[\R]/ is not supported: \R inside a character class
+puts "a\nb".match?(/[\R]/)
 -- grapheme.rb --
 # error: main.rb:2: regexp /\X/ is not supported: \X is not supported by RE2
 puts "ab".match?(/\X/)
@@ -66,8 +66,8 @@ def up(s) = s.upcase
 m = "ab".match(/(a)/)
 puts up(m[1]) if m
 -- string_match_arity.rb --
-# error: main.rb:2: String#match: wrong number of arguments (given 2, expected 1)
-puts "abc".match(/b/, 1).inspect
+# error: main.rb:2: String#match: wrong number of arguments (given 3, expected 1)
+puts "abc".match(/b/, 1, 2).inspect
 -- matchdata_index_arity.rb --
 # error: main.rb:3: MatchData#[]: wrong number of arguments (given 2, expected 1)
 m = /(b)/.match("abc")

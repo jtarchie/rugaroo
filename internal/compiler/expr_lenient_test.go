@@ -24,7 +24,7 @@ func TestLookupMissMode(t *testing.T) {
 		{"Array", "include?", 1, false, "false"},
 		{"Array", "index", 1, true, ""},
 		{"Array", "push", 1, false, ""},
-		{"Set", "include?", 1, false, ""},
+		{"Set", "include?", 1, false, "false"}, // a wrong-class key is a miss, as Array's (decision 444)
 	} {
 		got := lookupMissMode(lookupMiss[tc.recv][tc.name], tc.name, tc.nargs, tc.block)
 		if string(got) != tc.want {

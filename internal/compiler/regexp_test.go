@@ -244,9 +244,9 @@ func TestRegexpRejected(t *testing.T) {
 		{"H_in_class", `[\H]`, `\H inside a character class`},
 		{"H_in_negated_class", `[^\H]`, `\H inside a character class`},
 		{"subexpression call", `(a)\g<1>`, `\g (a subexpression call)`},
-		{"G_anchor", `\Ga`, `\G is not supported by RE2`},
+		{"G_anchor", `a\Gb`, `\G is not supported by RE2`}, // a leading \G is \A (decision 444)
 		{"K_keep", `a\Kb`, `\K is not supported by RE2`},
-		{"R_linebreak", `a\R`, `\R is not supported by RE2`},
+		{"R_linebreak_in_class", `[\R]`, `\R inside a character class`}, // \R itself is a linebreak (decision 444)
 		{"X_cluster", `\X`, `\X is not supported by RE2`},
 		{"possessive", `a++`, ""},
 		{"absent operator", `(?~abc)`, ""},

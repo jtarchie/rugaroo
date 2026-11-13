@@ -247,7 +247,7 @@ func (c *Compiler) emitLoadedFeatures() {
 // what it answers (parser's `name, = *node`: AST::Node#to_a is its children), one case per Go shape of such a to_a;
 // anything else is rbSplatAny's (an Array's elements, a Hash's pairs, nothing for nil, else x itself).
 func (c *Compiler) emitSplatObj() {
-	c.w("func rbSplatObj(x any) []any {\n\tswitch r := x.(type) {\n")
+	var cases strings.Builder
 	seen := map[string]bool{}
 	for _, cls := range c.classList {
 		m := cls.Methods["to_a"]
@@ -260,7 +260,11 @@ func (c *Compiler) emitSplatObj() {
 			continue
 		}
 		seen[shape] = true
-		c.w("\tcase %s:\n\t\treturn rbSplatAny(any(r.%s()))\n", shape, m.GoName)
+		fmt.Fprintf(&cases, "\tcase %s:\n\t\treturn rbSplatAny(any(r.%s()))\n", shape, m.GoName)
 	}
-	c.w("\t}\n\treturn rbSplatAny(x)\n}\n\n")
+	if cases.Len() == 0 { // no class has its own to_a: a switch would bind r for nothing
+		c.w("func rbSplatObj(x any) []any { return rbSplatAny(x) }\n\n")
+		return
+	}
+	c.w("func rbSplatObj(x any) []any {\n\tswitch r := x.(type) {\n%s\t}\n\treturn rbSplatAny(x)\n}\n\n", cases.String())
 }
