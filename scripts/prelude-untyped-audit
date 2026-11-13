@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Lists every prelude method whose `#:` signature mentions `untyped`, beside the type the rbs gem's own core/ and
+# stdlib/ signatures give that method, and a verdict (#106):
+#   genuine   rbs says untyped too (Kernel#p, ==, inspect)
+#   concrete  rbs gives plain classes: a type to copy, or to check against
+#   union     rbs gives a union or several overloads: a candidate for decision 150's unions, by hand
+#   interface rbs names an interface (`_ToS`), Numeric or int/real/boolish: rugaroo keeps those untyped or narrows by hand
+#   infer     rbs has no such method: a candidate to leave unannotated and type from callers (decision 317)
+# Usage: bundle exec scripts/prelude-untyped-audit [--summary] [prelude dir]
+# Output: tab-separated `Owner#method  ours  rbs  verdict`, one line per method, sorted.
+
+require "rbs"
+
+summary = ARGV.delete("--summary")
+dir = ARGV.first || File.expand_path("../prelude", __dir__)
+
+loader = RBS::EnvironmentLoader.new
+RBS::Repository::DEFAULT_STDLIB_ROOT.children.map { |p| p.basename.to_s }.each do |lib|
+  loader.add(library: lib, version: nil)
+rescue StandardError
+  next
+end
+env = RBS::Environment.from_loader(loader).resolve_type_names
+builder = RBS::DefinitionBuilder.new(env: env)
+
+# rbs_types is rbs's signature text for owner#name (instance) or owner.name (singleton), or nil.
+rbs_cache = {}
+rbs_types = lambda do |owner, name, singleton|
+  key = [owner, singleton]
+  defn = rbs_cache.fetch(key) do
+    tn = RBS::TypeName.parse("::#{owner}")
+    rbs_cache[key] = if env.class_decls.key?(tn)
+                       singleton ? builder.build_singleton(tn) : builder.build_instance(tn)
+                     end
+  rescue StandardError
+    rbs_cache[key] = nil
+  end
+  m = defn&.methods&.[](name.to_sym)
+  m&.method_types&.map(&:to_s)&.join(" | ")
+end
+
+rows = []
+Dir[File.join(dir, "**", "*.rb")].sort.each do |path|
+  stack = [] # [name, indent]
+  sig = nil
+  File.foreach(path) do |line|
+    indent = line[/\A */].size
+    stack.pop if stack.any? && line =~ /\A\s*end\b/ && indent == stack.last[1]
+    case line
+    when /\A(\s*)(class|module)\s+([A-Z][\w:]*)/
+      stack.push([Regexp.last_match(3), Regexp.last_match(1).size]) unless line.include?("; end")
+      sig = nil
+    when /\A\s*#:\s*(.+)$/
+      sig = Regexp.last_match(1).strip
+    when /\A\s*#/
+      next
+    when %r{\A\s*def\s+(self\.)?([\w?!=\[\]<>+\-*/%~@^&|]+)}
+      singleton = !Regexp.last_match(1).nil?
+      name = Regexp.last_match(2)
+      if sig&.include?("untyped") && !name.start_with?("__")
+        owner = stack.map(&:first).join("::").sub(/\A::/, "")
+        owner = "Object" if owner.empty?
+        theirs = rbs_types.call(owner, name, singleton)
+        verdict = if theirs.nil? then "infer"
+                  elsif theirs.include?("untyped") then "genuine"
+                  elsif theirs.match?(/::_[A-Z]|::Numeric\b|::int\b|::real\b|::boolish\b/) then "interface"
+                  elsif theirs.include?(" | ") || theirs.match?(/\)\s*->\s*\S+\s*\|/) then "union"
+                  else "concrete"
+                  end
+        rows << ["#{owner}#{singleton ? "." : "#"}#{name}", sig, theirs || "-", verdict]
+      end
+      sig = nil
+    else
+      sig = nil unless line.strip.empty?
+    end
+  end
+end
+
+rows.sort_by!(&:first)
+if summary
+  rows.group_by(&:last).sort.each { |v, rs| puts "#{v}\t#{rs.size}" }
+  puts "total\t#{rows.size}"
+else
+  rows.each { |r| puts r.join("\t") }
+end
