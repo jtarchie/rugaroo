@@ -30,6 +30,7 @@ func (c *Compiler) loadSigs(sources []Source) {
 		c.loadSigDir(dir, false)
 	}
 	c.loadGemSigs()
+	c.loadRBSCollections(sources, seen)
 	for _, lib := range c.gemDirs { // a gem's own sig/ beside its lib/ (decision 306), after the vendored ones it may need patching by
 		if dir := filepath.Join(filepath.Dir(lib), "sig"); filepath.Base(lib) == "lib" && !seen[dir] {
 			seen[dir] = true
@@ -412,4 +413,67 @@ func (c *Compiler) inferAdvisoryParams(m *Method, n *parser.DefNode) {
 		}
 		m.pendingIdx[i] = pendingParam{key: paramKey(m, names[i]), name: names[i]}
 	}
+}
+
+// loadRBSCollections reads `rbs collection install`'s directory: `.gem_rbs_collection` beside the program, or the one
+// RUGAROO_RBS_COLLECTION names, one version per gem (the highest present; the install pins it to Gemfile.lock). Its
+// sigs come after a program's own sig/ and the vendored sig/gems, before a gem's shipped sig/ (decision 457).
+func (c *Compiler) loadRBSCollections(sources []Source, seen map[string]bool) {
+	var roots []string
+	if c.env.RBSCollection != "" {
+		roots = append(roots, c.env.RBSCollection)
+	}
+	for _, src := range sources {
+		roots = append(roots, filepath.Join(filepath.Dir(sourceName(src)), ".gem_rbs_collection"))
+	}
+	for _, root := range roots {
+		if seen[root] {
+			continue
+		}
+		seen[root] = true
+		gems, err := os.ReadDir(root)
+		if err != nil {
+			continue // no collection there
+		}
+		for _, g := range gems {
+			if !g.IsDir() || strings.HasPrefix(g.Name(), ".") || strings.HasPrefix(g.Name(), "_") {
+				continue
+			}
+			versions, verr := os.ReadDir(filepath.Join(root, g.Name()))
+			if verr != nil {
+				continue
+			}
+			var names []string
+			for _, v := range versions {
+				if v.IsDir() {
+					names = append(names, v.Name())
+				}
+			}
+			if len(names) == 0 {
+				continue
+			}
+			slices.SortFunc(names, compareVersions)
+			c.loadSigDir(filepath.Join(root, g.Name(), names[len(names)-1]), true)
+		}
+	}
+}
+
+// compareVersions orders "2.2" before "2.10" by numeric segments.
+func compareVersions(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := range min(len(as), len(bs)) {
+		var x, y int
+		_, xe := fmt.Sscanf(as[i], "%d", &x)
+		_, ye := fmt.Sscanf(bs[i], "%d", &y)
+		if xe != nil || ye != nil {
+			if c := strings.Compare(as[i], bs[i]); c != 0 {
+				return c
+			}
+			continue
+		}
+		if x != y {
+			return x - y
+		}
+	}
+	return len(as) - len(bs)
 }

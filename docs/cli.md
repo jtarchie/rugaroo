@@ -83,6 +83,7 @@ For the compiler:
 | `RUGAROO_NIL_CHECK=mode` | The same as `-nil-check`. |
 | `RUGAROO_CGO=1` | The same as `-cgo`. |
 | `RUGAROO_COMPILER=tinygo` | The same as `-compiler tinygo`. |
+| `RUGAROO_RBS_COLLECTION=dir` | An `rbs collection install` directory to read gem signatures from, besides a `.gem_rbs_collection/` next to the program ([decision 457](decisions/457.md)). |
 | `RUGAROO_GEM_WARNINGS=1` | Also print warnings from gem files (hidden by default, since they are not yours to fix). |
 | `RUGAROO_UNTYPED_WHY=1` | Each dynamic-call warning also names where the untyped value came from. |
 | `RUGAROO_INFER_DEBUG=1` | Show what each round of parameter inference typed and what it could not compile. |

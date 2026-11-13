@@ -26,6 +26,7 @@ func TestLoadEnv(t *testing.T) {
 		"RUGAROO_INT_OVERFLOW":   func(e envConfig) string { return e.IntOverflow },
 		"RUGAROO_NIL_CHECK":      func(e envConfig) string { return e.NilCheck },
 		"RUGAROO_COMPILER":       func(e envConfig) string { return e.Compiler },
+		"RUGAROO_RBS_COLLECTION": func(e envConfig) string { return e.RBSCollection },
 	}
 	for name := range flags {
 		t.Setenv(name, "")

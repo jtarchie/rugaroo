@@ -2,7 +2,9 @@ package compiler
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -102,5 +104,39 @@ func TestResolveIntersection(t *testing.T) {
 		if got.C == nil || got.C.RubyName != want {
 			t.Errorf("%s resolved to %+v, want %s", in, got, want)
 		}
+	}
+}
+
+// An `rbs collection install` directory beside the program types a gem's methods, the highest version of each gem,
+// after the vendored sig/gems and before the gem's own sig/ (decision 457, #105).
+func TestRBSCollection(t *testing.T) {
+	_, err := exec.LookPath("ruby")
+	if err != nil {
+		t.Skip("boot needs ruby")
+	}
+	dir := t.TempDir()
+	write := func(rel, src string) {
+		t.Helper()
+		p := filepath.Join(dir, rel)
+		werr := os.MkdirAll(filepath.Dir(p), 0o750)
+		if werr == nil {
+			werr = os.WriteFile(p, []byte(src), 0o600)
+		}
+		if werr != nil {
+			t.Fatal(werr)
+		}
+	}
+	write("lib/colgem.rb", "class Colgem\n  def scale(n) = n * 2\nend\n")
+	write(".gem_rbs_collection/colgem/1.9/colgem.rbs", "class Colgem\n  def scale: (Integer) -> Integer\nend\n")
+	write(".gem_rbs_collection/colgem/1.10/colgem.rbs", "class Colgem\n  def scale: (Float) -> Float\nend\n")
+	app := "# load_path: lib\nrequire \"colgem\"\nv = [1.5].first #: untyped\np Colgem.new.scale(v)\n"
+	write("app.rb", app)
+	fsys := os.DirFS("../..")
+	out, _, err := CompileWithBoot(t.Context(), fsys, fsys, []Source{{Name: "app.rb", Src: []byte(app), Path: filepath.Join(dir, "app.rb")}}, []string{filepath.Join(dir, "lib")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "Colgem_Scale(self *Colgem, n Float) Float") {
+		t.Errorf("the collection's 1.10 sig (not 1.9) did not type Colgem#scale")
 	}
 }

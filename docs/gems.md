@@ -120,6 +120,11 @@ workflow we support for users.
 1. Run with `RUGAROO_GEM_WARNINGS=1` to see what rugaroo skipped or could not
    type in the gem's files.
 2. Check whether the gem ships RBS signatures in a `sig/` directory; rugaroo
-   reads them.
+   reads them. Signatures from the community
+   [gem_rbs_collection](https://github.com/ruby/gem_rbs_collection) work too:
+   run `rbs collection install` beside your program, and rugaroo reads its
+   `.gem_rbs_collection/` directory (or the one `RUGAROO_RBS_COLLECTION`
+   names). The order, first wins: inline `#:`, your own `sig/`, rugaroo's
+   bundled gem signatures, the collection, the gem's own `sig/`, inference.
 3. Try `-trace` if the gem loads files by computed name.
 4. Open an issue with the gem's name and version and the first error.
