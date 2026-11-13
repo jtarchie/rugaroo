@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -156,5 +157,39 @@ end
 	}
 	if strings.Contains(fields, "cur String") {
 		t.Errorf("Limits' @cur lost its nil:\n%s", decl)
+	}
+}
+
+// An unannotated attr writer nothing calls takes its ivar's type from the ivar's other writes (decision 445, #152);
+// one a computed send may reach keeps today's untyped ivar.
+func TestUncalledWriterIvarTyped(t *testing.T) {
+	src := `class Cell
+  attr_accessor :value
+  def initialize = @value = nil
+  def set(v) = @value = v
+  def get = @value
+end
+
+def render_one(v)
+  v.is_a?(String) ? "s" : "o"
+end
+
+c = Cell.new
+c.set("hello")
+c.set(42)
+p render_one(c.get)
+`
+	errText, ws := compileSrc(t, src)
+	if errText != "" {
+		t.Fatal(errText)
+	}
+	for _, w := range ws {
+		if strings.Contains(w, "untyped") || strings.Contains(w, "dynamic call") {
+			t.Errorf("unexpected warning: %s", w)
+		}
+	}
+	_, ws = compileSrc(t, src+"c.send(ARGV.first || \"value=\", 1)\n")
+	if !slices.ContainsFunc(ws, func(w string) bool { return strings.Contains(w, "render_one's parameter v is untyped") }) {
+		t.Errorf("a computed send reaches value=, so @value stays untyped; warnings: %q", ws)
 	}
 }

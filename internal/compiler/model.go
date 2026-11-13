@@ -254,6 +254,9 @@ type Param struct {
 	Out bool
 	// OutRet: an Out parameter the method may return, so a caller's use of the call's value is a use of its local (#128).
 	OutRet bool
+	// UncalledWriter: an unannotated attr writer's parameter no call types; it takes its ivar's type from the ivar's
+	// other writes once discovery ran (decision 445).
+	UncalledWriter bool
 }
 
 // BlockSig is the block a method takes.

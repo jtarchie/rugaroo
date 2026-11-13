@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"regexp"
 	"strings"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
@@ -150,8 +151,26 @@ func (f *fctx) ivarWriteValue(n *parser.InstanceVariableWriteNode, val expr, ann
 		return f.annotatedIvarValue(n, val, ann)
 	case val.provisional, f.awaitedWriterParam(n, val):
 		return f.provisionalIvarValue(n, val)
+	case f.discover && f.uncalledWriter(n):
+		return val, nil // declares nothing: the ivar's other writes do, and the parameter then takes their type (decision 445)
 	}
 	return val, val.typ
+}
+
+// uncalledWriter: an unannotated attr writer no call types writes its parameter; discovery notes the ivar so the
+// parameter can take the ivar's type from its other writes, or untyped when there are none (decision 445).
+func (f *fctx) uncalledWriter(n *parser.InstanceVariableWriteNode) bool {
+	if f.m == nil || !f.m.attrWriter || len(f.m.Params) != 1 || !f.m.Params[0].UncalledWriter {
+		return false
+	}
+	if _, ok := n.Value.(*parser.LocalVariableReadNode); !ok || f.c.writerReachable(f.m.Name) {
+		return false
+	}
+	if f.c.uncalledWriters == nil {
+		f.c.uncalledWriters = map[*Method]ivarKey{}
+	}
+	f.c.uncalledWriters[f.m] = ivarKey{f.owner, n.Name}
+	return true
 }
 
 // awaitedWriterParam: a round's attr writer write of a still-awaited param is bottom, so `l.x += n` callers can type it (decision 394).
@@ -160,7 +179,9 @@ func (f *fctx) awaitedWriterParam(n *parser.InstanceVariableWriteNode, val expr)
 		return false
 	}
 	p := f.m.Params[0]
-	if _, ok := n.Value.(*parser.LocalVariableReadNode); !ok || p.Pending == "" || !isAny(p.Type) || f.c.infer != nil && f.c.infer.noDrop[p.Pending] {
+	// a program's writer nothing calls keeps the drop: the final compile types it from the ivar's other writes (decision 445)
+	uncalled := f.c.infer != nil && f.c.infer.none[p.Pending] && !f.c.gemFile(f.m.File) && !f.c.writerReachable(f.m.Name)
+	if _, ok := n.Value.(*parser.LocalVariableReadNode); !ok || p.Pending == "" || !isAny(p.Type) || f.c.infer != nil && f.c.infer.noDrop[p.Pending] && !uncalled {
 		return false
 	}
 	if f.c.roundDrops == nil {
@@ -700,4 +721,29 @@ func (f *fctx) nilableOnUntyped(iv *Ivar, assigned Type) {
 	if iv != nil && f.discover && f.lenient() && isAny(assigned) && byValueType(iv.Type) {
 		iv.Type = optOf(iv.Type)
 	}
+}
+
+// sendCall is a send-family call by a computed name: `obj.send(name, v)`, which may reach any writer.
+var sendCall = regexp.MustCompile(`\b(?:send|public_send|__send__)\s*\(?\s*[^:\s)]`)
+
+// writerReachable: an untyped receiver's `obj.x = v` (or `x ||=`, `x +=`), a `:x=` Symbol or a send by a computed
+// name may reach writer name in a program file, so a writer no typed call types stays untyped (decision 445).
+func (c *Compiler) writerReachable(name string) bool {
+	if r, ok := c.writerReach[name]; ok {
+		return r
+	}
+	if c.writerReach == nil {
+		c.writerReach = map[string]bool{}
+	}
+	attr := regexp.QuoteMeta(strings.TrimSuffix(name, "="))
+	assign := regexp.MustCompile(`\.\s*` + attr + `\s*(?:\|\||&&|\*\*|<<|>>|[-+*/%|&^])?=(?:[^=~>]|$)`)
+	r := c.symbolLiterals()[name]
+	for _, f := range c.files {
+		if r {
+			break
+		}
+		r = !f.isPrelude() && (assign.Match(f.Src) || sendCall.Match(f.Src))
+	}
+	c.writerReach[name] = r
+	return r
 }

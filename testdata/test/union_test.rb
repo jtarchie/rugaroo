@@ -668,6 +668,8 @@ module UnionTests
   end
 
   class UnionNilCell
+    attr_accessor :value # never called: its writer takes @value's type from set's writes (decision 445)
+
     def initialize = @value = nil
     def set(v) = @value = v
     def get = @value

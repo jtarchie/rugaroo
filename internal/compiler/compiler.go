@@ -111,6 +111,8 @@ type Compiler struct {
 	usedBundled           bool                      // a bundled gem's lib joined the gem dirs (decision 427)
 	gemNilIvars           []gemNilIvar              // gem ivars discovery saw only nil assigned to (decision 169)
 	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
+	uncalledWriters       map[*Method]ivarKey       // attr writers no call types, by the ivar they write (decision 445)
+	writerReach           map[string]bool           // writerReachable's memo
 	nilIvars              map[ivarKey]bool          // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)
 	autoloads             map[string]bool           // `autoload :X` constants by qualified name: defined? answers for them (decision 167)
 	pendingAutoloads      []pendingAutoload         // gem autoloads whose path is computed: placed by the constant's file once every file is collected (decision 175)

@@ -211,6 +211,7 @@ func (c *Compiler) resolvePending(m *Method, prm *Param, pp pendingParam) {
 		prm.Type = TAny{}
 	case m.attrWriter, m.Owner != nil && m.Owner.isTemplate(): // a template's body is never compiled: its instances' are (decision 308)
 		prm.Type = TAny{} // an attr writer no call types: only a dynamic call can reach it (decision 179)
+		prm.UncalledWriter = m.attrWriter // until discovery gives it its ivar's type (decision 445)
 	default: // untyped, as a gem def's: only a dynamic call (send, a hook, an untyped receiver) can pass it anything (decision 183)
 		c.warn(m.File, m.Node, "method %s's parameter %s is untyped: no call in the program gives it a type (`# @rbs %s: T` for static calls; decision 183)", m.Name, strings.TrimLeft(pp.name, "*"), pp.name)
 		prm.Type = TAny{}

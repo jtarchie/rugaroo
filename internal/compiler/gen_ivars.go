@@ -263,6 +263,7 @@ func (c *Compiler) discoverIvars() {
 		}
 	}
 	c.untypedIvars = nil
+	c.typeUncalledWriters()
 	for _, g := range c.gemNilIvars { // only ever nil in what is compiled (a gem's pruned writes, decision 169; a user's nil-only ivar, 183)
 		if c.findIvar(g.cls, g.name) == nil {
 			c.warnAt(g.srcPos, "instance variable %s is only ever nil, so it is untyped (`# @rbs %s: T` for static calls; decision 183)", g.name, g.name)
@@ -270,6 +271,22 @@ func (c *Compiler) discoverIvars() {
 		}
 	}
 	c.declareGemClassIvars()
+}
+
+// typeUncalledWriters gives each attr writer no call types its ivar's type from the ivar's other writes; with none,
+// the writer declares it untyped as before (decision 445).
+func (c *Compiler) typeUncalledWriters() {
+	for _, m := range slices.SortedFunc(maps.Keys(c.uncalledWriters), func(a, b *Method) int {
+		return cmp.Or(cmp.Compare(a.Owner.Name, b.Owner.Name), cmp.Compare(a.Name, b.Name))
+	}) {
+		k := c.uncalledWriters[m]
+		iv := c.findIvar(k.cls, k.name)
+		if iv == nil {
+			iv = c.declareIvar(k.cls, k.name, TAny{}, m.File, m.File.line(m.Node.GetLocation().StartOffset))
+		}
+		m.Params[0].Type = iv.Type
+	}
+	c.uncalledWriters = nil
 }
 
 // declareGemClassIvars declares, untyped, each instance variable a gem class's own methods name that discovery left
