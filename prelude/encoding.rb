@@ -296,6 +296,199 @@ class Encoding < Object
 
   class ConverterNotFoundError < EncodingError; end
 
+  # Encoding::Converter on String#encode's transcoder (decision 452): each convert transcodes what it is given, an
+  # incomplete multibyte tail waits for the next call; errors raise as encode's do and are kept in last_error.
+  class Converter
+    # @rbs @source: Encoding
+    # @rbs @destination: Encoding
+    # @rbs @invalid: Symbol?
+    # @rbs @undef: Symbol?
+    # @rbs @replace: String?
+    # @rbs @xml: Symbol?
+    # @rbs @universal: bool
+    # @rbs @crlf: bool
+    # @rbs @cr: bool
+    # @rbs @pending: String
+    # @rbs @out_prefix: String
+    # @rbs @last_error: Exception?
+    # @rbs @errinfo: Array[untyped]
+
+    INVALID_MASK = 0x0f
+    INVALID_REPLACE = 0x02
+    UNDEF_MASK = 0xf0
+    UNDEF_REPLACE = 0x20
+    UNDEF_HEX_CHARREF = 0x30
+    PARTIAL_INPUT = 0x10000
+    AFTER_OUTPUT = 0x20000
+    UNIVERSAL_NEWLINE_DECORATOR = 0x100
+    CRLF_NEWLINE_DECORATOR = 0x1000
+    CR_NEWLINE_DECORATOR = 0x2000
+    XML_TEXT_DECORATOR = 0x4000
+    XML_ATTR_CONTENT_DECORATOR = 0x8000
+    XML_ATTR_QUOTE_DECORATOR = 0x100000
+
+    # `undef` is a keyword Ruby code cannot read as a local, so the keywords pass through Go to __setup.
+    #: (untyped, untyped, ?invalid: Symbol?, ?undef: Symbol?, ?replace: String?, ?xml: Symbol?, ?universal_newline: bool?, ?crlf_newline: bool?, ?cr_newline: bool?, ?newline: Symbol?) -> void
+    def initialize(src, dst, invalid: nil, undef: nil, replace: nil, xml: nil, universal_newline: nil, crlf_newline: nil, cr_newline: nil, newline: nil) = %x{
+      self.__Setup(src, dst, invalid, undef, replace, xml, universal_newline, crlf_newline, cr_newline, newline)
+    }
+
+    #: (untyped, untyped, Symbol?, Symbol?, String?, Symbol?, bool?, bool?, bool?, Symbol?) -> void
+    def __setup(src, dst, invalid, undf, replace, xml, universal_newline, crlf_newline, cr_newline, newline)
+      @source = Converter.__enc(src, src, dst)
+      @destination = Converter.__enc(dst, src, dst)
+      @invalid = invalid
+      @undef = undf
+      @replace = replace
+      @xml = xml
+      @universal = universal_newline == true || newline == :universal
+      @crlf = crlf_newline == true || newline == :crlf
+      @cr = cr_newline == true || newline == :cr
+      @pending = +""
+      @out_prefix = +""
+      @last_error = nil
+      @errinfo = [:source_buffer_empty, nil, nil, nil, nil]
+    end
+
+    # An encoding by name or object, or ConverterNotFoundError naming both ends, as MRI's.
+    #: (untyped, untyped, untyped) -> Encoding
+    def self.__enc(x, src, dst)
+      Encoding.find(x)
+    rescue ArgumentError
+      raise ConverterNotFoundError, "code converter not found (#{src} to #{dst})"
+    end
+
+    #: () -> Encoding
+    def source_encoding = @source
+
+    #: () -> Encoding
+    def destination_encoding = @destination
+
+    #: () -> Exception?
+    def last_error = @last_error
+
+    #: () -> String
+    def replacement = @replace || (@destination.name.start_with?("UTF-") ? "\uFFFD" : "?")
+
+    #: (String) -> String
+    def replacement=(s)
+      @replace = s
+    end
+
+    #: () -> Array[untyped]
+    def convpath = Converter.search_convpath(@source, @destination, xml: @xml, universal_newline: @universal, crlf_newline: @crlf, cr_newline: @cr)
+
+    #: () -> String
+    def inspect = "#<Encoding::Converter: #{@source.name} to #{@destination.name}>"
+
+    #: (untyped) -> bool
+    def ==(other) = other.is_a?(Converter) && other.inspect == inspect
+
+    # The conversion of s; a multibyte character cut at s's end waits for the next call (or finish).
+    #: (String) -> String
+    def convert(s)
+      src = @pending + s
+      @pending = +""
+      keep = __incomplete_tail(src)
+      if keep > 0
+        @pending = src.byteslice(src.bytesize - keep, keep) || ""
+        src = src.byteslice(0, src.bytesize - keep) || ""
+      end
+      __run(src)
+    end
+
+    # The rest: an incomplete character left by convert raises (or is replaced) here, as MRI's finish.
+    #: () -> String
+    def finish
+      src = @pending
+      @pending = +""
+      return "" if src.empty?
+
+      __run(src)
+    end
+
+    #: (String) -> String
+    def __run(src)
+      out = @out_prefix + src.encode(@destination, @source, invalid: @invalid, undef: @undef, replace: @replace, xml: @xml,
+                                                           universal_newline: @universal, crlf_newline: @crlf, cr_newline: @cr)
+      @out_prefix = +""
+      @last_error = nil
+      @errinfo = [:finished, nil, nil, nil, nil]
+      out
+    rescue InvalidByteSequenceError => ie
+      @last_error = ie
+      @errinfo = [:invalid_byte_sequence, ie.source_encoding_name, ie.destination_encoding_name, ie.error_bytes, ie.readagain_bytes || ""]
+      raise ie
+    rescue UndefinedConversionError => ue
+      @last_error = ue
+      @errinfo = [:undefined_conversion, ue.source_encoding_name, ue.destination_encoding_name, ue.error_char, ""]
+      raise ue
+    end
+
+    # Bytes at s's end that start a character the encoding needs more bytes for (UTF-8 only; other sources
+    # convert whole).
+    #: (String) -> Integer
+    def __incomplete_tail(s)
+      return 0 unless @source == Encoding::UTF_8
+
+      n = s.bytesize
+      k = 1
+      while k <= 3 && k <= n
+        c = s.getbyte(n - k) || 0
+        if c & 0xC0 != 0x80
+          need = if c >= 0xF0 then 4 elsif c >= 0xE0 then 3 elsif c >= 0xC0 then 2 else 1 end
+          return need > k ? k : 0
+        end
+        k += 1
+      end
+      0
+    end
+
+    #: () -> Array[untyped]
+    def primitive_errinfo = @errinfo
+
+    #: (?Integer?) -> String
+    def putback(_n = nil) = +""
+
+    #: (String) -> nil
+    def insert_output(s)
+      @out_prefix += s.encode(@destination)
+      nil
+    end
+
+    # The ASCII-compatible encoding a non-ASCII-compatible one converts through: UTF-8 for the UTF-16/32 family.
+    #: (untyped) -> Encoding?
+    def self.asciicompat_encoding(enc)
+      e = Encoding.find(enc)
+      return nil if e.ascii_compatible? || e.dummy?
+
+      e.name.start_with?("UTF-16", "UTF-32") ? Encoding::UTF_8 : nil
+    rescue ArgumentError
+      nil
+    end
+
+    # The steps a conversion takes, as pairs of Encodings (through UTF-8 unless an end is UTF-8), then any decorators.
+    #: (untyped, untyped, ?xml: Symbol?, ?universal_newline: bool?, ?crlf_newline: bool?, ?cr_newline: bool?, ?newline: Symbol?) -> Array[untyped]
+    def self.search_convpath(src, dst, xml: nil, universal_newline: nil, crlf_newline: nil, cr_newline: nil, newline: nil)
+      a = __enc(src, src, dst)
+      b = __enc(dst, src, dst)
+      path = [] #: Array[untyped]
+      if a != b
+        if a == Encoding::UTF_8 || b == Encoding::UTF_8
+          path << [a, b]
+        else
+          path << [a, Encoding::UTF_8] << [Encoding::UTF_8, b]
+        end
+      end
+      path << "universal_newline" if universal_newline || newline == :universal
+      path << "xml_text_escape" if xml == :text
+      path << "xml_attr_content_escape" << "xml_attr_quote" if xml == :attr
+      path << "crlf_newline" if crlf_newline || newline == :crlf
+      path << "cr_newline" if cr_newline || newline == :cr
+      path
+    end
+  end
+
   class UndefinedConversionError < EncodingError
     # @rbs @source_encoding_name: String?
     # @rbs @destination_encoding_name: String?
