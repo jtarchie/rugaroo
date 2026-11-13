@@ -1,6 +1,7 @@
 # rbs_inline: enabled
 
 require "minitest/autorun"
+require "stringio"
 
 # Each must_/wont_ expectation passing, with minitest's assertion counts (decision 83).
 describe "expectations" do
@@ -60,5 +61,37 @@ describe "ivars set in before" do
 
   it "reads them in the example" do
     _(@spec_seen).must_equal [1, 2]
+  end
+end
+
+# An it block is its own frame for $_, as the method minitest defines from it is; a sent gets sets it (decision 459).
+describe "last line" do
+  before do
+    @io = StringIO.new("one\ntwo\n")
+    @name = :gets
+  end
+
+  it "reads $_ set by a gets sent by name" do
+    @io.send(@name)
+    _($_).must_equal "one\n"
+    @io.readline
+    _($_).must_equal "two\n"
+  end
+end
+
+class SpecReopened
+  def base = 1
+end
+
+# A class statement in a before block reopens the top-level class: describe is a block in MRI (decision 459).
+describe "class in before" do
+  before do
+    class SpecReopened
+      def extra = base + 1
+    end
+  end
+
+  it "reopens the top-level class" do
+    _(SpecReopened.new.extra).must_equal 2
   end
 end

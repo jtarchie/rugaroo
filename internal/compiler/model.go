@@ -64,6 +64,7 @@ type Class struct {
 	slotsLinked       bool              // linkOverrides ran
 	Display           string            // the name Ruby shows, when the declaration has none of its own (a describe's class)
 	specChild         bool              // a nested describe's class: MRI undefines the test methods it inherits
+	describe          bool              // a describe block's class: in MRI a block, so a class statement in it is not nested in it
 	specTests         int               // its it/specify count, for MRI's test_0001_ names
 	hidden            bool              // `# @hidden` on a prelude module MRI lacks: left out of ancestors (decision 139)
 	ivarBits          bool              // its objects record which ivars were assigned (decision 153)

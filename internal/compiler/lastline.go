@@ -58,19 +58,45 @@ func eachFrame(v reflect.Value, prints map[*parser.CallNode]bool) {
 			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
 		case *parser.SingletonClassNode:
 			lowerFrame(reflect.ValueOf(&x.Body).Elem(), &x.Locals, prints)
+		case *parser.CallNode:
+			if b := specFrameBlock(x); b != nil {
+				lowerFrame(reflect.ValueOf(&b.Body).Elem(), &b.Locals, prints)
+				return
+			}
+			eachFrame(child, prints)
 		default:
 			eachFrame(child, prints)
 		}
 	})
 }
 
-// opensFrame: a def or class body has its own $_.
+// opensFrame: a def or class body has its own $_, as has a spec DSL block (spec.go makes it a class body or method).
 func opensFrame(n parser.Node) bool {
-	switch n.(type) {
+	switch x := n.(type) {
 	case *parser.DefNode, *parser.ClassNode, *parser.ModuleNode, *parser.SingletonClassNode:
 		return true
+	case *parser.CallNode:
+		return specFrameBlock(x) != nil
 	}
 	return false
+}
+
+// ponytail: any receiverless spec-DSL call with a block, not only those inside a describe; track describe nesting if a program's own `it` method takes a block.
+var specFrameNames = map[string]bool{"describe": true, "it": true, "specify": true, "before": true, "after": true, "let": true, "subject": true}
+
+// specFrameBlock is a block with a $_ of its own: a spec DSL block, or a new thread's (MRI's $_ is thread-local too).
+func specFrameBlock(c *parser.CallNode) *parser.BlockNode {
+	b, ok := c.Block.(*parser.BlockNode)
+	if !ok {
+		return nil
+	}
+	if c.Receiver == nil && specFrameNames[c.Name] {
+		return b
+	}
+	if r, ok := c.Receiver.(*parser.ConstantReadNode); ok && r.Name == "Thread" && (c.Name == "new" || c.Name == "start" || c.Name == "fork") {
+		return b
+	}
+	return nil
 }
 
 // usesLastLine: the frame's own code (not a nested def or class) reads or writes $_.
@@ -100,8 +126,8 @@ func usesLastLine(n parser.Node) bool {
 // lastLineCall is a call that reads $_ implicitly: a bare `print`, `~ /re/`.
 func lastLineCall(c *parser.CallNode) bool {
 	switch c.Name {
-	case "print":
-		return c.Receiver == nil && c.Arguments == nil && c.Block == nil
+	case "print": // IO#print and StringIO#print with no argument print the caller's $_ as Kernel#print does
+		return c.Arguments == nil && c.Block == nil
 	case "~":
 		_, re := c.Receiver.(*parser.RegularExpressionNode)
 		_, ire := c.Receiver.(*parser.InterpolatedRegularExpressionNode)
@@ -147,10 +173,30 @@ func walkLastLine(slot reflect.Value, depth uint32, prints map[*parser.CallNode]
 				Subsequent: &parser.ElseNode{Location: l, Statements: &parser.StatementsNode{Location: l, Body: []parser.Node{&parser.NilNode{Location: l}}}}})))
 		case (x.Name == "gets" || x.Name == "readline") && x.Block == nil:
 			slot.Set(reflect.ValueOf(parser.Node(&parser.LocalVariableWriteNode{Location: x.Location, Name: lastLineLocal, NameLoc: x.Location, Value: x, Depth: depth})))
+		case sentName(x) != nil: // $_ = __line_or(m, recv.send(m, ...), $_)
+			l := x.Location
+			args := []parser.Node{sentName(x), x, read}
+			call := &parser.CallNode{Location: l, Name: "__line_or", Arguments: &parser.ArgumentsNode{Location: l, Arguments: args}}
+			slot.Set(reflect.ValueOf(parser.Node(&parser.LocalVariableWriteNode{Location: l, Name: lastLineLocal, NameLoc: l, Value: call, Depth: depth})))
 		}
 		return
 	}
 	forNodeChildren(reflect.ValueOf(n), func(child reflect.Value) { walkLastLine(child, depth, prints) })
+}
+
+// sentName is the method name of a `send`/`public_send`/`__send__` whose name reads without side effects, so it can be read twice.
+func sentName(c *parser.CallNode) parser.Node {
+	if c.Receiver == nil || c.Block != nil || c.Arguments == nil || len(c.Arguments.Arguments) == 0 {
+		return nil
+	}
+	if c.Name != "send" && c.Name != "public_send" && c.Name != "__send__" {
+		return nil
+	}
+	switch a := c.Arguments.Arguments[0].(type) {
+	case *parser.SymbolNode, *parser.StringNode, *parser.LocalVariableReadNode, *parser.InstanceVariableReadNode:
+		return a
+	}
+	return nil
 }
 
 // forNodeChildren calls fn with a settable slot for each Node child (fields and slice elements) of the struct v points to.
@@ -188,7 +234,11 @@ func (f *fctx) lastLinePrint(n *parser.CallNode) *parser.CallNode {
 	if !f.f.lastLinePrints[n] {
 		return nil
 	}
-	if d := f.c.topDefs["print"]; d == nil || d.File == nil || d.File.isPrelude() { // a top-level def print is a private method of every object
+	if n.Receiver != nil {
+		if e := f.resolve(f.probeType(n.Receiver, nil), "print"); e != nil && e.M.File != nil && e.M.File.isPrelude() {
+			return nil
+		}
+	} else if d := f.c.topDefs["print"]; d == nil || d.File == nil || d.File.isPrelude() { // a top-level def print is a private method of every object
 		if e := f.resolve(f.selfType, "print"); e == nil || e.M.Owner == nil || e.M.Owner.RubyName == "Kernel" {
 			return nil
 		}

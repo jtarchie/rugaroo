@@ -111,6 +111,7 @@ type Compiler struct {
 	usedBundled           bool                       // a bundled gem's lib joined the gem dirs (decision 427)
 	gemNilIvars           []gemNilIvar               // gem ivars discovery saw only nil assigned to (decision 169)
 	inBlockScan           int                        // scanAnon is inside a block or def body: a class statement there is hoisted (decision 451)
+	inDefScan             int                        // scanAnon is inside a def body, where self is an instance (decision 459)
 	hoisted               map[parser.Node]bool       // those class and module statements: each compiles to nil where it stands
 	untypedIvars          map[ivarKey]*pendingIvar   // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
 	strCacheIvars         map[*Class]map[string]bool // per class, the String ivars its methods index (strCached, decision 454)

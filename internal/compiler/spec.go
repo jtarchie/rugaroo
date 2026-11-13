@@ -50,6 +50,7 @@ func (c *Compiler) collectDescribe(ctx context.Context, f *File, outer *Class, n
 	cls := c.declareHidden(f, key, f.line(n.Location.StartOffset), false)
 	cls.Display = strings.Join(parts, "::")
 	cls.specChild = outer != nil
+	cls.describe = true
 	super := parser.Node(&parser.ConstantPathNode{Parent: &parser.ConstantReadNode{Name: "Minitest"}, Name: ptr("Spec")})
 	if outer != nil {
 		super = &parser.ConstantReadNode{Name: outer.RubyName}

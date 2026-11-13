@@ -1006,6 +1006,10 @@ module Kernel
   #: () -> String?
   def __no_line = nil
 
+  # `recv.send(m, ...)` in a $_ frame: gets and readline sent by name set $_ as a literal call does (decision 459).
+  #: (untyped, untyped, String?) -> String?
+  def __line_or(name, value, old) = %w[gets readline].include?(name.to_s) ? value : old
+
   # The user-code frame uplevel frames up from warn's caller (decision 129).
   #: (Integer) -> String
   def __caller_loc(n) = %x{ return String(rbCallerLocN(int(n))) }

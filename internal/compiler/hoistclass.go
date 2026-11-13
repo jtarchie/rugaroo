@@ -10,7 +10,8 @@ import (
 // def; MRI refuses it in source) is hoisted as one in a block is (decision 451).
 func (c *Compiler) scanDefBody(ctx context.Context, f *File, body parser.Node, scope []*Class) {
 	c.inBlockScan++
-	defer func() { c.inBlockScan-- }()
+	c.inDefScan++
+	defer func() { c.inBlockScan--; c.inDefScan-- }()
 	c.scanAnon(ctx, f, body, scope)
 }
 
@@ -24,6 +25,14 @@ func (c *Compiler) hoistClass(ctx context.Context, f *File, n parser.Node, scope
 		c.hoisted = map[parser.Node]bool{}
 	}
 	c.hoisted[n] = true
+	if x, ok := n.(*parser.ClassNode); ok {
+		if _, self := x.Superclass.(*parser.SelfNode); self && (c.inDefScan > 0 || len(scope) == 0) {
+			c.errorf(f, x.Superclass, "a class statement in a block may not inherit from self here: self is an instance (main, or a method's receiver), so MRI raises TypeError (decision 459)")
+		}
+	}
+	for len(scope) > 0 && scope[len(scope)-1].describe { // MRI's describe is a block: `class BigDecimal` in its before reopens ::BigDecimal
+		scope = scope[:len(scope)-1]
+	}
 	var path parser.Node
 	var body parser.Node
 	switch x := n.(type) {

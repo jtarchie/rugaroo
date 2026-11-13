@@ -1303,6 +1303,10 @@ end
   end
 end
 p Foo.new.a
+-- class_in_block_self_super.rb --
+# error: main.rb:2: a class statement in a block may not inherit from self here
+make = -> { class Sub < self; end }
+make.call
 -- class_in_block_runs_code.rb --
 # error: main.rb:4: a class statement inside a block may only declare
 [1].each do
