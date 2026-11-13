@@ -22,13 +22,13 @@ type File struct {
 	// lastLinePrints are the bare `print` calls of frames that keep $_ (decision 446): Kernel#print's prints $_, a
 	// program's own `print` is called as written (lastLinePrint)
 	lastLinePrints map[*parser.CallNode]bool
-	valueGen  bool                       // a Struct/Data's generated members (valueClassSource), which may mark @dynamic
-	goBody    bool                       // generated with a %x{} Go body, as a prelude method's (an extern's typed twin, decision 442)
-	pinLine   int                        // every position reports this line: generated source, whose errors belong to its declaration
-	path      string                     // a user file's real path on disk, which require_relative resolves against
-	data      *string                    // the text after `__END__`, which DATA reads
-	overflow  string                     // its own `# int_overflow: mode` line, which governs the Integer arithmetic written in it (decision 381)
-	nilCheck  string                     // its own `# nil_check: mode` line, else its require_relative-ing file's; governs the T? uses written in it (decisions 393, 404)
+	valueGen       bool    // a Struct/Data's generated members (valueClassSource), which may mark @dynamic
+	goBody         bool    // generated with a %x{} Go body, as a prelude method's (an extern's typed twin, decision 442)
+	pinLine        int     // every position reports this line: generated source, whose errors belong to its declaration
+	path           string  // a user file's real path on disk, which require_relative resolves against
+	data           *string // the text after `__END__`, which DATA reads
+	overflow       string  // its own `# int_overflow: mode` line, which governs the Integer arithmetic written in it (decision 381)
+	nilCheck       string  // its own `# nil_check: mode` line, else its require_relative-ing file's; governs the T? uses written in it (decisions 393, 404)
 
 	// standalone annotation comments by the line they precede (first code line after)
 	leading map[int][]comment

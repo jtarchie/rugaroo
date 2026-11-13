@@ -12,9 +12,6 @@ import (
 // genCallRewrite is a call compiled as another expression: Regexp.last_match on the caller's $~ (decision 232), a
 // frozen proc literal at its expected type (decision 226).
 func (f *fctx) genCallRewrite(n *parser.CallNode, expected Type) (expr, bool) {
-	if c := f.lastLinePrint(n); c != nil {
-		return f.genCall(c, expected), true
-	}
 	if isRegexpConst(n.Receiver) && n.Name == "last_match" && n.Block == nil && len(callArgs(n)) <= 1 {
 		// the caller's $~ (decision 171: it is the frame's), handed to the helper that indexes it
 		gv := &parser.GlobalVariableReadNode{Location: n.Location, Name: "$~"}
@@ -419,6 +416,9 @@ func (f *fctx) genStringLowering(n *parser.CallNode) (expr, bool) {
 
 // genFoldOrLower is a Struct writer's __frozen_flag? as a constant, else a String lowering.
 func (f *fctx) genFoldOrLower(n *parser.CallNode, expected Type) (expr, bool) {
+	if c := f.lastLinePrint(n); c != nil {
+		return f.genCall(c, expected), true
+	}
 	if c := f.withIndexChain(n); c != nil {
 		return f.genCall(c, expected), true
 	}
