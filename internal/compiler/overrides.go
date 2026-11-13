@@ -115,6 +115,20 @@ func staticPrivate(m *Method) bool {
 	if !m.Private || m.Owner == nil {
 		return m.Private
 	}
+	if m.staticPriv != 0 {
+		return m.staticPriv == 1
+	}
+	r := staticPrivate0(m)
+	if m.Owner.shapeFixed { // includerDefines walks every includer's subclasses: rubocop's mixins have hundreds (decision 444)
+		m.staticPriv = 2
+		if r {
+			m.staticPriv = 1
+		}
+	}
+	return r
+}
+
+func staticPrivate0(m *Method) bool {
 	if m.Owner.descendantDefines(m.Name, true) || !m.Owner.universal && m.Owner.includerDefines(m.Name, map[*Class]bool{}) {
 		return false
 	}

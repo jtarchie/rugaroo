@@ -694,6 +694,9 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.checkAbstractIncludes()
 	c.guardConsts() // before any body is typed: defined?(X) on a guarded constant is String?
 	tick("link")
+	for _, cls := range c.classList {
+		cls.shapeFixed = true
+	}
 	c.discoverIvars()
 	c.ivarsDiscovered = true
 	if c.round {

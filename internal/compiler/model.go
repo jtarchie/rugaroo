@@ -18,6 +18,7 @@ type Class struct {
 	GoType         string    // `@go_type` underlying Go type; "" for struct classes
 	hashBase       bool      // a user class extending Hash or Array: embeds a Hash[any, V] or an Array[E] (decisions 165, 202)
 	constSingleton bool      // the hidden class of `X = K.new` with `def X.m`: live whenever the program is (no code names it)
+	shapeFixed     bool      // link is done: its methods, subclasses and includers no longer change (staticPrivate caches)
 	prunedDefs     []*Method // gem methods nothing reaches (decision 169): not compiled, still listed by reflection (decision 444)
 	selfDefs       bool      // some method has `# @self` (selfOverload)
 	TypeParams     []string
@@ -196,6 +197,7 @@ type Method struct {
 	Ret         Type
 	Iterator    bool   // block returns void → iter.Seq
 	seqAdapter  bool   // a closure overriding an iterator: GoName gains _blk, an iter.Seq adapter keeps the name
+	staticPriv  int8   // staticPrivate's answer once class shapes are fixed (Class.shapeFixed): 0 unknown, 1 yes, 2 no
 	protoOpt    bool   // a to_s or inspect whose parameters are all optional (ast's `inspect(indent=0)`): GoName gains _opt, a no-argument adapter keeps the name the runtime asserts
 	seqRest     bool   // an iterator `each(*args)` under Enumerable: GoName gains _rest, a no-argument iter.Seq adapter keeps the name
 	shadowed    []slot // ancestors' interface slots this override's signature differs from, nearest first; adapters answer them
