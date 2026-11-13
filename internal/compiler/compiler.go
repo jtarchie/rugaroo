@@ -113,6 +113,7 @@ type Compiler struct {
 	inBlockScan           int                       // scanAnon is inside a block or def body: a class statement there is hoisted (decision 451)
 	hoisted               map[parser.Node]bool      // those class and module statements: each compiles to nil where it stands
 	untypedIvars          map[ivarKey]*pendingIvar  // gem ivars discovery saw only untyped values assigned to, so far (decision 392)
+	strCacheIvars         map[*Class]map[string]bool // per class, the String ivars its methods index (strCached, decision 454)
 	uncalledWriters       map[*Method]ivarKey       // attr writers no call types, by the ivar they write (decision 445)
 	writerReach           map[string]bool           // writerReachable's memo
 	nilIvars              map[ivarKey]bool          // class#@ivar assigned nil where no type was known: a subclass's assignment types it (decision 182)

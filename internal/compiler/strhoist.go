@@ -127,6 +127,9 @@ func (f *fctx) isOutParam(name string) bool {
 
 // hoistedStrCall answers `s.length`/`s.size`/`s[i]`/`s[i, n]` of a hoisted String from hoistStrLoop's values, not in a block, which may run after the loop.
 func (f *fctx) hoistedStrCall(n *parser.CallNode) (expr, bool) {
+	if e, ok := f.cachedIvarStrCall(n); ok {
+		return e, true
+	}
 	r, ok := n.Receiver.(*parser.LocalVariableReadNode)
 	if !ok || len(f.strHoists) == 0 || n.Block != nil || n.IsSAFE_NAVIGATION() {
 		return expr{}, false
@@ -163,4 +166,77 @@ func (f *fctx) hoistedStrCall(n *parser.CallNode) (expr, bool) {
 		return expr{code: fmt.Sprintf("%s(%s, %s, &%s)", fn, strings.Join(codes, ", "), h.lim, dst), typ: TOpt{Elem: f.cls("String")}}, true
 	}
 	return expr{}, false
+}
+
+// strCached: iv is a String ivar its own class reads `length`/`size`/`[]` of, in a struct class (not a value class,
+// whose methods read a copy): it gets a cache field for its length scan (decision 454).
+func (c *Compiler) strCached(iv *Ivar) bool {
+	cls := iv.Owner
+	if iv.scratch || cls == nil || cls.byValue || !cls.isStruct() || cls.universal || !isClass(iv.Type, "String") {
+		return false
+	}
+	if c.strCacheIvars == nil {
+		c.strCacheIvars = map[*Class]map[string]bool{}
+	}
+	names, ok := c.strCacheIvars[cls]
+	if !ok {
+		names = map[string]bool{}
+		for _, m := range cls.MethodList {
+			if m.Owner != cls || m.Node == nil || m.File == nil || m.File.isPrelude() || c.gemFile(m.File) {
+				continue
+			}
+			walkNode(m.Node.Body, func(n parser.Node) (bool, bool) {
+				if call, ok := n.(*parser.CallNode); ok && (call.Name == "length" || call.Name == "size" || call.Name == "[]") {
+					if r, ok := call.Receiver.(*parser.InstanceVariableReadNode); ok {
+						names[r.Name] = true
+					}
+				}
+				return false, true
+			})
+		}
+		c.strCacheIvars[cls] = names
+	}
+	return names[iv.Name]
+}
+
+// strCacheField is the cache field of a String ivar strCached keeps.
+func strCacheField(iv *Ivar) string { return goFieldName(iv.Name) + "C_" }
+
+// cachedIvarStrCall is `@s.length` and `@s[i]` / `@s[i, n]` of a strCached ivar: its length and ASCII bound come from
+// the object's cache, not a scan per call (decision 454).
+func (f *fctx) cachedIvarStrCall(n *parser.CallNode) (expr, bool) {
+	r, ok := n.Receiver.(*parser.InstanceVariableReadNode)
+	if !ok || f.lenient() || n.Block != nil || n.IsSAFE_NAVIGATION() || f.owner == nil || f.scope.lookup(ivarNarrowKey(r.Name)) != nil {
+		return expr{}, false
+	}
+	iv := f.c.findIvar(f.owner, r.Name)
+	if iv == nil || iv.Owner != f.owner || !f.c.strCached(iv) {
+		return expr{}, false
+	}
+	args := callArgs(n)
+	intT := f.cls("Integer")
+	if n.Name != "[]" && (n.Name != "length" && n.Name != "size" || len(args) != 0) || n.Name == "[]" && (len(args) < 1 || len(args) > 2) {
+		return expr{}, false
+	}
+	for _, a := range args {
+		if isSplat(a) || !typeEq(f.probeType(a, intT), intT) {
+			return expr{}, false
+		}
+	}
+	s := f.ivarCode(iv)
+	cache := "&" + ivarPath(f.selfCode, iv)[:len(ivarPath(f.selfCode, iv))-len(goFieldName(iv.Name))] + strCacheField(iv)
+	if n.Name != "[]" {
+		ln := f.newTmp()
+		f.emit("%s, _ := rbStrCacheLenA(%s, %s)", ln, cache, s)
+		return expr{code: ln, typ: intT}, true
+	}
+	lim, dst := f.newTmp(), f.newTmp()
+	f.emit("_, %s := rbStrCacheLenA(%s, %s)", lim, cache, s)
+	f.emit("var %s String", dst)
+	codes := []string{s}
+	for _, a := range args {
+		codes = append(codes, f.genExpr(a, intT).code)
+	}
+	fn := map[int]string{1: "rbStrIdxA", 2: "rbStrSubA"}[len(args)]
+	return expr{code: fmt.Sprintf("%s(%s, %s, &%s)", fn, strings.Join(codes, ", "), lim, dst), typ: TOpt{Elem: f.cls("String")}}, true
 }

@@ -2854,4 +2854,61 @@ module StringTests
       assert_equal "[1", s
     end
   end
+
+  # An indexed String ivar caches its length scan per value it holds (decision 454)
+  class StrIvarScanner
+    attr_reader :pos
+
+    #: (String) -> void
+    def initialize(input)
+      @input = input
+      @pos = 0
+    end
+
+    #: (String) -> void
+    def reset(s)
+      @input = s
+      @pos = 0
+    end
+
+    def peek = @pos < @input.length ? @input[@pos] : nil
+
+    def advance
+      c = @input[@pos]
+      @pos += 1
+      c
+    end
+
+    def rest = @input[@pos, @input.size - @pos]
+
+    def size = @input.size
+  end
+
+  class StrIvarCacheTest < Minitest::Test
+    def test_cached_length_and_index
+      sc = StrIvarScanner.new("abcdefghijklmnopqrstuvwxyz0123456789-ascii")
+      assert_equal 42, sc.size
+      assert_equal "a", sc.advance
+      assert_equal "b", sc.peek
+      assert_equal "bcdefghijklmnopqrstuvwxyz0123456789-ascii", sc.rest
+      sc.reset("héllo wörld, ünïcode string past thirty-two bytes")
+      assert_equal 49, sc.size
+      assert_equal "h", sc.advance
+      assert_equal "é", sc.advance
+      assert_equal "llo", sc.rest[0, 3]
+      sc.reset("short")
+      assert_equal 5, sc.size
+      assert_equal "s", sc.peek
+      copy = sc.dup
+      copy.reset("x" * 40)
+      assert_equal 40, copy.size
+      assert_equal 5, sc.size
+    end
+
+    def test_threads_read_one_object
+      sc = StrIvarScanner.new("0123456789" * 10)
+      sizes = Array.new(4) { Thread.new { (1..50).sum { sc.size } } }.map(&:value)
+      assert_equal [5000, 5000, 5000, 5000], sizes
+    end
+  end
 end

@@ -930,6 +930,30 @@ func rbStrLenA(s String) (Integer, uint64) {
 	return Integer(rbStrLen(string(s))), 0
 }
 
+// rbStrCacheEnt is a String ivar's rbStrLenA, for the String whose bytes start at p and run n (decision 454).
+type rbStrCacheEnt struct {
+	p   *byte
+	n   int
+	ln  Integer
+	lim uint64
+}
+
+// rbStrCacheLenA is rbStrLenA of an indexed String ivar, kept per object in its cache field c: a String of 32 bytes
+// or more is scanned once per value it holds (any write gives a new data pointer or length), and threads reading
+// one object swap whole entries, so no lock and no torn read (decision 454).
+func rbStrCacheLenA(c *unsafe.Pointer, s String) (Integer, uint64) {
+	if len(s) < 32 {
+		return rbStrLenA(s)
+	}
+	p := unsafe.StringData(string(s))
+	if e := (*rbStrCacheEnt)(atomic.LoadPointer(c)); e != nil && e.p == p && e.n == len(s) {
+		return e.ln, e.lim
+	}
+	ln, lim := rbStrLenA(s)
+	atomic.StorePointer(c, unsafe.Pointer(&rbStrCacheEnt{p: p, n: len(s), ln: ln, lim: lim}))
+	return ln, lim
+}
+
 // rbStrIdxA is String#[](i) of a hoisted String, written to the call site's own dst, so the String? needs no allocation
 // whether or not this inlines; below lim, byte i with no prefix scan.
 func rbStrIdxA(s String, i Integer, lim uint64, dst *String) *String {

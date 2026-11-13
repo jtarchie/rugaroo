@@ -475,6 +475,9 @@ func (c *Compiler) emitRootFields(cls *Class) {
 func (c *Compiler) emitIvarFields(cls *Class) {
 	for _, iv := range cls.IvarList {
 		c.w("\t%s %s\n", goFieldName(iv.Name), c.goType(iv.Type))
+		if c.strCached(iv) {
+			c.w("\t%s unsafe.Pointer\n", strCacheField(iv)) // its length scan, per String it holds (decision 454)
+		}
 	}
 }
 
