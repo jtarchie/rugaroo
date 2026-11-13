@@ -1292,3 +1292,21 @@ class Pt
 end
 Pt.new(1)
 p Pt.allocate
+-- class_in_block_replaces.rb --
+# error: main.rb:7: Foo#a already exists: a class statement inside a block may add methods, not replace them
+class Foo
+  def a = 1
+end
+[1].each do
+  class Foo
+    def a = 2
+  end
+end
+p Foo.new.a
+-- class_in_block_runs_code.rb --
+# error: main.rb:4: a class statement inside a block may only declare
+[1].each do
+  class Foo
+    puts "hi"
+  end
+end

@@ -35,7 +35,7 @@ func (c *Compiler) collect(ctx context.Context, f *File) {
 				c.collectModule(ctx, f, n, nil)
 			case *parser.DefNode:
 				c.collectTopDef(f, n)
-				c.scanAnon(ctx, f, n.Body, nil)
+				c.scanDefBody(ctx, f, n.Body, nil)
 			case *parser.ConstantWriteNode:
 				if call, kind := valueClass(n.Value); call != nil {
 					c.collectValueClass(ctx, f, n, call, kind, nil)
