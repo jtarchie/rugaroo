@@ -70,7 +70,23 @@ func (c *Compiler) checkHoistedStmt(f *File, s parser.Node, existing *Class) {
 			c.errorf(f, x, "%s#%s already exists: a class statement inside a block may add methods, not replace them, as rugaroo declares it before the block runs (decision 451)", existing.RubyName, x.Name)
 		}
 		return
-	case *parser.ClassNode, *parser.ModuleNode, *parser.SingletonClassNode, *parser.ConstantWriteNode, *parser.AliasMethodNode:
+	case *parser.ClassNode, *parser.ModuleNode, *parser.SingletonClassNode:
+		var body parser.Node
+		switch y := x.(type) {
+		case *parser.ClassNode:
+			body = y.Body
+		case *parser.ModuleNode:
+			body = y.Body
+		case *parser.SingletonClassNode:
+			body = y.Body
+		}
+		if st, ok := body.(*parser.StatementsNode); ok { // a nested body is hoisted too: its calls would run at load
+			for _, n := range st.Body {
+				c.checkHoistedStmt(f, n, nil)
+			}
+		}
+		return
+	case *parser.ConstantWriteNode, *parser.AliasMethodNode:
 		return
 	case *parser.CallNode:
 		if x.Receiver == nil && hoistDecls[x.Name] {

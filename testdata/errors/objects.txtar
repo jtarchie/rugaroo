@@ -1314,3 +1314,12 @@ make.call
     puts "hi"
   end
 end
+-- class_in_block_nested_runs_code.rb --
+# error: main.rb:5: a class statement inside a block may only declare
+[1].each do
+  module Outer
+    class Inner
+      puts "hi"
+    end
+  end
+end
