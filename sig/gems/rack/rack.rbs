@@ -109,7 +109,7 @@ module Rack
       def parse_query: (String, ?String) -> Hash[String, untyped]
       def parse_multipart: () -> untyped
       def expand_param_pairs: (Array[untyped], ?Rack::QueryParser) -> Hash[String, untyped]
-      def split_header: (untyped) -> Array[String]
+      def split_header: (String?) -> Array[String]
       def split_authority: (untyped) -> Array[untyped]
       def forwarded_scheme: () -> untyped
       def allowed_scheme: (untyped) -> untyped
@@ -183,7 +183,7 @@ module Rack
     def each_query_pair: (String?, String?, ?(^(String) -> String)?) { (String, String?) -> void } -> void
     def parse_query_pairs: (String?, ?String?) -> Array[untyped]
     def make_params: () -> Rack::QueryParser::Params[untyped]
-    def _normalize_params: (untyped, String?, untyped, Integer) -> untyped
+    def _normalize_params: (Rack::QueryParser::Params[untyped], String?, untyped, Integer) -> untyped
   end
 
   class MediaType
@@ -201,6 +201,10 @@ module Rack
       def normalize_filename: (String) -> String
       def tag_multipart_encoding: (String?, String?, untyped, untyped) -> void
       def find_encoding: (String?) -> Encoding
+      def self.parse_boundary: (String?) -> String?
+      def initialize: (String, untyped, Integer, Rack::QueryParser) -> void
+      def handle_dummy_encoding: (String, String) -> [String, String]
+      def handle_empty_content!: (String?) -> void
     end
   end
 end

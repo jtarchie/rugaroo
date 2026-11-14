@@ -3,6 +3,8 @@
 module Rackup
   module Handler
     self.@handlers: Hash[Symbol, untyped]
+    def self.get: (String | Symbol) -> untyped
+    def self.[]: (String | Symbol) -> untyped
 
     class WEBrick < ::WEBrick::HTTPServlet::AbstractServlet
       self.@server: Rackup::Handler::WEBrick::Server?
