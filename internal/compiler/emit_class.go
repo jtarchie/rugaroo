@@ -282,7 +282,7 @@ func (c *Compiler) reshapedBridge(cls *Class, m *Method, t entry, ret string) (s
 		if p.Rest || p.KwRest || p.Default == nil && !p.Keyword {
 			return "", false
 		}
-		args = append(args, "*new("+c.goType(subst(p.Type, tenv))+")")
+		args = append(args, goZero(c.goType(subst(p.Type, tenv))))
 	}
 	call := fmt.Sprintf("%s%s(self%s)", freeFuncName(t.M), c.forwardTypeArgs(t, cls), comma(strings.Join(args, ", ")))
 	_, tret := c.sig(t.M, tenv)

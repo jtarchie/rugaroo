@@ -336,10 +336,18 @@ func (c *Compiler) typeParamDecl(m *Method) string {
 	return "[" + strings.Join(tps, ", ") + "]"
 }
 
-// goZero is the zero value of Go type t as code: nil for any, which gocritic's newDeref rejects as `*new(any)`.
+// goZero is the zero value of Go type t as code: nil for any and the literal for a core value type, which gocritic's
+// newDeref rejects as `*new(any)` or `*new(Boolean)`.
 func goZero(t string) string {
-	if t == "any" {
+	switch t {
+	case "any":
 		return "nil"
+	case "Boolean":
+		return "Boolean(false)"
+	case "Integer", "Float":
+		return t + "(0)"
+	case "String", "Symbol":
+		return t + `("")`
 	}
 	return "*new(" + t + ")"
 }

@@ -124,7 +124,7 @@ func (c *Compiler) emitProtoOpt(cls *Class, e entry, recv string) bool {
 	args := make([]string, 0, 2+len(e.M.Params))
 	args = append(args, "self", "0")
 	for _, p := range e.M.Params {
-		args = append(args, "*new("+c.goType(subst(p.Type, env))+")")
+		args = append(args, goZero(c.goType(subst(p.Type, env))))
 	}
 	call := freeFuncName(e.M) + c.forwardTypeArgs(e, cls) + "(" + strings.Join(args, ", ") + ")"
 	c.w("func (self %s) %s() String { return rbAs[String](any(%s), \"String\") }\n", recv, strings.TrimSuffix(e.M.GoName, "_opt"), call)
