@@ -143,13 +143,11 @@ In the order the parser gem's profile shows them:
    `ParserEngine: parser_prism` and `TargetRubyVersion: 3.4` MRI itself spends 10% fewer instructions on `dir20`
    (10,577M against 11,726M), and compiled prism is C code run as wasm. Not measured compiled: any `.rubocop.yml`
    beside the input stops the compiled binary (next item).
-6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` stops the compiled binary, so only the default
-   configuration runs: first `no block given (yield)` in `RuboCop::Config#each_key` (a blockless `each_key` through
-   `def_delegators`, fixed on this branch), then `no implicit conversion of RuboCop::Config into Hash` at
-   `config_loader_resolver.rb:129` (`base_hash.merge(derived_hash)` needs `to_hash`, fixed on this branch too), then
-   `wrong number of arguments (given 2, expected 1)` in `RuboCop::Config#replace` (`config_loader_resolver.rb:182`),
-   not fixed: that path was never in the `-trace` run, so each step is new. With `ParserEngine: parser_prism` the
-   binary stops earlier: `ProcessedSource.lazy_tokens_parser_class does not compile`; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
+6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` stopped the compiled binary at three places in turn, all fixed on
+   this branch (a blockless `each_key` through `def_delegators`, `Hash#merge` of a `Config` needing `to_hash`, and a
+   forwarder's absent `&block` counted as an argument of `Config#replace`): with a config that sets a cop's style and
+   disables a department the binary prints what MRI prints on `a.rb` and `dir20`. `ParserEngine: parser_prism` still
+   stops it (`ProcessedSource.lazy_tokens_parser_class does not compile`); a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
    too; `kids << a << i` on an Array first seen holding one class
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
