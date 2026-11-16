@@ -515,6 +515,9 @@ func rbHashViewCopy(s rbHashView) rbHashView {
 
 // rbHashViewCall answers a dynamic call of name on a Hash's view, or false when name is not one of its names.
 func rbHashViewCall(name string, s rbHashView, args []any) (any, bool) { //nolint:cyclop,gocognit,gocyclo // one switch per name
+	if b, rest := rbPopBlock(args); b == nil { // a forwarder's `&block` the caller did not give is not an argument (rubocop's Config#replace)
+		args = rest
+	}
 	switch name {
 	case "merge":
 		rbArity(len(args), 1, 1)
