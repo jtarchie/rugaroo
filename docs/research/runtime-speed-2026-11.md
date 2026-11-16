@@ -309,3 +309,8 @@ them. Leaf time inside the cops, largest first:
 
 These are general (every program with untyped values pays them: kramdown, liquid) and are runtime changes, so
 each is a before/after on `benchmarks/` and spinel's suite as well as on rubocop.
+
+Tried the `rbEq`/`rbUnbox` candidate on the small programs (2026-11-16): a first switch on Integer, Symbol and String
+in `rbEq`, and on the unboxed core values in `rbUnbox`. Parser program 1,656M → 1,662M, liquid 1,774M → 1,762M,
+kramdown 4,020M → 4,083M: nothing, so it was not kept. Whether rubocop, with its hundreds of `T?` boxes in
+`rbUnbox`'s switch, differs was not measured (it needs a rubocop build).
