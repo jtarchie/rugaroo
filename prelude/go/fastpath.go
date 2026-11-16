@@ -84,8 +84,11 @@ const rbStrFactMin = 256
 // under rbStrSetbyte, which clears its slot.
 var rbStrFacts [16]atomic.Pointer[rbStrFact]
 
-// rbStrFactsUsed is set once any fact has been cached: until then rbStrSetbyte has nothing to clear and tests only this.
-var rbStrFactsUsed atomic.Bool
+// rbStrMutable is set when rbStrSetbyte first gives a long String a buffer it writes in place (decision 395). From
+// then on no fact is cached: a cached one could describe bytes a later setbyte changed, and testing for that on every
+// setbyte cost a byte-twiddling loop 7%. Entries cached before stay valid: they are of other, immutable Strings, and
+// holding their bytes keeps a new buffer from taking their address.
+var rbStrMutable atomic.Bool
 
 func rbStrFactSlot(n int) *atomic.Pointer[rbStrFact] { return &rbStrFacts[(n^n>>4)&15] }
 
@@ -118,9 +121,8 @@ func rbStrFactOf(s string, level int) *rbStrFact {
 		}
 		e.level = level
 	}
-	slot.Store(e)
-	if !rbStrFactsUsed.Load() {
-		rbStrFactsUsed.Store(true)
+	if !rbStrMutable.Load() {
+		slot.Store(e)
 	}
 	return e
 }
