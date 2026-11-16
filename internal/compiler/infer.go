@@ -877,6 +877,24 @@ func (c *Compiler) updateInference(inf *inference) {
 	diff := c.roundDiff(inf, next)
 	if c.env.Timing {
 		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
+		// what inference can reach: a parameter no call types has a static call that passed something untyped
+		// (typeable once that value is), only dynamic calls by its name (send, an untyped receiver), or no call at all
+		var static, dynOnly, uncalled int
+		for k := range c.pendingSeen {
+			if t, ok := next[k]; ok && !isAny(t) {
+				continue
+			}
+			uses := c.uses[k]
+			switch {
+			case slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt }):
+				static++
+			case len(uses) > 0:
+				dynOnly++
+			default:
+				uncalled++
+			}
+		}
+		fmt.Fprintf(os.Stderr, "rugaroo: round left untyped: %d with a static call, %d with dynamic calls only, %d with no call\n", static, dynOnly, uncalled)
 	}
 	settled := !inf.changed || diff*50 <= len(next)
 	c.settleRound(inf, settled, bets, next, from)
