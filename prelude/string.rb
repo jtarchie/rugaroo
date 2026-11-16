@@ -263,19 +263,25 @@ class String < Object
 
   #: (String, Integer) -> Integer?
   def __index_2(s, start) = %x{
-    r := []rune(string(self))
+    str := string(self)
     if start < 0 {
-      start += Integer(len(r))
+      start += Integer(rbStrLen(str))
     }
-    if start < 0 || int(start) > len(r) {
+    if start < 0 {
       return rbOpt[Integer]{}
     }
-    rest := string(r[start:])
-    i := strings.Index(rest, string(s))
+    from, ok := rbCharOffset(str, int(start))
+    if !ok {
+      return rbOpt[Integer]{}
+    }
+    i := strings.Index(str[from:], string(s))
     if i < 0 {
       return rbOpt[Integer]{}
     }
-    return rbSome(start + Integer(utf8.RuneCountInString(rest[:i])))
+    if rbASCII(str) {
+      return rbSome(start + Integer(i))
+    }
+    return rbSome(start + Integer(utf8.RuneCountInString(str[from:from+i])))
   }
 
   #: (Integer) -> String?
@@ -708,19 +714,20 @@ class String < Object
   # The last occurrence starting at or before character pos (negative counts from the end).
   #: (String, Integer) -> Integer?
   def __rindex_2(s, pos) = %x{
-    r := []rune(string(self))
+    str := string(self)
+    n := Integer(rbStrLen(str))
     if pos < 0 {
-      pos += Integer(len(r))
+      pos += n
     }
     if pos < 0 {
       return rbOpt[Integer]{}
     }
-    hay := string(r[:min(int(pos)+utf8.RuneCountInString(string(s)), len(r))])
-    i := strings.LastIndex(hay, string(s))
+    end, _ := rbCharOffset(str, min(int(pos)+rbStrLen(string(s)), int(n)))
+    i := strings.LastIndex(str[:end], string(s))
     if i < 0 {
       return rbOpt[Integer]{}
     }
-    return rbSome(Integer(utf8.RuneCountInString(hay[:i])))
+    return rbSome(Integer(rbCharCount(str, i)))
   }
 
   #: (String) -> Integer?

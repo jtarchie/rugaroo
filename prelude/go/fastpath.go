@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // rbBDStripZeros is a copy of the nonzero mant with its k trailing decimal zeros removed.
@@ -58,29 +59,67 @@ func rbReadUntil(r *bufio.Reader, want []byte) []byte {
 	}
 }
 
-// rbValidCache is the last large subject found valid UTF-8; holding the string keeps its memory from being reused, and an atomic pointer to an immutable entry needs no lock.
-var rbValidCache atomic.Pointer[string]
-
-// rbValidUTF8 is utf8.ValidString with MRI's cached coderange for the large subject a loop matches again and again: == short-circuits on the same bytes (pointer-equal) and on differing lengths.
-// The cache's store is out of line: taking &s moves s to the heap at entry, which in one function cost every short
-// String a 16-byte allocation that never reached the cache (decision 349).
-func rbValidUTF8(s string) bool {
-	if len(s) < 512 {
-		return utf8.ValidString(s)
-	}
-	return rbValidUTF8Long(s)
+// rbStrFact is what MRI keeps on a String as its coderange and length: computed once for a large String, then read
+// again by every index, slice, length and match against the same bytes (decision 464).
+type rbStrFact struct {
+	p     *byte // the key: the String's data pointer and length. Holding p keeps the bytes from being reused.
+	n     int
+	ascii bool
+	valid bool // valid UTF-8
+	chars int  // its length in characters: bytes unless valid and not ASCII
 }
 
+// rbStrFactMin is the length from which a String's facts are cached; a shorter one costs less to scan than to look up.
+const rbStrFactMin = 256
+
+// rbStrFacts is a direct-mapped cache by length: whole immutable entries swapped atomically, so no lock; a
+// collision only rescans. Go strings never change in place except under rbStrSetbyte, which clears its slot.
+var rbStrFacts [16]atomic.Pointer[rbStrFact]
+
+func rbStrFactSlot(n int) *atomic.Pointer[rbStrFact] { return &rbStrFacts[(n^n>>4)&15] }
+
+// rbStrFactOf is s's facts; len(s) >= rbStrFactMin.
+//
 //go:noinline
-func rbValidUTF8Long(s string) bool {
-	if p := rbValidCache.Load(); p != nil && *p == s {
-		return true
+func rbStrFactOf(s string) *rbStrFact {
+	p := unsafe.StringData(s) //nolint:gosec // the key: compared only
+	slot := rbStrFactSlot(len(s))
+	if e := slot.Load(); e != nil && e.p == p && e.n == len(s) {
+		return e
 	}
-	if !utf8.ValidString(s) {
-		return false
+	e := &rbStrFact{p: p, n: len(s), chars: len(s)}
+	if e.ascii = rbASCIIScan(s); e.ascii {
+		e.valid = true
+	} else if e.valid = utf8.ValidString(s); e.valid {
+		e.chars = utf8.RuneCountInString(s)
 	}
-	rbValidCache.Store(&s)
-	return true
+	slot.Store(e)
+	return e
+}
+
+// rbValidUTF8 is utf8.ValidString with MRI's cached coderange for the large subject a loop matches again and again.
+func rbValidUTF8(s string) bool {
+	if len(s) < rbStrFactMin {
+		return utf8.ValidString(s)
+	}
+	return rbStrFactOf(s).valid
+}
+
+// rbCharOffset is the byte offset of s's character k (k <= its length), and whether s has that many characters:
+// k itself in an ASCII String.
+func rbCharOffset(s string, k int) (int, bool) {
+	if k <= len(s) && rbASCII(s) {
+		return k, true
+	}
+	return rbRuneOffset(s, k)
+}
+
+// rbCharCount is how many characters s[:b] holds, b a character boundary of the valid UTF-8 s.
+func rbCharCount(s string, b int) int {
+	if rbASCII(s) {
+		return b
+	}
+	return utf8.RuneCountInString(s[:b])
 }
 
 // rbFormatFast is rbFormatOne for the flag-free %d, %s and %f with only a width (and a precision on %f): strconv and a space pad, no fmt parse. ok is false for everything else.

@@ -2920,6 +2920,91 @@ module StringTests
     end
   end
 
+  # Long Strings (256 bytes and up) keep their ASCII flag and character count between calls (decision 464).
+  class StrFactTest < Minitest::Test
+    def test_ascii_long
+      s = "line of text\n" * 40
+      assert_equal 520, s.length
+      assert_equal 12, s.index("\n")
+      assert_equal 25, s.index("\n", 13)
+      assert_equal 519, s.index("\n", -1)
+      assert_nil s.index("\n", 520)
+      assert_nil s.index("\n", 521)
+      assert_equal 520, s.index("", 520)
+      assert_equal 506, s.rindex("\n", 518)
+      assert_equal 519, s.rindex("\n", -1)
+      assert_nil s.rindex("z", 400)
+      assert_equal "of text", s[5, 7]
+      assert_equal "t", s[515]
+      assert_nil s[520]
+      assert_equal "", s[520, 3]
+      m = /t(e)xt/.match(s, 300)
+      assert_equal 307, m.begin(0)
+      assert_equal 308, m.begin(1)
+      assert_nil(/text/.match(s, 517))
+      assert_equal 40, s.scan(/line/).size
+    end
+
+    def test_non_ascii_long
+      s = "héllo wörld\n" * 40
+      assert_equal 480, s.length
+      assert_equal 560, s.bytesize
+      assert_equal 11, s.index("\n")
+      assert_equal 23, s.index("\n", 12)
+      assert_equal 479, s.index("\n", -1)
+      assert_nil s.index("\n", 481)
+      assert_equal 467, s.rindex("\n", 478)
+      assert_equal 475, s.rindex("ö", -1)
+      assert_equal "wörld", s[18, 5]
+      assert_equal "é", s[469]
+      m = /w(ö)rld/.match(s, 300)
+      assert_equal 306, m.begin(0)
+      assert_equal 307, m.begin(1)
+    end
+
+    def test_same_length_strings_do_not_share
+      a = "a" * 300
+      b = ("é" * 150).b
+      c = "é" * 150
+      3.times do
+        assert_equal 300, a.length
+        assert_equal 300, b.length
+        assert_equal 150, c.length
+        assert_equal "a", a[299]
+        assert_equal "é", c[149]
+        assert_nil c[150]
+      end
+    end
+
+    #: (String) -> [Integer, Integer, String]
+    def refact(base)
+      s = base.dup
+      before = s.length
+      s.setbyte(0, 0xC3)
+      s.setbyte(1, 0xA9)
+      [before, s.length, s]
+    end
+
+    def test_setbyte_drops_the_cached_fact
+      base = "a" * 300
+      before, after, s = refact(base)
+      assert_equal 300, before
+      assert_equal 299, after
+      assert_equal "é", s[0]
+      refute_predicate s, :ascii_only?
+      assert_equal 0, s.index("é")
+      assert_equal 1, s.index("a")
+      assert_equal 300, base.length
+    end
+
+    def test_threads
+      s = "0123456789" * 30
+      t = "é123456789" * 30
+      got = Array.new(4) { |i| Thread.new { (1..50).sum { (i.even? ? s : t).length + (s.index("9", 285) || 0) } } }.map(&:value)
+      assert_equal [29_450, 29_450, 29_450, 29_450], got
+    end
+  end
+
   class StringRebindTest < Minitest::Test
     def test_replace_and_clear_on_a_local
       s = +"k"

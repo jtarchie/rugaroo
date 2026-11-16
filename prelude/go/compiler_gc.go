@@ -5,6 +5,7 @@ package prelude
 
 import (
 	"hash/maphash"
+	"os"
 	"runtime"
 	"unsafe"
 )
@@ -38,4 +39,19 @@ func rbGoIDStack() int64 {
 		id = id*10 + int64(c-'0')
 	}
 	return id
+}
+
+// rbGCBallast raises the heap size at which Go first collects (decision 463). Go starts collecting at 4 MB and again
+// at every doubling of the live heap, so a program with a few MB of live data collects dozens of times a second;
+// MRI's own heap starts larger. The ballast is never written, so the OS never backs it with memory; the collector
+// counts it as live, which puts the first collection at twice its size and adds that much headroom, a constant,
+// to a large heap's goal. Raising GOGC instead would scale with the heap (and with the globals Go adds to the goal).
+var rbGCBallast []byte
+
+// rbGCStart allocates the ballast. A GOGC or GOMEMLIMIT in the environment wins.
+func rbGCStart() {
+	if os.Getenv("GOGC") != "" || os.Getenv("GOMEMLIMIT") != "" {
+		return
+	}
+	rbGCBallast = make([]byte, 16<<20)
 }

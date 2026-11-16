@@ -267,9 +267,17 @@ func rbASCIIMapBytes(s string, f func(byte) byte) string {
 	return b.String()
 }
 
-// rbASCII reports s is all ASCII, where a character is a byte: eight bytes a step (Go combines the loads), as
-// String#length and #[] ask it of the String on every call (decision 399).
+// rbASCII reports s is all ASCII, where a character is a byte, as String#length and #[] ask it of the String on
+// every call (decision 399): a scan of a short String, the cached fact of a long one (decision 464).
 func rbASCII(s string) bool {
+	if len(s) < rbStrFactMin {
+		return rbASCIIScan(s)
+	}
+	return rbStrFactOf(s).ascii
+}
+
+// rbASCIIScan reads s eight bytes a step (Go combines the loads).
+func rbASCIIScan(s string) bool {
 	for len(s) >= 8 {
 		w := uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 | uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
 		if w&0x8080808080808080 != 0 {
@@ -724,6 +732,9 @@ func rbEachChar(s string) iter.Seq[string] {
 }
 
 func rbStrLen(s string) int {
+	if len(s) >= rbStrFactMin {
+		return rbStrFactOf(s).chars
+	}
 	if rbASCII(s) { // one pass, not a validity pass and then a rune count (decision 399)
 		return len(s)
 	}
@@ -871,6 +882,9 @@ func rbStrSetbyte(buf *[]byte, s String, i, v Integer) String {
 		*buf = b
 		s = String(unsafe.String(unsafe.SliceData(b), len(b))) //nolint:gosec // the proof: s is the only String over buf, and every later read of it follows this store
 	}
+	if len(s) >= rbStrFactMin {
+		rbStrFactSlot(len(s)).Store(nil) // the bytes change in place: their cached facts go (decision 464)
+	}
 	b[j] = byte(v)
 	return s
 }
@@ -899,7 +913,7 @@ var rbRadixPrefixes = map[string]int{"0b": 2, "0B": 2, "0o": 8, "0O": 8, "0x": 1
 //
 //go:noinline
 func rbStrAt(s String, i Integer) (String, bool) {
-	if i >= 0 && int(i) < len(s) && rbASCII(string(s[:i+1])) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
+	if i >= 0 && int(i) < len(s) && (len(s) >= rbStrFactMin && rbASCII(string(s)) || rbASCIIScan(string(s[:i+1]))) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
 		return rbNewStr(s, s[i:i+1]), true
 	}
 	if !rbValidUTF8(string(s)) { // ASCII-8BIT by decision 136: a byte is a character
@@ -1001,7 +1015,7 @@ func rbStrSub(s String, start, count Integer) (String, bool) {
 		if int(count) < e-int(start) {
 			e = int(start + count)
 		}
-		if rbASCII(string(s[:e])) {
+		if len(s) >= rbStrFactMin && rbASCII(string(s)) || rbASCIIScan(string(s[:e])) { // the whole String's cached fact, or its prefix's scan
 			return rbNewStr(s, s[start:e]), true
 		}
 	}
@@ -1103,7 +1117,7 @@ func rbStrIndex(s, t String) (Integer, bool) {
 	if i < 0 {
 		return 0, false
 	}
-	return Integer(utf8.RuneCountInString(string(s)[:i])), true
+	return Integer(rbCharCount(string(s), i)), true
 }
 
 // rbStrRindex is String#rindex(t): the character offset of t's last occurrence.

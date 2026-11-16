@@ -79,13 +79,16 @@ class Regexp < Object
   def __match_2(s, pos) = %x{
     str := string(s)
     n := Integer(utf8.RuneCountInString(str))
+    if len(str) >= rbStrFactMin {
+      n = Integer(rbStrFactOf(str).chars)
+    }
     if pos < 0 {
       pos += n
     }
     if pos < 0 || pos > n {
       return nil
     }
-    from := len(string([]rune(str)[:pos]))
+    from, _ := rbCharOffset(str, int(pos))
     var loc []int
     if len(self.src) > 1 && self.src[0] == 92 && self.src[1] == 'G' { // a leading backslash-G is pos itself: the text from there, searched from its start (decision 444)
       if loc = slices.Clone(rbFindLoc(self, str[from:])); loc != nil {
