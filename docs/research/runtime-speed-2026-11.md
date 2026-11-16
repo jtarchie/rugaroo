@@ -314,3 +314,16 @@ Tried the `rbEq`/`rbUnbox` candidate on the small programs (2026-11-16): a first
 in `rbEq`, and on the unboxed core values in `rbUnbox`. Parser program 1,656M → 1,662M, liquid 1,774M → 1,762M,
 kramdown 4,020M → 4,083M: nothing, so it was not kept. Whether rubocop, with its hundreds of `T?` boxes in
 `rbUnbox`'s switch, differs was not measured (it needs a rubocop build).
+
+## Checks on merged main (2026-11-16, 7e3ea95b)
+
+- Full suite, low priority: the only failures are the four `TestMinitest` files MRI itself fails on this machine
+  (json, rxjson, stdlib_hardening, prism: json 3.1.0 and prism 2.1.0 are installed). `TestVendoredMirror` and
+  `TestVendoredGemsMRI` pass here (the main checkout has the submodules).
+- `benchmarks/` (24 programs) and spinel's suite (68 that build), the compiler at 3561a4e9 against main, instructions
+  retired: 19,180M → 19,296M and 81,047M → 81,372M, +0.6% and +0.4%, inside run-to-run spread (collections, the
+  one row that moved by more than 5% under `GOMAXPROCS=1`, is 1,158M → 1,162M with the default collector and equal
+  with it off). So decisions 471-473 and the lexer signatures leave the typed benchmarks where decision 470 left
+  them; the spinel wall-clock table in BENCHMARKS.md was not re-timed (the machine was shared).
+- Do not export `GOMAXPROCS` around `go test`: `test_env_hash_methods` reads ENV, MRI's failing result is then
+  cached, and the file keeps failing until one run with `RUGAROO_NO_MRI_CACHE=1`.
