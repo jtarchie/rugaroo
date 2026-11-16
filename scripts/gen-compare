@@ -1,0 +1,146 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Which programs' generated Go differs between two rugaroo CLIs: `rugaroo gen` of every examples/*/main.rb,
+# testdata/run/*.rb, testdata/test/*_test.rb and benchmarks/*.rb (and spinel's benchmarks) with OLD and with NEW.
+# It builds nothing: the caller passes the binaries. The inputs are this checkout's.
+#
+#   go build -o /tmp/new ./cmd/rugaroo; go build -C ../main-checkout -o /tmp/old ./cmd/rugaroo
+#   scripts/gen-compare /tmp/old /tmp/new
+#   scripts/gen-compare /tmp/old /tmp/new --spinel ~/src/spinel/benchmark   # also DIR/*.rb, with --nil-check=runtime
+#   scripts/gen-compare /tmp/old /tmp/new --only 'examples/00*' --only benchmarks/strings.rb --keep /tmp/diffs -v
+#
+# One line per input that differs (`DIFF path (N lines differ)`, `NEWLY-COMPILES path`, `NEWLY-FAILS path: error`),
+# then a summary; exit status 1 when anything differs. An input both fail on with the same stderr is the same, and
+# is counted apart ("fail on both": `-v` lists them, since a wrong flag here would hide there).
+#
+# Flags per input are the test harness's (rugaroo_test.go): `# load_path: dir` is -I, `# gem: dir` is -gem (both
+# relative to the file), `# trace: why` is -trace with no arguments. `# int_overflow:` and `# nil_check:` lines are
+# read by the compiler itself. Compared after dropping `//line` lines and renumbering the prelude byte offsets in
+# method keys, as the harness's stableLines does, so a prelude line shift alone is no difference.
+# RUGAROO_NO_INFER_CACHE=1 is set for both: the cache is keyed by inputs only and would hand NEW what OLD inferred.
+
+require "fileutils"
+require "open3"
+require "optparse"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+PRELUDE_KEY = %r{([#.]@prelude/[^:"\s]+):(\d+)"}
+
+opts = { only: [], jobs: 4 }
+OptionParser.new do |o|
+  o.banner = "usage: scripts/gen-compare OLD NEW [--spinel DIR] [--only GLOB]... [--keep DIR] [-j N] [-v]"
+  o.on("--spinel DIR", "also DIR/*.rb (spinel's benchmark directory), with --nil-check=runtime") { |d| opts[:spinel] = d }
+  o.on("--only GLOB", "only inputs whose path matches (repeatable; * crosses /)") { |g| opts[:only] << g }
+  o.on("--keep DIR", "write both outputs of each differing input into DIR") { |d| opts[:keep] = d }
+  o.on("-j N", Integer, "inputs at a time (default 4; each runs OLD then NEW)") { |n| opts[:jobs] = n }
+  o.on("-v", "every input's result and seconds, on stderr") { opts[:verbose] = true }
+end.parse!
+abort "usage: scripts/gen-compare OLD NEW [--spinel DIR] [--only GLOB]... [--keep DIR] [-j N] [-v]" unless ARGV.size == 2
+old_bin, new_bin = ARGV.map { |b| File.expand_path(b) }
+[old_bin, new_bin].each { |b| abort "#{b}: not an executable" unless File.executable?(b) }
+
+def flags_for(path)
+  src = File.read(path)
+  dir = File.dirname(path)
+  flags = src.scan(/^# load_path: (.*)$/).flat_map { |(d)| ["-I", File.join(dir, d.strip)] }
+  flags += src.scan(/^# gem: (.*)$/).flat_map { |(d)| ["-gem", File.join(dir, d.strip)] }
+  flags << "-trace" if src.match?(/^# trace: /) # ponytail: no `# args:` for the traced run, as the harness; pass them when a traced input needs some
+  flags
+end
+
+# the Go without what moves when nothing changed: //line directives, and prelude defs' byte offsets (ranked per file)
+def normalize(code)
+  ranks = Hash.new { |h, file| h[file] = {} }
+  code.scan(PRELUDE_KEY) { |file, off| ranks[file][off.to_i] = 0 }
+  ranks.each_value { |offs| offs.keys.sort.each_with_index { |off, i| offs[off] = i + 1 } }
+  code = code.gsub(PRELUDE_KEY) { "#{Regexp.last_match(1)}:#{ranks[Regexp.last_match(1)][Regexp.last_match(2).to_i]}\"" }
+  code.lines.grep_v(%r{^\s*//line }).join
+end
+
+def gen(bin, flags, path)
+  out, err, status = Open3.capture3({ "RUGAROO_NO_INFER_CACHE" => "1" }, bin, "gen", *flags, path, chdir: ROOT)
+  status.success? ? [normalize(out), nil] : [nil, err]
+end
+
+def first_error(err)
+  (err.lines.map(&:strip).reject { |l| l.empty? || l.start_with?("warning:") }.first || "(no message)")[0, 300]
+end
+
+def lines_differ(tmp, name, old, new)
+  a = File.join(tmp, "#{name}.old")
+  b = File.join(tmp, "#{name}.new")
+  File.write(a, old)
+  File.write(b, new)
+  out, = Open3.capture2("diff", a, b)
+  FileUtils.rm_f([a, b])
+  out.lines.grep(/^[<>]/).size
+end
+
+def compare(old, new, tmp, name)
+  old_go, old_err = old
+  new_go, new_err = new
+  if old_go && new_go
+    old_go == new_go ? [:same, nil] : [:diff, "(#{lines_differ(tmp, name, old_go, new_go)} lines differ)"]
+  elsif new_go then [:newly_compiles, nil]
+  elsif old_go then [:newly_fails, ": #{first_error(new_err)}"]
+  elsif old_err == new_err then [:fail_both, ": #{first_error(new_err)}"]
+  else
+    [:diff, "(fails on both, errors differ: #{first_error(new_err)})"]
+  end
+end
+
+inputs = Dir.chdir(ROOT) do
+  %w[examples/*/main.rb testdata/run/*.rb testdata/test/*_test.rb benchmarks/*.rb].flat_map { |g| Dir[g] }
+end
+inputs = inputs.sort.map { |p| [p, flags_for(File.join(ROOT, p))] }
+if opts[:spinel]
+  spinel = Dir[File.join(File.expand_path(opts[:spinel]), "*.rb")].sort.reject { |p| File.basename(p) == "bm_fannkuch.rb" }
+  abort "no *.rb in #{opts[:spinel]}" if spinel.empty?
+  inputs += spinel.map { |p| [p, ["--nil-check=runtime", *flags_for(p)]] }
+end
+inputs.select! { |p, _| opts[:only].any? { |g| File.fnmatch(g, p) } } unless opts[:only].empty?
+abort "no inputs match" if inputs.empty?
+
+FileUtils.mkdir_p(opts[:keep]) if opts[:keep]
+LABEL = { diff: "DIFF", newly_compiles: "NEWLY-COMPILES", newly_fails: "NEWLY-FAILS" }.freeze
+results = {}
+lock = Mutex.new
+queue = Queue.new
+inputs.each { |i| queue << i }
+queue.close
+started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+Dir.mktmpdir("gen-compare") do |tmp|
+  Array.new(opts[:jobs]) do
+    Thread.new do
+      while (path, flags = queue.pop)
+        t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        old = gen(old_bin, flags, path)
+        new = gen(new_bin, flags, path)
+        name = path.delete_prefix("/").tr("/", "_")
+        kind, detail = compare(old, new, tmp, name)
+        secs = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+        if opts[:keep] && LABEL.key?(kind)
+          File.write(File.join(opts[:keep], "#{name}.old.#{old[0] ? "go" : "err"}"), old.compact.first)
+          File.write(File.join(opts[:keep], "#{name}.new.#{new[0] ? "go" : "err"}"), new.compact.first)
+        end
+        lock.synchronize do
+          results[path] = [kind, detail]
+          warn format("%-14<kind>s %6.1<secs>fs %<path>s%<detail>s", kind:, secs:, path:, detail: kind == :fail_both ? detail : "") if opts[:verbose]
+        end
+      end
+    end
+  end.each(&:join)
+end
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+results.sort.each do |path, (kind, detail)|
+  puts "#{LABEL[kind]} #{path}#{" " if kind == :diff}#{detail}" if LABEL.key?(kind)
+end
+count = results.values.map(&:first).tally
+count.default = 0
+puts format("%<same>d same (%<both>d fail on both), %<diff>d diff, %<nc>d newly-compile, %<nf>d newly-fail; %<n>d inputs in %<s>.0f s",
+            same: count[:same] + count[:fail_both], both: count[:fail_both], diff: count[:diff],
+            nc: count[:newly_compiles], nf: count[:newly_fails], n: results.size, s: elapsed)
+exit((count[:diff] + count[:newly_compiles] + count[:newly_fails]).zero? ? 0 : 1)
