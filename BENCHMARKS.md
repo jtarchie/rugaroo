@@ -131,8 +131,7 @@ spinel ships its own benchmarks: 73 programs in
 micro-benchmarks of one VM path (ivar reads and writes, sends, allocation,
 loops) plus a few small applications (a template engine, a CSV pipeline, a
 Lisp). Neither compiler was tuned against the other's suite, so this is the
-away game for rugaroo, as `benchmarks/` is for spinel. Same machine and
-versions as above, spinel `baea3e28`, 2026-10-27 after decision 402, median of 5 runs:
+away game for rugaroo, as `benchmarks/` is for spinel.
 
 Re-measured on 2026-11-16 on branch `perf/rubocop-10x` (decisions 463-469) with spinel `ae83631a` built on this
 machine, every program under `--nil-check=runtime` (bm_fannkuch left out: it does not end there), median of 5 runs:
@@ -140,7 +139,7 @@ rugaroo builds 67 of the 73 programs, spinel all of them; on the 67 both ran, MR
 spinel 5.17s (20.3x). rugaroo is as fast or faster on 18 rows. It trails most on `bm_getivar_module` (0.058s
 against 0.005s: a loop of ten additions of one module ivar, which the C compiler folds), `bm_histogram` (0.88s
 against 0.39s before decision 469, 0.77s after), `bm_nested_loop`, `bm_partial_sums` and `bm_inline` (2.5-3.4x).
-The table below is the 2026-10-27 run.
+The table below is that run.
 
 ```sh
 S=/path/to/spinel
@@ -150,89 +149,89 @@ NIL_CHECK=runtime:bm_fasta,bm_histogram,... INT_OVERFLOW=promote:bm_bigint_fib,b
 
 `bm_bigint_fib` and `bm_pidigits` build with `--int-overflow=promote` in both
 compilers: spinel promotes their growing locals in its default mode too, and
-the files carry no `# int_overflow:` line (decision 381). Rows marked † build
-rugaroo with `--nil-check=runtime` (decision 393, below); spinel needs no flag.
-Every other row is rugaroo's default.
+the files carry no `# int_overflow:` line (decision 381). In this run every row builds
+rugaroo with `--nil-check=runtime` (decision 393, below; 47 of them also build by default); spinel needs no flag.
 
 | workload | MRI | MRI+YJIT | rugaroo | spinel |
 |---|---:|---:|---:|---:|
-| bm_ackermann | 0.49s | 0.12s | 0.067s | 0.069s |
-| bm_ao_render | 2.68s | 1.15s | 0.099s | 0.11s |
-| bm_attr_accessor | 1.54s | 1.68s | 0.059s | 0.055s |
-| bm_bigint_fib | 0.053s | 0.055s | 0.008s | 0.006s |
-| bm_binary_trees | 0.082s | 0.069s | 0.011s | 0.009s |
-| bm_csv_build | 1.83s | 1.61s | - | 0.39s |
-| bm_csv_process | 0.80s | 0.70s | 0.35s | 0.24s |
-| bm_fannkuch † | 0.061s | 0.062s | 0.008s | 0.006s |
-| bm_fasta † | 0.060s | 0.061s | 0.009s | 0.006s |
-| bm_fib | 0.61s | 0.15s | 0.032s | 0.030s |
-| bm_gcbench | 3.22s | 1.67s | 0.24s | 0.30s |
-| bm_getivar | 0.18s | 0.18s | 0.013s | 0.005s |
-| bm_getivar_module | 1.24s | 1.24s | 0.059s | 0.006s |
-| bm_handle_read_loop | 3.05s | 1.91s | - | 0.19s |
-| bm_handle_readonly_param † | 2.60s | 1.21s | 0.053s | 0.072s |
-| bm_histogram † | 18.45s | 18.51s | 0.88s | 0.41s |
-| bm_huffman † | 0.11s | 0.11s | 0.019s | 0.012s |
-| bm_inline | 1.75s | 1.16s | 0.093s | 0.033s |
-| bm_io_wordcount | 0.13s | 0.12s | 0.054s | 0.036s |
-| bm_jekyll_lite † | 0.055s | 0.056s | 0.008s | 0.006s |
-| bm_json_parse † | 0.41s | 0.31s | 0.065s | 0.058s |
-| bm_keyword_args | 0.26s | 0.25s | 0.009s | 0.005s |
-| bm_life | 0.85s | 0.42s | 0.050s | 0.030s |
-| bm_linked_list | 0.34s | 0.28s | 0.037s | 0.043s |
-| bm_loops_times | 1.07s | 0.36s | 0.039s | 0.039s |
-| bm_mandel_term | 0.073s | 0.064s | 0.009s | 0.007s |
-| bm_matmul † | 0.44s | 0.44s | 0.023s | 0.012s |
-| bm_micro_lisp | 0.055s | 0.069s | - | 0.006s |
-| bm_nbody | 0.062s | 0.067s | 0.008s | 0.005s |
-| bm_nested_loop | 0.64s | 0.64s | 0.019s | 0.006s |
-| bm_nil_recv_loop | 1.35s | 0.29s | 0.085s | 0.070s |
-| bm_nqueens † | 0.32s | 0.32s | 0.026s | 0.013s |
-| bm_object_new | 0.18s | 0.17s | 0.009s | 0.007s |
-| bm_object_new_init | 0.26s | 0.19s | 0.010s | 0.006s |
-| bm_object_new_no_escape | 0.29s | 0.17s | 0.009s | 0.006s |
-| bm_partial_sums | 1.28s | 1.28s | 0.064s | 0.025s |
-| bm_pidigits | 0.055s | 0.055s | 0.008s | 0.006s |
-| bm_point_in_polygon | 1.03s | 0.34s | 0.079s | 0.060s |
-| bm_poly_cells | 0.054s | 0.055s | - | 0.007s |
-| bm_range_each | 22.46s | 14.51s | 0.67s | 0.44s |
-| bm_rbs_items | 0.23s | 0.19s | 0.014s | 0.027s |
-| bm_rbs_items_control | 0.20s | 0.22s | 0.013s | 0.033s |
-| bm_rbtree | 0.52s | 0.18s | 0.028s | 0.033s |
-| bm_reader_index † | 11.43s | 12.86s | 0.39s | 0.23s |
-| bm_ruby_xor † | 1.45s | 0.39s | 0.069s | 0.088s |
-| bm_send_bmethod | 0.31s | 0.29s | - | 0.007s |
-| bm_send_cfunc_block | 1.07s | 1.09s | 0.032s | 0.17s |
-| bm_send_rubyfunc_block | 1.79s | 1.08s | 0.075s | 0.071s |
-| bm_setivar | 0.29s | 0.29s | 0.020s | 0.015s |
-| bm_setivar_object | 0.30s | 0.30s | 0.020s | 0.015s |
-| bm_setivar_young | 0.29s | 0.29s | 0.020s | 0.015s |
-| bm_sieve | 0.64s | 0.65s | 0.035s | 0.022s |
-| bm_sinatra_mini † | 0.055s | 0.057s | 0.008s | 0.005s |
-| bm_so_lists | 0.42s | 0.26s | 0.084s | 0.031s |
-| bm_so_mandelbrot | 1.53s | 1.53s | 0.046s | 0.034s |
-| bm_sort_by | 0.067s | 0.067s | 0.016s | 0.012s |
-| bm_spectral_norm † | 0.10s | 0.088s | 0.010s | 0.006s |
-| bm_splay | 0.21s | 0.12s | 0.015s | 0.020s |
-| bm_stark_field † | 1.26s | 0.91s | 0.12s | 0.10s |
-| bm_str_concat | 0.055s | 0.056s | 0.008s | 0.006s |
-| bm_str_readonly_param † | 0.056s | 0.056s | 0.013s | 0.009s |
-| bm_structaref | 0.24s | 0.24s | 0.013s | 0.008s |
-| bm_structaset | 0.45s | 0.45s | 0.019s | 0.017s |
-| bm_sudoku † | 0.18s | 0.10s | 0.014s | 0.009s |
-| bm_tak | 0.56s | 0.15s | 0.033s | 0.028s |
-| bm_tarai | 0.45s | 0.13s | 0.027s | 0.023s |
-| bm_template † | 0.92s | 0.71s | 0.19s | 0.15s |
-| bm_template_render | 1.39s | 1.20s | - | 0.28s |
-| bm_threaded_render | 6.29s | 5.84s | 0.67s | 0.54s |
+| bm_ackermann | 0.50s | 0.12s | 0.065s | 0.069s |
+| bm_ao_render | 2.69s | 1.15s | 0.10s | 0.11s |
+| bm_attr_accessor | 1.62s | 1.48s | 0.057s | 0.054s |
+| bm_bigint_fib | 0.054s | 0.055s | 0.007s | 0.005s |
+| bm_binary_trees | 0.082s | 0.069s | 0.010s | 0.008s |
+| bm_csv_build | 1.93s | 1.73s | - | 0.35s |
+| bm_csv_process | 0.80s | 0.70s | 0.16s | 0.22s |
+| bm_fasta | 0.059s | 0.060s | 0.007s | 0.006s |
+| bm_fib | 0.60s | 0.15s | 0.031s | 0.030s |
+| bm_gcbench | 3.27s | 1.70s | 0.21s | 0.29s |
+| bm_getivar | 0.18s | 0.18s | 0.012s | 0.005s |
+| bm_getivar_module | 1.24s | 1.25s | 0.058s | 0.005s |
+| bm_handle_read_loop | 3.11s | 1.92s | 0.074s | 0.19s |
+| bm_handle_readonly_param | 2.64s | 1.22s | 0.052s | 0.072s |
+| bm_hash_delete | 2.41s | 2.02s | 0.74s | 0.94s |
+| bm_histogram | 18.53s | 18.66s | 0.88s | 0.39s |
+| bm_huffman | 0.11s | 0.11s | 0.018s | 0.009s |
+| bm_inline | 1.74s | 1.20s | 0.091s | 0.037s |
+| bm_io_wordcount | 0.13s | 0.12s | 0.035s | 0.033s |
+| bm_jekyll_lite | 0.054s | 0.055s | 0.006s | 0.005s |
+| bm_json_parse | 0.41s | 0.31s | 0.036s | 0.044s |
+| bm_keyword_args | 0.26s | 0.24s | 0.008s | 0.005s |
+| bm_life | 0.88s | 0.42s | 0.049s | 0.029s |
+| bm_linked_list | 0.35s | 0.28s | 0.041s | 0.044s |
+| bm_loops_times | 1.10s | 0.36s | 0.038s | 0.042s |
+| bm_mandel_term | 0.072s | 0.064s | 0.008s | 0.006s |
+| bm_matmul | 0.41s | 0.41s | 0.022s | 0.011s |
+| bm_micro_lisp | 0.054s | 0.069s | - | 0.006s |
+| bm_nbody | 0.062s | 0.067s | 0.007s | 0.005s |
+| bm_nested_loop | 0.65s | 0.66s | 0.017s | 0.005s |
+| bm_nil_recv_loop | 1.34s | 0.28s | 0.084s | 0.068s |
+| bm_nqueens | 0.32s | 0.32s | 0.025s | 0.013s |
+| bm_object_new | 0.18s | 0.17s | 0.008s | 0.006s |
+| bm_object_new_init | 0.26s | 0.19s | 0.008s | 0.006s |
+| bm_object_new_no_escape | 0.31s | 0.18s | 0.009s | 0.006s |
+| bm_partial_sums | 1.28s | 1.29s | 0.063s | 0.024s |
+| bm_pidigits | 0.054s | 0.055s | 0.007s | 0.005s |
+| bm_point_in_polygon | 1.01s | 0.35s | 0.070s | 0.063s |
+| bm_poly_cells | 0.055s | 0.055s | 0.006s | 0.005s |
+| bm_range_each | 22.41s | 14.84s | 0.67s | 0.44s |
+| bm_rbs_items | 0.24s | 0.21s | 0.013s | 0.016s |
+| bm_rbs_items_control | 0.22s | 0.22s | 0.012s | 0.010s |
+| bm_rbtree | 0.52s | 0.18s | 0.026s | 0.032s |
+| bm_reader_index | 11.74s | 11.81s | 0.36s | 0.23s |
+| bm_ruby_xor | 1.46s | 0.38s | 0.081s | 0.088s |
+| bm_send_bmethod | 0.31s | 0.28s | - | 0.005s |
+| bm_send_cfunc_block | 1.07s | 1.08s | 0.031s | 0.17s |
+| bm_send_rubyfunc_block | 1.84s | 1.04s | 0.074s | 0.070s |
+| bm_setivar | 0.29s | 0.29s | 0.018s | 0.015s |
+| bm_setivar_object | 0.30s | 0.30s | 0.018s | 0.014s |
+| bm_setivar_young | 0.29s | 0.29s | 0.018s | 0.014s |
+| bm_sieve | 0.66s | 0.66s | 0.035s | 0.021s |
+| bm_sinatra_mini | 0.055s | 0.055s | 0.007s | 0.005s |
+| bm_so_lists | 0.42s | 0.26s | 0.080s | 0.036s |
+| bm_so_mandelbrot | 1.52s | 1.53s | 0.045s | 0.033s |
+| bm_sort_by | 0.066s | 0.068s | 0.016s | 0.011s |
+| bm_spectral_norm | 0.10s | 0.087s | 0.009s | 0.006s |
+| bm_splay | 0.22s | 0.12s | 0.014s | 0.019s |
+| bm_stark_field | 1.23s | 0.91s | 0.12s | 0.10s |
+| bm_str_concat | 0.054s | 0.055s | 0.007s | 0.005s |
+| bm_str_readonly_param | 0.055s | 0.056s | 0.012s | 0.008s |
+| bm_structaref | 0.23s | 0.24s | 0.012s | 0.007s |
+| bm_structaset | 0.46s | 0.46s | 0.018s | 0.015s |
+| bm_sudoku | 0.18s | 0.11s | 0.013s | 0.008s |
+| bm_tak | 0.56s | 0.14s | 0.033s | 0.027s |
+| bm_tarai | 0.45s | 0.13s | 0.028s | 0.022s |
+| bm_template | 0.92s | 0.71s | 0.034s | 0.11s |
+| bm_template_render | 1.39s | 1.19s | - | 0.29s |
+| bm_threaded_render | 6.43s | 5.91s | 0.57s | 0.60s |
 | bm_throw | 0.29s | 0.24s | - | 0.006s |
-| bm_tree_walker † | 2.11s | 0.48s | 0.085s | 0.18s |
-| bm_tree_walker_frames | 0.40s | 0.13s | - | 0.044s |
-| bm_wordfreq | 0.058s | 0.058s | 0.011s | 0.006s |
-| total (rows run) | 106.07s | 82.78s | 5.48s | 5.08s |
-| vs MRI | 1.0x | 1.3x | 18.0x | 20.9x |
+| bm_tree_walker | 2.11s | 0.47s | 0.084s | 0.17s |
+| bm_tree_walker_frames | 0.40s | 0.13s | - | 0.042s |
+| bm_wordfreq | 0.057s | 0.058s | 0.007s | 0.005s |
+| total (rows run) | 109.35s | 84.18s | 5.58s | 5.89s |
+| vs MRI | 1.0x | 1.3x | 18.8x | 18.6x |
 
-rugaroo builds 65 of the 73 unmodified: 47 by default, 18 more with
+The 2026-10-27 run (spinel `baea3e28`, after decision 402), for comparison:
+rugaroo built 65 of the 73 unmodified: 47 by default, 18 more with
 `--nil-check=runtime` (on 2026-11-13, commit 0f0a8bf3: 66 of 74, 47 and 19; the table is not re-timed). On the 65 rows both ran,
 the totals are MRI 98.7s, YJIT 77.3s, rugaroo 5.48s (18.0x MRI), spinel 4.15s
 (23.8x MRI); before decisions 381-388 that was 9.5x against 23.3x on 44 rows.
