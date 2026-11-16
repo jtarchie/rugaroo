@@ -813,9 +813,10 @@ func (f *fctx) literalOverload(m *Method, owner *Class, args []parser.Node) *ent
 	return nil
 }
 
-// unpackIntsRe is an unpack format whose every directive is a starred fixed-width integer or U: no nil for a short
-// String, no value past 64 bits (decision 465).
-var unpackIntsRe = regexp.MustCompile(`^(\s*[CcSsLlNnVvU][_!<>]*\*)+\s*$`)
+// unpackIntsRe is an unpack format whose every directive is a starred integer of at most 32 bits or U: no nil for a
+// short String, no value past an Integer. Not the native-size `_` and `!` (`L_` is an unsigned 64-bit long), nor
+// Q, J and w, which can pass 2**63 (decision 465).
+var unpackIntsRe = regexp.MustCompile(`^(\s*[CcSsLlNnVvU][<>]?\*)+\s*$`)
 
 // stringLiteralOverload: String#scan with a pattern that has groups yields each match's groups, and force_encoding of a
 // literal BINARY and unpack1 of a literal a/A/Z/m/u/M first directive make a binary String (decisions 352, 439).
