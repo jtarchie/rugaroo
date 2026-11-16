@@ -152,6 +152,24 @@ In the order the parser gem's profile shows them:
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
 
+## Community signatures (gem_rbs_collection), tried 2026-11-16
+
+`RUGAROO_RBS_COLLECTION` pointed at the collection's `ast` 2.4, `parser` 3.2, `rubocop-ast` 1.46 and `rubocop` 1.57
+(decision 457), against the installed parser 3.3.13, rubocop-ast 1.50 and rubocop 1.92:
+
+- The parser gem alone: 2,415 → 2,239 dynamic-call warnings, 1,812M → 1,786M instructions, output equal to MRI's,
+  after one override (`Buffer.recognize_encoding` answers nil; the collection says `Encoding`).
+- rubocop: the `rubocop` signatures stop the compile (`config_loader.rb:193: def has 2 keyword parameters but its
+  signature has 0`: written for 1.57). Without them the binary builds; it first stopped at
+  `diagnostics.consumer = lambda { ... }` (the collection types the consumer `^(Diagnostic) -> void`, and an untyped
+  lambda is not that proc; overridden in `sig/gems/parser`), then, on every input but the 2-line one, at
+  `Parser::Builders::Default#assignable`: `*RuboCop_AST_CasgnNode is not RuboCop_AST_ConstNodeI` (a signature that
+  names one node class where the builder passes another). On the 2-line file, which runs, it is worth 1%.
+
+Three stops in three 20-minute builds: the collection's signatures describe other versions and are not checked
+against this code, so each wrong one is a run-time TypeError found one build at a time. Not adopted for rubocop;
+`sig/gems/parser` keeps the two overrides, which are true of the gem with or without the collection.
+
 ## A different inference, if the rounds are not enough
 
 Every root found here was a cycle the round-based inference resolved pessimistically: a value is untyped in the first
