@@ -157,6 +157,14 @@ In the order the parser gem's profile shows them:
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
 
+## What the baseline covers now (2026-11-16)
+
+Compiled against MRI, stdout and exit status: 269 files of rubocop's own `cop/{layout,style,lint,metrics,naming}`
+in inspection mode; a project `.rubocop.yml`; files with non-ASCII text, squiggly heredocs and every numeric literal
+form; `-a` and `-A` on 43 files (corrected files compared too). Each of those failed on main or had never been run.
+Not covered: `ParserEngine: parser_prism`, `--parallel`, the result cache, formatters other than the default, and
+the text of heredoc content tokens.
+
 ## Community signatures (gem_rbs_collection), tried 2026-11-16
 
 `RUGAROO_RBS_COLLECTION` pointed at the collection's `ast` 2.4, `parser` 3.2, `rubocop-ast` 1.46 and `rubocop` 1.57
