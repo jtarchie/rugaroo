@@ -499,6 +499,8 @@ func rbHashViewArg(v any) rbHashView {
 		return h
 	case Hash_Any:
 		return h._ToAny()
+	case interface{ DynToHash(...any) any }: // MRI's implicit to_hash (rubocop's `base_hash.merge(config)` of a Config)
+		return rbHashViewArg(h.DynToHash())
 	}
 	panic(NewTypeError(Ref(String("no implicit conversion of " + rbClassName(v) + " into Hash"))))
 }
