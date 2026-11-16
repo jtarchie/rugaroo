@@ -45,4 +45,13 @@ module Parser
       def self.recognize_encoding: (String) -> Encoding?
     end
   end
+
+  class Diagnostic
+    class Engine
+      # gem_rbs_collection's parser 3.2 types the consumer `^(Diagnostic) -> void`; callers store an untyped lambda
+      # (rubocop-ast's `diagnostics.consumer = lambda { |diagnostic| ... }`), which is not a proc of that signature
+      attr_accessor consumer: untyped
+      def initialize: (?untyped consumer) -> void
+    end
+  end
 end
