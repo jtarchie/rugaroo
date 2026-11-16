@@ -2678,3 +2678,28 @@ module NumberTests
     end
   end
 end
+
+module NumberTests
+  # Kernel#Rational converts an Integer, Float, Rational or a String that is one, as MRI does.
+  class KernelRationalTest < Minitest::Test
+    def test_values
+      assert_equal "5/2", Rational("2.5").to_s
+      assert_equal "3/1", Rational("3").to_s
+      assert_equal "1/3", Rational(" 1/3 ").to_s
+      assert_equal "-5/4", Rational("-1.25").to_s
+      assert_equal "3/2", Rational(1.5).to_s
+      assert_equal "2/1", Rational(2).to_s
+      assert_equal "7/2", Rational(7, 2).to_s
+      assert_equal "7/2", Rational("7", "2").to_s
+      assert_equal "1/2", Rational(Rational(1, 2)).to_s
+      assert_equal "1/4", Rational(Rational(1, 2), 2).to_s
+    end
+
+    def test_errors
+      assert_raises(ArgumentError) { Rational("abc") }
+      assert_raises(ArgumentError) { Rational("1.5x") }
+      assert_raises(ZeroDivisionError) { Rational(1, 0) }
+      assert_raises(ZeroDivisionError) { Rational("1/0") }
+    end
+  end
+end

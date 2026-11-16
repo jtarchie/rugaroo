@@ -137,3 +137,39 @@ func rbFloatRationalizeEps(f, e float64) *Rational {
 		p0, q0, p1, q1 = p1, q1, p2, q2
 	}
 }
+
+var rbRationalRe = regexp.MustCompile(`^\s*[-+]?(?:\d[\d_]*)(?:\.\d[\d_]*)?(?:[eE][-+]?\d+)?(?:/\d[\d_]*)?\s*$`)
+
+// rbRationalOf is Kernel#Rational's one value: an Integer, Float or Rational as it is, a String that is a rational
+// and nothing else ("2.5", "1/3"; String#to_r takes a prefix instead), ArgumentError or TypeError for the rest, as MRI.
+func rbRationalOf(x any) *Rational {
+	switch v := rbUnbox(x).(type) {
+	case Integer:
+		return rbRat(int64(v), 1)
+	case Float:
+		out := &Rational{}
+		if out.v.SetFloat64(float64(v)) == nil {
+			panic(NewFloatDomainError(Ref(rbFloatToS(float64(v)))))
+		}
+		return out
+	case *Rational:
+		return v
+	case String:
+		if !rbRationalRe.MatchString(string(v)) {
+			panic(NewArgumentError(Ref(String("invalid value for convert(): " + string(v.Inspect())))))
+		}
+		return rbStrToR(string(v))
+	case nil:
+		panic(NewTypeError(Ref(String("can't convert nil into Rational"))))
+	}
+	panic(NewTypeError(Ref(String("can't convert " + rbClassName(x) + " into Rational"))))
+}
+
+// rbRational is Kernel#Rational(n, d): n over d, each converted as rbRationalOf.
+func rbRational(n, d any) *Rational {
+	num, den := rbRationalOf(n), rbRationalOf(d)
+	if den.v.Sign() == 0 {
+		panic(NewZeroDivisionError(Ref(String("divided by 0"))))
+	}
+	return rbRatOp(num, den, (*big.Rat).Quo)
+}

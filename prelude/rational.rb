@@ -346,11 +346,10 @@ end
 module Kernel
   private
 
-  #: (Integer, ?Integer) -> Rational
+  # An Integer, Float, Rational or a String that is one ("2.5", "1/3"), as MRI converts them: the parser gem's
+  # `Rational(chars)` of a rational literal's digits.
+  #: (untyped, ?untyped) -> Rational
   def Rational(n, d = 1) = %x{
-    if d == 0 {
-      panic(NewZeroDivisionError(Ref(String("divided by 0"))))
-    }
-    return rbRat(int64(n), int64(d))
+    return rbRational(n, d)
   }
 end
