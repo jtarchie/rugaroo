@@ -22,7 +22,7 @@ func rbRegexpOf(re *rxRegexp, src, opts string) *Regexp {
 	return r
 }
 
-// rbRxLazy is the pattern of a Regexp that compiles at its first use (--regexp-compile=lazy, decision S1): a static
+// rbRxLazy is the pattern of a Regexp that compiles at its first use (--regexp-compile=lazy, decision 471): a static
 // literal's translated pattern, or a gem's interpolated source (lenient). The compile runs once, behind this
 // Regexp's own sync.Once, and stores the result in the Regexp, so every use, lazy or not, is one atomic load and a
 // nil test. source, inspect, ==, hash and options read src and opts and never compile.
@@ -86,7 +86,7 @@ func (r *Regexp) anchSlot() *atomic.Pointer[rxRegexp] {
 }
 
 // rbRegexpLazy is a static literal under --regexp-compile=lazy: pattern is translated and folded (rxFold) by the
-// compiler, which also compiled it once to validate it, and compiles here at the literal's first use (decision S1).
+// compiler, which also compiled it once to validate it, and compiles here at the literal's first use (decision 471).
 func rbRegexpLazy(pattern, src, opts string) *Regexp {
 	return &Regexp{lz: &rbRxLazy{pat: pattern, src: src, opts: opts}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
 }

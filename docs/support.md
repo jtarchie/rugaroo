@@ -225,7 +225,7 @@ at build time, with your environment and no sandbox
 | `rugaroo run`, `build`, `gen`, `test` | stable | Shaped like `go run`/`build`/`test`; `-race`, `-gcflags`, `-o`, `-work`, `-I` pass through; no Go debug info unless `-debug` (decision 437). |
 | `--int-overflow=raise` (default), `wrap` | stable | [decision 372](decisions/372.md) |
 | `--int-overflow=promote` | experimental | Bignum where MRI would grow past 64 bits ([126](../examples/126_bignum/main.rb)). |
-| `--regexp-compile=lazy` (default), `eager` | stable | A Regexp literal compiles its pattern at its first use, or when the program starts ([decision S1](decisions/startup-S1.md)). |
+| `--regexp-compile=lazy` (default), `eager` | stable | A Regexp literal compiles its pattern at its first use, or when the program starts ([decision 471](decisions/startup-S1.md)). |
 | `--nil-check=compile` (default), `runtime` | experimental (`runtime`) | A `T?` where `T` is expected raises on nil when it runs instead of failing the compile ([132](../examples/132_nil_check_runtime/main.rb), [decision 393](decisions/393.md)). |
 | `-trace`, `-trace-also`, `-rubyopt`, `-main` | experimental | See gems above. |
 | `-compiler tinygo` | experimental | Builds with TinyGo instead of `go build`: smaller binaries; no sockets, `os/exec`, C calls or backtraces, and threads are slow. Proven by an opt-in lane, `RUGAROO_COMPILER=tinygo go test -run TestExamples .`, with a skip list ([decision 443](decisions/443.md)). |

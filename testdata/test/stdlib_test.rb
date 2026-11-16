@@ -1293,7 +1293,7 @@ module StdlibTests
     end
 
     # A symlink is an entry whatever it leads to: one to a directory is entered by name but not by `**`, one to
-    # nothing is still listed (decision S3).
+    # nothing is still listed (decision 473).
     def test_glob_symlinks
       in_tree(lambda do
         File.symlink("a/b", "ldir")

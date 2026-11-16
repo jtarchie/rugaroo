@@ -1811,7 +1811,7 @@ func TestIntOverflowValuePanic(t *testing.T) {
 }
 
 // TestRegexpCompileMode: --regexp-compile picks where a literal's pattern compiles, a file's `# regexp_compile:` line wins
-// for its own literals, and an eager program still runs (the suite's default lane is lazy; decision S1).
+// for its own literals, and an eager program still runs (the suite's default lane is lazy; decision 471).
 func TestRegexpCompileMode(t *testing.T) { //nolint:paralleltest // sets RUGAROO_REGEXP_COMPILE
 	requireToolchain(t)
 	const body = "R = /(a+)b/\nputs R.source, \"xaab\"[R, 1], \"a1\".sub(/\\d/, \"2\")\n"

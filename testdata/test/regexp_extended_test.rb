@@ -261,7 +261,7 @@ module RegexpExtendedTests
       assert_equal("b", "abc".match(/b/, 1).to_s)
     end
   end
-  # A literal compiles its pattern at its first use or when the program starts (--regexp-compile, decision S1): the
+  # A literal compiles its pattern at its first use or when the program starts (--regexp-compile, decision 471): the
   # same answers either way, and nothing that only reads the source needs the compile.
   class RegexpCompileTimeTest < Minitest::Test
     UNUSED = /(?<year>\d{4})-(?<mon>\d\d)/i

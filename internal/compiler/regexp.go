@@ -209,7 +209,7 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 		f.errorf(n, "regexp /%s/ is not supported: %v", src, err)
 	}
 	ctor := "rbRegexpStatic"
-	if f.regexpLazy() { // compiled at its first use, not in this variable's initializer (decision S1)
+	if f.regexpLazy() { // compiled at its first use, not in this variable's initializer (decision 471)
 		ctor = "rbRegexpLazy"
 	}
 	args := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(flags.goPrefix()+goPat), strconv.Quote(src), flags.opts())
@@ -354,7 +354,7 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 
 func isConstPath(n parser.Node) bool { _, ok := n.(*parser.ConstantPathNode); return ok }
 
-// regexpCompileComment is a source's `# regexp_compile: mode` line (decision S1).
+// regexpCompileComment is a source's `# regexp_compile: mode` line (decision 471).
 var regexpCompileComment = regexp.MustCompile(`(?m)^# regexp_compile: (\S+)\s*$`)
 
 // checkRegexpMode rejects a mode other than lazy or eager ("" is lazy).
@@ -366,7 +366,7 @@ func checkRegexpMode(where, mode string) string {
 }
 
 // regexpLazy: the Regexp literal being compiled compiles its pattern at its first use, not where it is created (its
-// file's own `# regexp_compile:` line, else --regexp-compile; decision S1).
+// file's own `# regexp_compile:` line, else --regexp-compile; decision 471).
 func (f *fctx) regexpLazy() bool {
 	if f.f != nil && f.f.rxCompile != "" {
 		return f.f.rxCompile == "lazy"
@@ -374,7 +374,7 @@ func (f *fctx) regexpLazy() bool {
 	return f.c.env.RegexpCompile != "eager"
 }
 
-// lenientRegexpCtor builds a gem's regexp that RE2 may reject (decision 176): at its first use when lazy (decision S1).
+// lenientRegexpCtor builds a gem's regexp that RE2 may reject (decision 176): at its first use when lazy (decision 471).
 func (f *fctx) lenientRegexpCtor() string {
 	if f.regexpLazy() {
 		return "rbRegexpLenientLazy"
@@ -383,7 +383,7 @@ func (f *fctx) lenientRegexpCtor() string {
 }
 
 // sourceDirVar is the package variable that answers `__dir__` for the source file name: its directory, resolved at
-// the file's first `__dir__` and kept, one sync.OnceValue per file (decision S2).
+// the file's first `__dir__` and kept, one sync.OnceValue per file (decision 472).
 func (c *Compiler) sourceDirVar(name string) string {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(name)) // a hash.Hash never fails

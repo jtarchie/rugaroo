@@ -316,7 +316,7 @@ func rbGlobWalk(dir, prefix string, segs []string, flags int, out *[]string) {
 	for _, e := range es { // ReadDir sorts by name
 		name := e.Name()
 		p := filepath.Join(dir, name)
-		// The entry's type is the directory's own record of it (decision S3): only a symlink needs a stat, to learn
+		// The entry's type is the directory's own record of it (decision 473): only a symlink needs a stat, to learn
 		// whether it leads to a directory. One that leads nowhere is still an entry, as in MRI.
 		plainDir := e.IsDir() // `**` neither lists nor enters a symlink to a directory, as MRI
 		isDir := plainDir
@@ -360,7 +360,7 @@ func rbGlobStep(p, shown string, isDir bool, rest []string, flags int, out *[]st
 }
 
 // rbSourceDir is Kernel#__dir__: the source file's absolute directory, resolved against the working directory as MRI
-// does at load. Each source file calls it once, at its first `__dir__`, and keeps the answer (decision S2).
+// does at load. Each source file calls it once, at its first `__dir__`, and keeps the answer (decision 472).
 func rbSourceDir(name string) String {
 	p, err := filepath.Abs(name)
 	if err != nil {

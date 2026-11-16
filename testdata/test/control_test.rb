@@ -4799,7 +4799,7 @@ module ControlTests
       assert_equal File.dirname(File.expand_path(__FILE__)), __dir__
     end
 
-    # Resolved once per file, as MRI fixes a file's path at load: a later chdir does not move it (decision S2).
+    # Resolved once per file, as MRI fixes a file's path at load: a later chdir does not move it (decision 472).
     def test_dir_is_kept_across_chdir
       here = __dir__
       Dir.chdir("/") { assert_equal here, __dir__ }
