@@ -249,6 +249,10 @@ func (f *fctx) genIndexOpWrite(n *parser.IndexOperatorWriteNode) expr {
 		f.emitExprStmt(n, f.genMethodCall(n, recv, "[]=", append(slices.Clone(as), &exprNode{Node: n.Value, e: val}), nil))
 		return expr{code: val.code, typ: val.typ, lit: val.lit, done: true}
 	}
+	if at, ok := recv.typ.(TClass); ok && at.C == f.c.classes["Array"] && len(as) == 1 && (isClass(at.Args[0], "Integer") || isClass(at.Args[0], "Float")) &&
+		isClass(stripOpt(as[0].(*exprNode).e.typ), "Integer") && f.fuseResult(n, at.Args[0], n.BinaryOperator, n.Value) {
+		return f.genFusedElem(n, recv, at.Args[0], as[0].(*exprNode).e, n.BinaryOperator, n.Value, unfused)
+	}
 	if ht, ok := f.fuseHash(recv.typ); ok && len(as) == 1 && f.fuseResult(n, ht.Args[1], n.BinaryOperator, n.Value) {
 		return f.genFusedSlot(n, recv, ht, as[0].(*exprNode).e, n.BinaryOperator, n.Value, unfused) // the receiver and key evaluate once either way
 	}

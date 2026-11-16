@@ -3365,3 +3365,37 @@ module ArrayTests
     end
   end
 end
+
+module ArrayTests
+  # `a[i] op= v` on an Array of Integers or Floats updates the element in place (decision 469).
+  class ArrayElemOpAssignTest < Minitest::Test
+    def test_in_range_and_out
+      counts = Array.new(4, 0)
+      sums = Array.new(4, 0.0)
+      [0, 3, 3, 1, 3].each_with_index do |b, j|
+        counts[b] += 1
+        sums[b] += j * 0.5
+        counts[b] -= 0
+      end
+      assert_equal [1, 1, 0, 3], counts
+      assert_equal [0.0, 1.5, 0.0, 3.5], sums
+      counts[-1] += 10
+      counts[-4] *= 7
+      assert_equal [7, 1, 0, 13], counts
+      assert_equal 14, (counts[3] += 1)
+    end
+
+    def test_past_the_end_raises
+      xs = [1, 2]
+      err = assert_raises(NoMethodError) { xs[5] += 1 }
+      assert_match(/\+/, err.message)
+      assert_equal [1, 2], xs
+    end
+
+    def test_frozen
+      xs = [1, 2].freeze
+      assert_raises(FrozenError) { xs[0] += 1 }
+      assert_equal [1, 2], xs
+    end
+  end
+end

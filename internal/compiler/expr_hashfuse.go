@@ -94,6 +94,39 @@ func (f *fctx) genFusedSlot(n parser.Node, recv expr, ht TClass, key expr, op st
 	return expr{code: res, typ: v, done: true}
 }
 
+// genFusedElem is `a[i] op= v` of an Array of Integers or Floats at an Integer index within it: one bounds test, then
+// the element read and written where it lies (a histogram's `counts[b] += 1`; decision 469). The read-then-write it
+// replaces tests the index for the read, again for the write, and for a negative index each time. An index outside
+// the Array (negative, or past the end: nil, or growth) takes that path, miss.
+func (f *fctx) genFusedElem(n parser.Node, recv expr, elem Type, idx expr, op string, value parser.Node, miss func() expr) expr {
+	res, i := f.newTmp(), f.newTmp()
+	f.emit("var %s %s", res, f.c.goType(elem))
+	if isOpt(idx.typ) { // an Integer? index (`--nil-check=runtime`, a gem's): nil takes the miss path, which raises as before
+		f.emit("if %s := %s; %s.ok && uint64(%s.v) < uint64(len(%s.s)) {", i, idx.code, i, i, recv.code)
+		i += ".v"
+	} else {
+		f.emit("if %s := %s; uint64(%s) < uint64(len(%s.s)) {", i, idx.code, i, recv.code)
+	}
+	f.indent++
+	saved := f.enterBlock()
+	val := f.genOp(n, expr{code: recv.code + ".s[" + i + "]", typ: elem}, op, value)
+	f.emit("%s = %s", res, f.coerce(n, val, elem))
+	f.emit("%s.rbCheckFrozen()", recv.code)
+	f.emit("%s.s[%s] = %s", recv.code, i, res)
+	f.leaveBlock(saved)
+	f.indent--
+	f.emit("} else {")
+	f.indent++
+	saved = f.enterBlock()
+	m := miss()
+	f.emit("%s = %s", res, f.coerce(n, m, elem))
+	f.leaveBlock(saved)
+	f.indent--
+	f.emit("}")
+	f.emit("_ = %s", res) // a statement's value is unused: wastedassign would flag the miss arm's store
+	return expr{code: res, typ: elem, done: true}
+}
+
 // genFusedIndexAssign: k must be pure because Ruby evaluates it twice, here once.
 func (f *fctx) genFusedIndexAssign(n *parser.CallNode) (expr, bool) {
 	if n.Name != "[]=" || n.Block != nil || n.IsSAFE_NAVIGATION() || f.noFuse == n {

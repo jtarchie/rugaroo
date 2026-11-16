@@ -134,6 +134,14 @@ Lisp). Neither compiler was tuned against the other's suite, so this is the
 away game for rugaroo, as `benchmarks/` is for spinel. Same machine and
 versions as above, spinel `baea3e28`, 2026-10-27 after decision 402, median of 5 runs:
 
+Re-measured on 2026-11-16 on branch `perf/rubocop-10x` (decisions 463-469) with spinel `ae83631a` built on this
+machine, every program under `--nil-check=runtime` (bm_fannkuch left out: it does not end there), median of 5 runs:
+rugaroo builds 67 of the 73 programs, spinel all of them; on the 67 both ran, MRI 105.0s, rugaroo 5.58s (18.8x MRI),
+spinel 5.17s (20.3x). rugaroo is as fast or faster on 18 rows. It trails most on `bm_getivar_module` (0.058s
+against 0.005s: a loop of ten additions of one module ivar, which the C compiler folds), `bm_histogram` (0.88s
+against 0.39s before decision 469, 0.77s after), `bm_nested_loop`, `bm_partial_sums` and `bm_inline` (2.5-3.4x).
+The table below is the 2026-10-27 run.
+
 ```sh
 S=/path/to/spinel
 NIL_CHECK=runtime:bm_fasta,bm_histogram,... INT_OVERFLOW=promote:bm_bigint_fib,bm_pidigits \
