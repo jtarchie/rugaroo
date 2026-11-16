@@ -85,6 +85,11 @@ what MRI prints, `dir20` included; the same 5 gem methods fail to compile as on 
 | `dir20` | 11,726M | 23,072M | 15,910M | 1.4x slower |
 | 60 files of `cop/lint/` | 15,675M | - | 24,025M | 1.5x slower |
 
+With `sig/gems/parser` and the blockless `each_key` fix as well (the same inputs, all equal to MRI's output):
+`a.rb` 2,966M, `cli.rb` 4,313M, `runner.rb` 6,369M, `dir20` 14,883M (1.3x slower than MRI's 11,462M), the 60 lint
+files 22,297M (1.45x slower). The lexer's signatures are worth 6% of rubocop on `dir20`: lexing is a small share
+once the String fixes are in; the cops and the AST walk are the rest.
+
 Per-file work fell by about a third (`dir20` minus `a.rb`: 19.8G → 12.9G; MRI 5.6G). The 10x budget is 580M for
 `a.rb` and 1,150M for `dir20`: start-up is 5x over it and untouched, per-file work 22x over it.
 
@@ -108,9 +113,11 @@ In the order the parser gem's profile shows them:
    `ParserEngine: parser_prism` and `TargetRubyVersion: 3.4` MRI itself spends 10% fewer instructions on `dir20`
    (10,577M against 11,726M), and compiled prism is C code run as wasm. Not measured compiled: any `.rubocop.yml`
    beside the input stops the compiled binary (next item).
-6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` raises `no block given (yield)` in
-   `RuboCop::Config#each_key` (`config_loader_resolver.rb:166`, a blockless `each_key`), so only the default
-   configuration runs; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
+6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` stops the compiled binary, so only the default
+   configuration runs: first `no block given (yield)` in `RuboCop::Config#each_key` (a blockless `each_key` through
+   `def_delegators`, fixed on this branch), then `no implicit conversion of RuboCop::Config into Hash` at
+   `config_loader_resolver.rb:129` (`base_hash.merge(derived_hash)` needs `to_hash`), not fixed: that path was never
+   in the `-trace` run; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
    too; `kids << a << i` on an Array first seen holding one class
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
