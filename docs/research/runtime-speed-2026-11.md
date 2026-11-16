@@ -2,8 +2,7 @@
 
 Goal set by the user: compiled rubocop at least 10x faster than `ruby`, as a baseline that lifts every gem program,
 and at least level with spinel on its suite. Branch `perf/rubocop-10x` (decisions 463-467). This file records what
-was measured, what landed, and what is still between here and 10x. RUBOCOP-AFTER marks numbers still to be filled in.
-
+was measured, what landed, and what is still between here and 10x. 
 ## How to measure
 
 - **Instructions retired, not wall clock.** `/usr/bin/time -l cmd` on macOS; the machine ran at load 12-26 all
@@ -71,7 +70,19 @@ everything computed from it untyped too.
 
 The parser gem alone, 21 files: MRI 2,312M (1,360M of it parsing); compiled 7,945M → 1,751M.
 
-RUBOCOP-AFTER
+rubocop rebuilt with decisions 463-467 and the parser patch, before `sig/gems/parser` was added (every input prints
+what MRI prints, `dir20` included; the same 5 gem methods fail to compile as on main):
+
+| input | MRI | main | branch | branch / MRI |
+|---|---:|---:|---:|---|
+| `a.rb` (2 lines) | 6,119M | 3,239M | 3,056M | 2.0x faster |
+| `cli.rb` | 6,884M | 5,229M | 4,518M | 1.5x faster |
+| `runner.rb` | 7,668M | 10,758M | 6,715M | 1.1x faster |
+| `dir20` | 11,726M | 23,072M | 15,910M | 1.4x slower |
+| 60 files of `cop/lint/` | 15,675M | - | 24,025M | 1.5x slower |
+
+Per-file work fell by about a third (`dir20` minus `a.rb`: 19.8G → 12.9G; MRI 5.6G). The 10x budget is 580M for
+`a.rb` and 1,150M for `dir20`: start-up is 5x over it and untouched, per-file work 22x over it.
 
 ## What is still in the way
 
@@ -89,7 +100,14 @@ In the order the parser gem's profile shows them:
 4. **Start-up** (3.2G for a 2-line file; the 10x target is 0.58G). Linux profile of `a.rb`: 29% scheduler and
    system calls (config and glob), 23% allocation, 20% interface lookups (`getitab`: the first assertion of each
    (interface, class) pair across ~2,000 class objects), 11% maps. Not worked on yet.
-5. **Known wrong results** found on the way, not fixed: `kids << a << i` on an Array first seen holding one class
+5. **prism instead of the Ragel lexer and racc.** rubocop's default engine is `parser_whitequark`; with
+   `ParserEngine: parser_prism` and `TargetRubyVersion: 3.4` MRI itself spends 10% fewer instructions on `dir20`
+   (10,577M against 11,726M), and compiled prism is C code run as wasm. Not measured compiled: any `.rubocop.yml`
+   beside the input stops the compiled binary (next item).
+6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` raises `no block given (yield)` in
+   `RuboCop::Config#each_key` (`config_loader_resolver.rb:166`, a blockless `each_key`), so only the default
+   configuration runs; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
+   too; `kids << a << i` on an Array first seen holding one class
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
 
