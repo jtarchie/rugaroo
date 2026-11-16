@@ -27,12 +27,12 @@ func rbRegexpOf(re *rxRegexp, src, opts string) *Regexp {
 // Regexp's own sync.Once, and stores the result in the Regexp, so every use, lazy or not, is one atomic load and a
 // nil test. source, inspect, ==, hash and options read src and opts and never compile.
 type rbRxLazy struct {
-	anch    *atomic.Pointer[rxRegexp]
-	once    sync.Once
-	pat     string // static: the translated pattern; lenient: the flag prefix
-	src     string
-	opts    string
-	build   func(*rbRxLazy) (*rbRxCompiled, error) // rbRxLenient, or nil for a static literal: a field, so a program without gem regexps does not link the translator
+	anch  *atomic.Pointer[rxRegexp]
+	once  sync.Once
+	pat   string // static: the translated pattern; lenient: the flag prefix
+	src   string
+	opts  string
+	build func(*rbRxLazy) (*rbRxCompiled, error) // rbRxLenient, or nil for a static literal: a field, so a program without gem regexps does not link the translator
 }
 
 // rbRxLenient translates and compiles a gem's interpolated source, as rbRegexpLenient does where it is built.
