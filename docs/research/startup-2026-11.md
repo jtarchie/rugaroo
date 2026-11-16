@@ -9,8 +9,9 @@ system calls") was measured before decision 468 and is no longer true.
 
 - Compiled rubocop on an empty file retires 2,193M instructions (MRI 5,847M). 1,170M of that is spent before the
   first line of `main.rb` runs: every gem class body, and before those every Regexp literal in the program.
-- About 680M of the 2,193M (31%) is an artefact of how rugaroo compiles, and MRI does none of it: Regexp literals
-  compiled at start whether or not they are ever used (340M), six collections during package initialisation before
+- About 680M of the 2,193M (31%) is an artefact of how rugaroo compiles: every Regexp literal in the program
+  compiled at start, including those in files MRI never loads (340M; MRI compiles a file's literals when it loads
+  the file, and far more cheaply), six collections during package initialisation before
   decision 463's `rbGCStart` runs (about 100M), a `realpath` for each of 619 `__dir__` calls (115M), a `stat` per
   directory entry in `Dir.glob`, a SHA1 of 310 gem files because `$LOADED_FEATURES` is complete from the start, and
   boxing racc's tables for `Ractor.make_shareable`.
@@ -19,8 +20,10 @@ system calls") was measured before decision 468 and is no longer true.
 - Removing every artefact found gives about 1,500M (about 1,350M if rubocop also parsed its YAML once), not the
   580M that 10x needs. The remaining gap is rubocop's own
   start-up work (YAML twice, config validation, the cop registry) run through untyped dispatch, plus the collector.
-- `runtime.getitab` and interface switches are now 2.8% of start-up, and Go's own runtime initialisation is under
-  3%. Neither is a target any more.
+- `runtime.getitab`, interface switches and type assertions are now 4.3% of start-up cumulatively (2.8% as leaf
+  time; about 20% before decision 468). Not a target any more.
+- About a third of the load's CPU time on Linux is kernel time the Go profile does not see (12,373 page faults,
+  103 MB resident while the live heap is 3 MB). It is inside the instruction counts but not broken down here.
 
 ## Ranked fixes
 
@@ -31,10 +34,10 @@ total, which assumes the two machines spend instructions in the same proportions
 
 | # | fix | size | general? | code | risk |
 |---|---|---|---|---|---|
-| 1 | Compile a static Regexp literal at its first use, not in a package variable initialiser. | 340M measured (15.5%), an upper bound: what start-up really matches is still compiled. Also removes most of fix 3a's 100M, since the compiles are what allocates 26 MB during initialisation. | Every program with Regexp literals. kramdown's load is 33% this, liquid's 14%, cuba's 8%. | `genStaticRegexp` in `internal/compiler/regexp.go`; `rbRegexpNew` in `prelude/go/regexp.go`; every read of `Regexp`'s `re` field in `prelude/regexp.rb` and `prelude/go/`. | Medium. The literal is already validated at compile time, so no error moves. Needs a once-only compile per literal (`sync.Once` or an atomic pointer per variable, no shared lock) and costs one load and branch per match. |
+| 1 | Compile a static Regexp literal at its first use, not in a package variable initialiser. | 340M measured (15.5%) is the upper bound: what start-up really matches is still compiled. At least 265M: six unicode-emoji patterns are 78% of the bucket, MRI never loads their files, and no run here matched one. Also removes most of fix 3a's 100M, since the compiles are what allocates 26 MB during initialisation. | Every program with Regexp literals. kramdown's load is 33% this, liquid's 14%, cuba's 8%. | `genStaticRegexp` in `internal/compiler/regexp.go`; `rbRegexpNew` in `prelude/go/regexp.go`; every read of `Regexp`'s `re` field in `prelude/regexp.rb` and `prelude/go/`. | Medium. The literal is already validated at compile time, so no error moves. Needs a once-only compile per literal (`sync.Once` or an atomic pointer per variable, no shared lock) and costs one load and branch per match. |
 | 1b | Run `rxFold` at compile time for a static literal. | 80M measured, inside fix 1's 340M. | As fix 1. | `genStaticRegexp` emits the folded pattern; `rbRegexpNew` stops calling `rxFold`. | Low. The pattern is a compile-time constant. Worth doing even if fix 1 is not. |
-| 1c | Compile a gem's interpolated Regexp (`rbRegexpLenient`) at its first match. | About 56M inferred for rubocop (3.1%). Far larger elsewhere: 44% of kramdown's load, 38% of cuba's, 24% of liquid's. | Every gem program. | `rbRegexpLenient` and `rxCompileLazy` in `prelude/go/regexp.go` and `internal/compiler/rxtranslate.go`. | Medium. Decision 176 already defers a gem regexp's error to its first use, and `rxAltLazy` already defers the regexp2 compile; this extends the same rule to RE2. User-code interpolated regexps must keep raising at creation. |
-| 2 | Parse `config/default.yml` once, or make the YAML loader cheaper. | 322M measured for the two parses (14.7%); MRI spends 376M on the same two. | The second parse is rubocop's (`CacheConfig.root_dir_from_toplevel_config` reads the file again because it contains the word `CacheRootDirectory`). A cheaper loader helps every program that reads YAML. | Rubocop only: one hunk in `overrides/rubocop/gem-patches`. General: go-yaml's scanner is 60% of the load, and about 40% of that is converting rune slices to strings; the loader's scalar typing runs regexps. | The gem patch is low risk and a last resort by the project's rules. The general fix is in a dependency and needs a decision (upstream change, or a scanner of our own). |
+| 1c | Compile a gem's interpolated Regexp (`rbRegexpLenient`) at its first match. | About 56M inferred for rubocop (3.1%). Far larger elsewhere: 33% of kramdown's start-up is `rbRegexpLenient` called from class bodies, and Regexps built at run time are 38% of cuba's and 24% of liquid's. | Every gem program. | `rbRegexpLenient` and `rxCompileLazy` in `prelude/go/regexp.go` and `internal/compiler/rxtranslate.go`. | Medium. Decision 176 already defers a gem regexp's error to its first use, and `rxAltLazy` already defers the regexp2 compile; this extends the same rule to RE2. User-code interpolated regexps must keep raising at creation. |
+| 2 | Parse `config/default.yml` once, or make the YAML loader cheaper. | 322M measured for the two parses (14.7%); MRI spends 376M on the same two. | The second parse is upstream rubocop's own (`CacheConfig.root_dir_from_toplevel_config` reads the file again because it contains the word `CacheRootDirectory`; our gem patch only replaces its ERB step), so MRI pays it too. A cheaper loader helps every program that reads YAML. | Rubocop only: one hunk in `overrides/rubocop/gem-patches`. General: go-yaml's scanner is 60% of the load, and about 40% of that is converting rune slices to strings; the loader's scalar typing runs regexps. | The gem patch is low risk and a last resort by the project's rules. The general fix is in a dependency and needs a decision (upstream change, or a scanner of our own). |
 | 3a | Call `rbGCStart` before package initialisation. | About 100M measured (load-only run: 1,166M default, 1,064M with `GOGC=800`). Six collections run at a 4 MB goal before `main` starts. | Any program whose package initialisers allocate past 4 MB. Only rubocop does among the programs measured; it mostly disappears if fix 1 lands. | `emitProgram` (make `rbGCStart` the first package variable initialiser) or `prelude/go/runtime.go`. | Low. |
 | 3b | Do not start a collection straight after the ballast is allocated. | One collection of about ten; roughly 40M inferred. `gctrace` shows `gc 8 64->65->13 MB` and 3 ms later `gc 9 30->31->30 MB, 30 MB goal`. | Every program that reaches its first collection. | The finalizer in `rbGCStart` (decision 463). | Low to medium. Amends decision 463; needs its benchmark table rerun. |
 | 4 | Resolve `__dir__` once per source file. | 115M measured (5.2%): 619 calls, 8,030 `lstat` system calls, 8 distinct files. | Every program that calls `__dir__` more than once per file. liquid does it 3 times. | `rbSourceDir` in `prelude/go/file.go`, or the compiler emits one `sync.OnceValue` per source file. | Low. MRI resolves the path once at load, so a memo is closer to MRI than today. |
@@ -141,7 +144,7 @@ Work MRI also does, against artefacts of compilation (instructions, `empty.rb`):
 
 | | size | how known |
 |---|---:|---|
-| artefact: static Regexp literals compiled at start | 340M | measured (replica) |
+| artefact: static Regexp literals compiled at start (MRI loads 2 of unicode-emoji's 20 generated regex files; the six largest patterns, 78% of this, are in files it never loads) | 340M | measured (replica); the MRI side from `$LOADED_FEATURES` at exit of a `dir20` run |
 | artefact: collections during package initialisation | about 100M | measured (`GOGC=800` on the load run) |
 | artefact: `realpath` per `__dir__` | 115M | measured (replica) |
 | artefact: `stat` per glob entry, the part above MRI's cost | about 40M | measured (94M against MRI's 57M) |
@@ -149,13 +152,21 @@ Work MRI also does, against artefacts of compilation (instructions, `empty.rb`):
 | artefact: boxing in `Ractor.make_shareable` | about 35M | inferred |
 | MRI also: YAML twice | 322M | measured (replica; MRI 376M) |
 | MRI also: the two globs at MRI's cost | 57M | measured |
-| MRI also: config processing, cop registry, class bodies, unicode index, source checksum | about 500M | inferred |
+| MRI also: config processing, cop registry queries, class bodies, unicode index, source checksum, runner (70 ms of the 176.8 ms profile, less the two artefacts above) | about 690M | inferred |
+| MRI also: Regexps built while class bodies run | about 56M | inferred |
 | collector after package initialisation | about 240M | measured (342M total, minus the 100M above) |
+| unattributed: process start, page faults, exit, and the error of the conversions above | about 150M | the remainder of 2,193M |
 
-Not found, although looked for: Go runtime initialisation of the 291 MB binary (main's package initialisation
-starts 1.8 ms after the runtime does on Linux, 5.6 ms on macOS); itab construction (2.8%, was 20% before decision
-468); the frozen string literal table (4,321 entries, under 1 ms); symbol set-up (a Symbol is a string
+Not found, although looked for: Go package initialisation outside `main` (main's own starts 1.8 ms after the
+runtime's on Linux, 5.6 ms on macOS); itab construction (4.3% cumulative, about 20% before decision 468); the frozen string literal table (4,321 entries, under 1 ms); symbol set-up (a Symbol is a string
 conversion); class objects (static data).
+
+**Kernel time the profile does not see.** 100 load-only runs in the container take 15.4 to 16.2 s of user plus
+system time, 154 to 162 ms each, of which 47 to 51 ms is system time; the merged profile holds 107 ms per run. The
+difference, about a third, is process start and page faults: a load-only run takes 12,373 minor faults and reaches
+103 MB resident (hello-world: 310 faults, 2 MB), although its live heap is 3 MB. The macOS load-only run reports
+0.03 s of system time in 0.12 s. What touches that much of a 291 MB binary (94 MB of it is `gopclntab`, 17 MB type
+data) was not investigated; the 27 MB of package-initialisation garbage is part of it, so fix 1 removes some.
 
 ## Deliverable 1, second half: `dir20` from the same build
 
@@ -217,9 +228,10 @@ Notes for whoever works on this:
   a dynamic `[]` (`t11_ := rbDynOp_idx(...)`), so it compiles to a chain of `case bool(rbEq[any](t11_,
   Integer(65)))` tests tried in order. Each test calls `rbUnbox` twice (203 ms flat in total, the largest single
   function in the profile) and then fails three interface assertions. Decision 467 made this a Go `switch` only
-  when the subject is typed. Typing `_lex_trans_actions` would do it, and so would one assertion to Integer in
-  front of a `switch` when every `when` is an Integer literal, which is a rule at compile time and not run-time
-  machinery.
+  when the subject is typed, so the fix that fits the rules is typing `_lex_trans_actions` (a `sig/gems/parser`
+  line, or inference of a class-level table read through `self.class.send`). An open question for the user: an
+  untyped subject whose every `when` is an Integer literal could compile to one assertion to Integer in front of a
+  `switch`. That is a compile-time rule, but it sits close to the "no untyped fast path" constraint.
 - `Layout/TrailingEmptyLines#on_new_investigation` spends 24 ms per run (1.6% of the whole run) in regexp2
   backtracking, and `Lint/DuplicateMethods#humanize_scope` 12 ms.
 
@@ -251,11 +263,14 @@ Share of each program's start-up CPU (Linux profile, 300 runs each, profile writ
 | cause | kramdown | liquid | cuba | rubocop `empty.rb` |
 |---|---:|---:|---:|---:|
 | static Regexp literals at package initialisation | 33.1% | 14.0% | 7.8% | 17.3% |
-| Regexps built while class bodies run | 43.6% | 23.7% | 38.3% | 2.4% |
+| Regexps built at run time (class-body constants; for kramdown about a quarter of it is during the parse) | 43.6% | 23.7% | 38.3% | 2.4% |
 | collector | 6.1% | 0% | 0% | 17.9% |
 | `realpath` per `__dir__`, glob | 0% | 2.1% | 0% | 12.2% |
 | everything else | 17.2% | 60.2% | 53.9% | 50.2% |
 | CPU per run | 30.1 ms | 6.2 ms | 4.7 ms | 239.2 ms |
+
+The three gems' directories were not copied into the container, so the little file work these programs do
+(liquid's three `__dir__` calls) fails early there and is understated.
 
 So Regexp construction is the general start-up cost of a gem program: 77% of kramdown's load, 46% of cuba's, 38% of
 liquid's. The collector, the system calls and YAML are rubocop's, and a program has to be that large or read that
