@@ -34,6 +34,7 @@ require "findish"
 require "bufish"
 require "ragelish"
 require "cfgish"
+require "methish"
 require "cmpish"
 require "sexpish"
 require "capish"
@@ -194,3 +195,5 @@ p bl.lower?, bl.to_s
 Ragelish.demo.each { |v| p v }
 # a forwarded each_key called without a block answers the target's Enumerator (decision 444)
 p Cfgish.demo
+# a Method object called with a block yields to it (decision 444)
+p Methish.demo

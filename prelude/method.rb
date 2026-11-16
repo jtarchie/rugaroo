@@ -5,8 +5,14 @@
 # @rbs generic F
 # @go_type struct { fn F; dyn func(any, ...any) any; recv any; info *rbMethodInfo }
 class Method < Object
-  #: (*untyped) -> untyped
-  def call(*args) = %x{ return rbMethodCallDyn(self.dyn, self.recv, self.info, rest_) }
+  # A block goes on to the method, as `m.call(x) { }` yields to it (parser's `@enforcer.call(event) do ... end`).
+  #: (*untyped) ?{ (*untyped) -> untyped } -> untyped
+  def call(*args) = %x{
+    if blk != nil {
+      rest_ = append(slices.Clip(rest_), rbBlockArg{fn: blk})
+    }
+    return rbMethodCallDyn(self.dyn, self.recv, self.info, rest_)
+  }
 
   #: (*untyped) -> untyped
   def [](*args) = %x{ return rbMethodCallDyn(self.dyn, self.recv, self.info, rest_) }

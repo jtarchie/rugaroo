@@ -221,7 +221,7 @@ func (f *fctx) genBoundMethod(n parser.Node, recv expr, name string, public bool
 		return f.genMethodCall(n, r, name, args, nil)
 	})
 	dyn := noBlockDyn
-	if !needsBlock(e.M) {
+	if !needsBlock(e.M) || f.lenient() { // a gem's `@enforcer.call(event) do ... end`: Method#call passes its block on to the dispatcher (decision 444)
 		dyn = f.dynClosure(e, recv.typ, env, !public, false)
 	}
 	t := TClass{C: mc, Args: []Type{ft}}
