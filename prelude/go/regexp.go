@@ -72,7 +72,7 @@ func (l *rbRxLazy) compile(r *Regexp) {
 				c, err = rbRxCompile(rxFold(l.pat+pat), l.src, true)
 			}
 		} else {
-			c, err = rbRxCompile(rxFold(l.pat), l.src, false)
+			c, err = rbRxCompile(l.pat, l.src, false)
 		}
 		if err != nil {
 			c = &rbRxCompiled{re: &rxRegexp{unsupported: "regexp /" + l.src + "/ is not supported by rugaroo: " + err.Error()}, anch: new(atomic.Pointer[rxRegexp])}
@@ -82,8 +82,8 @@ func (l *rbRxLazy) compile(r *Regexp) {
 	})
 }
 
-// rbRegexpLazy is a static literal under --regexp-compile=lazy: pattern is translated by the compiler, which also
-// compiled it once to validate it, and compiles here at the literal's first use (decision S1).
+// rbRegexpLazy is a static literal under --regexp-compile=lazy: pattern is translated and folded (rxFold) by the
+// compiler, which also compiled it once to validate it, and compiles here at the literal's first use (decision S1).
 func rbRegexpLazy(pattern, src, opts string) *Regexp {
 	return &Regexp{lz: &rbRxLazy{pat: pattern, src: src, opts: opts}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
 }
@@ -139,6 +139,16 @@ func rbRegexpCompiled(pat, src, opts string, lazy bool) (*Regexp, error) {
 	r := &Regexp{src: src, opts: opts, anch: c.anch, u8: rbRegexpUTF8(src, opts)}
 	r.re.Store(c.re)
 	return r, nil
+}
+
+// rbRegexpStatic is a static literal under --regexp-compile=eager: pattern is translated and folded (rxFold) by the
+// compiler, so only the compile is left for the program's start.
+func rbRegexpStatic(pattern, src, opts string) *Regexp {
+	r, err := rbRegexpCompiled(pattern, src, opts, false)
+	if err != nil {
+		panic(NewRegexpError(Ref(String(rbRegexpErr(err, src)))))
+	}
+	return r
 }
 
 // rbRegexpNew compiles a translated pattern; dynamic (interpolated) ones

@@ -1816,11 +1816,11 @@ func TestRegexpCompileMode(t *testing.T) { //nolint:paralleltest // sets RUGAROO
 	requireToolchain(t)
 	const body = "R = /(a+)b/\nputs R.source, \"xaab\"[R, 1], \"a1\".sub(/\\d/, \"2\")\n"
 	for _, tc := range []struct{ env, src, has, hasNot string }{
-		{"", body, "= rbRegexpLazy(", "= rbRegexpNew("},
-		{"lazy", body, "= rbRegexpLazy(", "= rbRegexpNew("},
-		{"eager", body, "= rbRegexpNew(", "= rbRegexpLazy("},
-		{"eager", "# regexp_compile: lazy\n" + body, "= rbRegexpLazy(", "= rbRegexpNew("},
-		{"", "# regexp_compile: eager\n" + body, "= rbRegexpNew(", "= rbRegexpLazy("},
+		{"", body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"lazy", body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"eager", body, "= rbRegexpStatic(", "= rbRegexpLazy("},
+		{"eager", "# regexp_compile: lazy\n" + body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"", "# regexp_compile: eager\n" + body, "= rbRegexpStatic(", "= rbRegexpLazy("},
 	} {
 		t.Setenv("RUGAROO_REGEXP_COMPILE", tc.env)
 		out, _, err := Compile(t.Context(), "main.rb", []byte(tc.src))

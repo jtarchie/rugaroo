@@ -208,7 +208,7 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 	if err != nil {
 		f.errorf(n, "regexp /%s/ is not supported: %v", src, err)
 	}
-	ctor := "rbRegexpNew"
+	ctor := "rbRegexpStatic"
 	if f.regexpLazy() { // compiled at its first use, not in this variable's initializer (decision S1)
 		ctor = "rbRegexpLazy"
 	}
@@ -219,7 +219,12 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 		_, _ = h.Write([]byte(args))                // a hash.Hash never fails
 		name = fmt.Sprintf("rbRe_%016x", h.Sum64()) // by pattern, not by when it was first rendered (decision 432)
 		f.c.regexpVars[args] = name
-		init := args
+		// the pattern goes out with its /i literals already folded (rxFold): a constant, so not folded again each run
+		folded := rxFold(flags.goPrefix() + goPat)
+		if _, err := rxCompile(folded); err != nil { // what the program compiles: it must not be the first to see an error
+			f.errorf(n, "regexp /%s/ is not supported: %v", src, err)
+		}
+		init := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(folded), strconv.Quote(src), flags.opts())
 		if alt { // after the regexp2 engine registers, which naming it keeps (decision 242)
 			init = "rbRxAlt(rxAltReady, " + init + ")"
 		}

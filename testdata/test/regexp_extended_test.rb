@@ -309,6 +309,15 @@ module RegexpExtendedTests
       assert_equal ["abc", "def"], "abc def".scan(SCANNED)
     end
 
+    # /i also matches Unicode's multi-character case folds; the compiler expands the literal (rxFold).
+    def test_case_folds_of_a_literal
+      assert "straße".match?(/STRASSE/i)
+      assert "SS".match?(/ß/i)
+      assert "ﬀ".match?(/FF/i)
+      refute "strase".match?(/STRASSE/i)
+      refute "straße".match?(/STRASSE/)
+    end
+
     def test_literal_in_a_branch_never_taken
       taken = [1].empty? ? "x".match?(/(?<never>y)/) : "x".match?(/x/)
       assert taken
