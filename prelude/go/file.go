@@ -293,6 +293,10 @@ func rbGlobWalk(dir, prefix string, segs []string, flags int, out *[]string) {
 		p := filepath.Join(dir, seg)
 		fi, err := os.Stat(p)
 		if err != nil {
+			if _, lerr := os.Lstat(p); lerr != nil {
+				return
+			}
+			rbGlobStep(p, prefix+seg, false, rest, flags, out) // a symlink to nothing: it is there, and not a directory
 			return
 		}
 		rbGlobStep(p, prefix+seg, fi.IsDir(), rest, flags, out)
@@ -312,11 +316,14 @@ func rbGlobWalk(dir, prefix string, segs []string, flags int, out *[]string) {
 	for _, e := range es { // ReadDir sorts by name
 		name := e.Name()
 		p := filepath.Join(dir, name)
-		fi, err := os.Stat(p)
-		if err != nil {
-			continue
+		// The entry's type is the directory's own record of it (decision S3): only a symlink needs a stat, to learn
+		// whether it leads to a directory. One that leads nowhere is still an entry, as in MRI.
+		plainDir := e.IsDir() // `**` neither lists nor enters a symlink to a directory, as MRI
+		isDir := plainDir
+		if e.Type()&fs.ModeSymlink != 0 {
+			fi, err := os.Stat(p)
+			isDir = err == nil && fi.IsDir()
 		}
-		plainDir := fi.IsDir() && e.Type()&fs.ModeSymlink == 0 // `**` neither lists nor enters a symlink to a directory, as MRI
 		if seg == "**" {
 			hidden := strings.HasPrefix(name, ".") && flags&rbFnmDotmatch == 0
 			if rbGlobMatch(rest[0], name, flags) || rest[0] == "" && !hidden {
@@ -325,7 +332,7 @@ func rbGlobWalk(dir, prefix string, segs []string, flags int, out *[]string) {
 						*out = append(*out, prefix+name+"/")
 					}
 				} else {
-					rbGlobStep(p, prefix+name, fi.IsDir(), rest[1:], flags&^rbGlobDeep, out)
+					rbGlobStep(p, prefix+name, isDir, rest[1:], flags&^rbGlobDeep, out)
 				}
 			}
 			if plainDir && !hidden {
@@ -334,7 +341,7 @@ func rbGlobWalk(dir, prefix string, segs []string, flags int, out *[]string) {
 			continue
 		}
 		if rbGlobMatch(seg, name, flags) {
-			rbGlobStep(p, prefix+name, fi.IsDir(), rest, flags&^rbGlobDeep, out)
+			rbGlobStep(p, prefix+name, isDir, rest, flags&^rbGlobDeep, out)
 		}
 	}
 }

@@ -1292,6 +1292,35 @@ module StdlibTests
       end)
     end
 
+    # A symlink is an entry whatever it leads to: one to a directory is entered by name but not by `**`, one to
+    # nothing is still listed (decision S3).
+    def test_glob_symlinks
+      in_tree(lambda do
+        File.symlink("a/b", "ldir")
+        File.symlink("nowhere", "dangling")
+        File.symlink("top.rb", "lfile.rb")
+        File.symlink("../x", "a/lx")
+        assert_equal ["a", "b.txt", "dangling", "ldir", "lfile.rb", "top.rb", "x"], Dir.glob("*").sort
+        assert_equal ["a", "a/1.rb", "a/b", "a/b/2.rb", "a/b/c", "a/b/c/3.rb", "a/lx", "b.txt", "dangling", "ldir", "lfile.rb", "top.rb", "x", "x/4.txt"], Dir.glob("**/*").sort
+        assert_equal ["a/1.rb", "a/b/2.rb", "a/b/c/3.rb", "lfile.rb", "top.rb"], Dir.glob("**/*.rb").sort
+        assert_equal ["a/", "a/b/", "a/b/c/", "x/"], Dir.glob("**/").sort
+        assert_equal ["a/", "ldir/", "x/"], Dir.glob("*/").sort
+        assert_equal ["ldir/2.rb", "ldir/c"], Dir.glob("ldir/*").sort
+        assert_equal ["ldir/2.rb", "ldir/c/3.rb"], Dir.glob("ldir/**/*.rb").sort
+        assert_equal ["dangling"], Dir.glob("dangling")
+        assert_equal [], Dir.glob("dangling/*")
+        assert_equal ["dangling"], Dir.glob("d*")
+        assert_equal [], Dir.glob("a/**/*.txt")
+        assert_equal ["a/1.rb", "a/b", "a/lx", "ldir/2.rb", "ldir/c", "x/4.txt"], Dir.glob("*/*").sort
+        assert_equal ["ldir/2.rb", "ldir/c", "x/4.txt"], Dir.glob("{ldir,dangling,x}/*").sort
+        assert_equal ["a/b/c"], Dir.glob("**/c")
+        assert_equal [".", ".hid", "a", "b.txt", "dangling", "ldir", "lfile.rb", "top.rb", "x"], Dir.glob("*", File::FNM_DOTMATCH).sort
+        assert_equal [".", ".hid", ".hid/5.rb", "a", "a/.dot.rb", "a/1.rb", "a/b", "a/b/2.rb", "a/b/c", "a/b/c/3.rb", "a/lx", "b.txt", "dangling", "ldir", "lfile.rb", "top.rb", "x", "x/4.txt"],
+                     Dir.glob("**/*", File::FNM_DOTMATCH).sort
+        assert_equal ["dangling", "ldir", "lfile.rb"], Pathname.glob("{l,d}*").map(&:to_s).sort
+      end)
+    end
+
     def test_dir_and_file
       in_tree(lambda do
         assert_equal ["1.rb", "b"], Dir.chdir("a") { Dir.glob("*") }
