@@ -195,6 +195,16 @@ computes from it. That, not the cycles of the next section, is most of rubocop's
 would have to come from somewhere other than a caller (what MRI's run observed, or signatures), with a fallback for
 what was not observed.
 
+## Typing the cop callbacks by signature (decision 470), tried 2026-11-16
+
+With every `on_<type>(node)` of `Cop::Base`'s subclasses declared to take a `RuboCop::AST::Node` (one generated sig
+file, applied to each cop by the new rule): no gain, `dir20` 13,950M → 14,330M, and cops that reassign `node` to nil
+raise. In a 60-line gem of the same shape the same rule gives −18%, because there the callbacks call only methods the
+base node class has. In rubocop what a callback does with its node is call a subclass's method or a generated
+node-pattern matcher, and those stay dynamic. So the receiver's exact class matters, not just "a Node": the types
+that would pay are per node class (`on_send` takes a `SendNode`), which is what MRI's run observes and a signature on
+the base class cannot say safely.
+
 ## A different inference, if the rounds are not enough
 
 Every root found here was a cycle the round-based inference resolved pessimistically: a value is untyped in the first
