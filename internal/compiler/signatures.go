@@ -468,6 +468,7 @@ func (c *Compiler) inferRet(m *Method) {
 	}
 	m.Ret = ret
 	m.roundRet = c.awaitsParams(m, ret)
+	c.noteHardAny(m, ret)
 }
 
 // roundBottomReturns leaves a round's untyped returns out of m's join when a typed one remains and m has a parameter not

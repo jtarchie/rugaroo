@@ -59,6 +59,7 @@ type inference struct {
 	settled int                   // rounds in a row that changed at most 2% of the parameters (decision 444)
 	anyUse  map[pendingKey]bool   // a gem parameter typed by some calls while a gem call passes an untyped value: untyped once the rounds converged (decision 444)
 	from    map[pendingKey]string // the first call each type came from, file:line, for a mismatch's message
+	hardAny map[pendingKey]bool   // a method (by its first pending parameter) that returned untyped with every parameter typed: its result is never provisional again (decision 466)
 	changed bool
 }
 
@@ -644,6 +645,59 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 		t = en.use
 	}
 	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: n.GetLocation().StartOffset})
+	if f.c.round && realType(t) {
+		if f.typedUse == nil {
+			f.typedUse = map[pendingKey]bool{}
+		}
+		f.typedUse[p.Pending] = true
+	}
+}
+
+// typedThisCall reports a round's call of m that passes a real type to each of m's parameters still untyped from
+// use: the next round types them from this call, so m's untyped result now says nothing yet (decision 466). Not
+// once m has returned untyped with its parameters typed: the caller would flip between the two every round.
+func (f *fctx) typedThisCall(m *Method) bool {
+	if !f.c.round || f.c.infer == nil || len(f.typedUse) == 0 {
+		return false
+	}
+	waits := false
+	for _, p := range m.Params {
+		if p.Pending == "" || !isAny(p.Type) {
+			continue
+		}
+		if !f.typedUse[p.Pending] {
+			return false
+		}
+		waits = true
+	}
+	return waits && !f.c.infer.hardAny[firstPending(m)]
+}
+
+// firstPending is m's first parameter typed from use, its key in inference.hardAny.
+func firstPending(m *Method) pendingKey {
+	for _, p := range m.Params {
+		if p.Pending != "" {
+			return p.Pending
+		}
+	}
+	var none pendingKey
+	return none
+}
+
+// noteHardAny records a round's untyped return of m with every from-use parameter typed (decision 466).
+func (c *Compiler) noteHardAny(m *Method, ret Type) {
+	if !c.round || c.infer == nil || !isAny(ret) {
+		return
+	}
+	var zero pendingKey
+	k := firstPending(m)
+	if k == zero || slices.ContainsFunc(m.Params, func(p Param) bool { return p.Pending != "" && isAny(p.Type) }) {
+		return
+	}
+	if c.infer.hardAny == nil {
+		c.infer.hardAny = map[pendingKey]bool{}
+	}
+	c.infer.hardAny[k] = true
 }
 
 // pendingWant is the expected type for an argument: none for a pending parameter in a round, so the argument types itself.

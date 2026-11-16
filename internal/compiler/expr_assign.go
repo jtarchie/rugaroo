@@ -293,10 +293,11 @@ func (f *fctx) genMultiWrite(n *parser.MultiWriteNode) expr {
 	} else {
 		f.emit("%s := %s", tmp, v.code)
 	}
-	saved := f.destructuring
+	saved, savedProv := f.destructuring, f.mwProvisional
 	f.destructuring = f.discover && f.lenient() && f.storageDestructure(n.Value)
+	f.mwProvisional = v.provisional
 	f.destructureInto(n, expr{code: tmp, typ: v.typ}, n.Lefts, n.Rest, n.Rights)
-	f.destructuring = saved
+	f.destructuring, f.mwProvisional = saved, savedProv
 	if len(n.Lefts) == 0 && len(n.Rights) == 0 && isBareRest(n.Rest) { // `(*) = x` reads nothing of x
 		f.emit("_ = %s", tmp)
 	}
@@ -567,6 +568,7 @@ func (f *fctx) toAry(v expr) expr {
 func (f *fctx) assignTarget(target parser.Node, v expr) {
 	switch t := target.(type) {
 	case *parser.LocalVariableTargetNode:
+		v.provisional = v.provisional || f.mwProvisional && isAny(v.typ)
 		f.assignLocal(t, t.Name, v, nil)
 	case *parser.InstanceVariableTargetNode:
 		f.storageWrite = f.destructuring

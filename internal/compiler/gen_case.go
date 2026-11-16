@@ -2,7 +2,9 @@ package compiler
 
 import (
 	"fmt"
+	"math"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
@@ -55,6 +57,9 @@ func (f *fctx) genCase(n *parser.CaseNode, t tail) {
 		f.genStmt(caseAsMatchIf(n, subjNode, !isClass(st, "String"), isCls, f.whenRegexp), t)
 		return
 	}
+	if f.genIntCase(n, t, held) {
+		return
+	}
 	// each arm's test is built before the switch: one may need statements (a union subject's type switch, a ternary), which cannot sit between cases
 	arms, pre := make([]string, len(n.Conditions)), make([]string, len(n.Conditions))
 	for i, w := range n.Conditions {
@@ -76,6 +81,70 @@ func (f *fctx) genCase(n *parser.CaseNode, t tail) {
 		f.leaveBlock(saved)
 	}
 	f.genCaseSwitch(n, t, 0, arms, pre)
+}
+
+// intCaseMin is the fewest arms worth a Go switch on the value: below it the chain of tests is as good.
+const intCaseMin = 4
+
+// genIntCase is a `case` of an Integer (or Integer?) subject whose every `when` is a distinct Integer literal, as one
+// Go `switch` on the value, which the Go compiler turns into a jump table or a binary search: a Ragel scanner's
+// `case _lex_trans_actions[_trans]` has hundreds of arms, tested one by one otherwise (decision 467). A nil subject
+// takes a value no arm names, so it reaches the else.
+func (f *fctx) genIntCase(n *parser.CaseNode, t tail, subj expr) bool {
+	if !isClass(stripOpt(subj.typ), "Integer") || len(n.Conditions) < intCaseMin {
+		return false
+	}
+	seen := map[int64]bool{}
+	labels := make([]string, len(n.Conditions))
+	spare := int64(math.MinInt64)
+	for i, w := range n.Conditions {
+		var vals []string
+		for _, cond := range w.(*parser.WhenNode).Conditions {
+			lit, ok := cond.(*parser.IntegerNode)
+			if !ok || lit.Location.Length == 0 {
+				return false
+			}
+			v, err := strconv.ParseInt(strings.ReplaceAll(f.f.text(lit.Location), "_", ""), 0, 64) // Go's reading: 0d and out-of-range literals stay with genInteger
+			if err != nil || seen[v] || v == math.MaxInt64 {
+				return false
+			}
+			seen[v] = true
+			spare = max(spare, v+1)
+			vals = append(vals, strconv.FormatInt(v, 10))
+		}
+		labels[i] = strings.Join(vals, ", ")
+	}
+	key := subj.code
+	if isOpt(subj.typ) {
+		key = f.newTmp()
+		f.emit("%s := Integer(%d)", key, spare)
+		f.emit("if %s.ok {", subj.code)
+		f.emit("\t%s = %s.v", key, subj.code)
+		f.emit("}")
+	}
+	f.emit("switch %s {", key)
+	f.switches++
+	for i, w := range n.Conditions {
+		f.emit("case %s:", labels[i])
+		saved := f.enterBlock()
+		f.indent++
+		f.genWhenArm(w.(*parser.WhenNode), t)
+		f.indent--
+		f.leaveBlock(saved)
+	}
+	f.emit("default:")
+	saved := f.enterBlock()
+	f.indent++
+	if n.ElseClause != nil {
+		f.genStmts(n.ElseClause.Statements, t)
+	} else {
+		f.emptyTail(n, t)
+	}
+	f.indent--
+	f.leaveBlock(saved)
+	f.switches--
+	f.emit("}")
+	return true
 }
 
 // genCaseSwitch nests an arm whose test needed statements (pre) in the previous switch's default, so a later `when` runs only if no earlier one matched, as MRI's.

@@ -1371,7 +1371,12 @@ func rbViewIdx2(s rbView, start, count Integer) any {
 	if start < 0 || start > n || count < 0 {
 		return nil
 	}
-	return rbViewFrom(s, rbViewElems(s)[start:min(start+count, n)])
+	end := min(start+count, n)
+	xs := make([]any, 0, end-start) // only the slice's own elements: a stack's `[-n, n]` must not copy the stack
+	for i := start; i < end; i++ {
+		xs = append(xs, s._At(i))
+	}
+	return rbViewFrom(s, xs)
 }
 
 // rbViewChecked converts xs to the array's element type before anything is written, as a typed call converts its
@@ -1429,8 +1434,16 @@ func rbViewIdxSet(s rbView, args []any) any {
 	if n < start {
 		s._Resize(start)
 	}
+	end := min(start+count, s._Len())
+	if len(items) == 0 && end == s._Len() { // `stack[-n, n] = []`: a truncation, whatever the element type
+		s._Resize(start)
+		return v
+	}
+	if a, ok := s.(*Array[any]); ok { // spliced in place, not rebuilt
+		a.s = slices.Replace(a.s, int(start), int(end), items...)
+		return v
+	}
 	xs := rbViewElems(s)
-	end := min(start+count, Integer(len(xs)))
 	rbViewReplace(s, slices.Concat(xs[:start:start], items, xs[end:]))
 	return v
 }

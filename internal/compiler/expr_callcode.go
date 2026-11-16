@@ -542,7 +542,7 @@ func (f *fctx) callMethod0(n parser.Node, e *entry, recv expr, args []parser.Nod
 	} else if f.c.selfVarReturns(e, recv.typ) {
 		out.code, out.assert = "any("+out.code+").(Self)", true
 	}
-	out.provisional = f.c.provisional(m, out.typ)
+	out.provisional = f.c.provisional(m, out.typ) || isAny(out.typ) && f.typedThisCall(m)
 	if armT != nil {
 		return f.narrowToArm(n, flatOpt(out), subst(armT, env))
 	}

@@ -338,6 +338,9 @@ func (f *fctx) widenParam(name string, info *localInfo, existing *local, val exp
 	if info == nil || !info.param || !f.lenient() || isVoid(val.typ) || isNil(val.typ) || isAny(existing.typ) {
 		return
 	}
+	if val.provisional { // a round's untyped result of a method still awaiting its own parameters: the next round types it (decision 358)
+		return
+	}
 	// an untyped value fits any type by assertion, which fails when the guess from a default was wrong
 	// (`level = :FATAL; level = const_get(level)`): an unsigned param takes it untyped
 	// a Hash[untyped, V] into a Hash[Symbol, V] param fits by a converted copy, which fails on another key (exec3's
