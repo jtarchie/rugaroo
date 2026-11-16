@@ -64,7 +64,7 @@ func rbReadUntil(r *bufio.Reader, want []byte) []byte {
 type rbStrFact struct {
 	p     *byte // the key: the String's data pointer and length. Holding p keeps the bytes from being reused.
 	n     int
-	level int  // how much is known: rbFactASCII, then valid, then chars. An ASCII String knows all three.
+	level int // how much is known: rbFactASCII, then valid, then chars. An ASCII String knows all three.
 	ascii bool
 	valid bool // valid UTF-8
 	chars int  // its length in characters: bytes unless valid and not ASCII

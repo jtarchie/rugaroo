@@ -968,6 +968,11 @@ class String < Object
   #: (String, ?offset: Integer) -> String
   def __unpack1_binary(format, offset: 0) = %x{ return rbUnpack(string(self), string(format), offset).s[0].(String) }
 
+  # unpack of a literal format made only of starred integer directives ("U*", "C*", "n*"): every element an Integer
+  # (decision 465).
+  #: (String, ?offset: Integer) -> Array[Integer]
+  def __unpack_ints(format, offset: 0) = %x{ return rbUnpackInts(string(self), string(format), offset) }
+
   # A gem's unpack (decision 324): an unsigned value past 2**63 is its 64 bits as an Integer, as the gem's Integer#<< wraps.
   #: (String, ?offset: Integer) -> Array[untyped]
   def __unpack_wrap(format, offset: 0) = %x{ return rbUnpackWrap(string(self), string(format), true, offset) }

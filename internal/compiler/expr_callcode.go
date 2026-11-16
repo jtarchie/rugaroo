@@ -1033,6 +1033,11 @@ func (f *fctx) gemCallShortcut(n parser.Node, e *entry, recv expr, args []parser
 		return f.genDynCall(n, recv, "new", args), true
 	}
 	if f.lenient() && block == nil && (e.M.Name == "unpack" || e.M.Name == "unpack1") && e.M.Owner == f.c.classes["String"] {
+		if lit, ok := firstStringArg(args); ok && e.M.Name == "unpack" && unpackIntsRe.MatchString(lit) {
+			if w := f.c.classes["String"].lookup("__unpack_ints"); w != nil { // starred integer directives: Array[Integer] (decision 465)
+				return f.callMethod(n, w, recv, args, block), true
+			}
+		}
 		if w := f.c.classes["String"].lookup("__" + e.M.Name + "_wrap"); w != nil { // a gem's 64-bit fields wrap (decision 324)
 			return f.callMethod(n, w, recv, args, block), true
 		}
@@ -1334,4 +1339,16 @@ func flatLeafOpt(code string, decl Type, env map[string]Type) string {
 		}
 	}
 	return code
+}
+
+// firstStringArg is the value of a call's first argument when it is a String literal.
+func firstStringArg(args []parser.Node) (string, bool) {
+	if len(args) == 0 {
+		return "", false
+	}
+	s, ok := args[0].(*parser.StringNode)
+	if !ok {
+		return "", false
+	}
+	return s.Unescaped.Value, true
 }

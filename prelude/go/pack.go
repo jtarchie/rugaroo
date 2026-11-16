@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Array#pack and String#unpack share one parser and one sizing table so the two sides agree (decision 138).
@@ -517,6 +518,38 @@ func rbUnpackPad(n, have int) {
 // rbUnpack is String#unpack; an unsigned value past 2**63 raises RangeError where MRI makes a Bignum (decision 35).
 func rbUnpack(s, format string, offset Integer) *Array[any] {
 	return rbUnpackWrap(s, format, false, offset)
+}
+
+// rbUnpackInts is unpack of a format the compiler read as starred integer directives only (decision 465): "C*" is
+// the bytes, anything else rbUnpackWrap's values, each an Integer.
+func rbUnpackInts(s, format string, offset Integer) *Array[Integer] {
+	if format == "C*" && offset >= 0 && int(offset) <= len(s) {
+		out := make([]Integer, len(s)-int(offset))
+		for i := range out {
+			out[i] = Integer(s[int(offset)+i])
+		}
+		return &Array[Integer]{s: out}
+	}
+	if format == "U*" && offset >= 0 && int(offset) <= len(s) {
+		out := make([]Integer, 0, len(s)-int(offset))
+		for pos := int(offset); pos < len(s); {
+			if c := s[pos]; c < utf8.RuneSelf {
+				out = append(out, Integer(c))
+				pos++
+				continue
+			}
+			r, size := rbUnpackU(s[pos:])
+			out = append(out, Integer(r))
+			pos += size
+		}
+		return &Array[Integer]{s: out}
+	}
+	vals := rbUnpackWrap(s, format, true, offset).s
+	out := make([]Integer, len(vals))
+	for i, v := range vals {
+		out[i] = v.(Integer) //nolint:forcetypeassert // the format's directives give only Integers
+	}
+	return &Array[Integer]{s: out}
 }
 
 // rbUnpackWrap is rbUnpack; wrap keeps an unsigned value past 2**63 as its 64 bits (a gem's, decision 324). offset is

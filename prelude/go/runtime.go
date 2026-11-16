@@ -1983,7 +1983,7 @@ func rbArgAt[T any](xs []T, i int) T {
 // rbMust is a gem's T? where T is wanted (decision 172): nil raises TypeError.
 func rbMust[T any](p *T, want string) T {
 	if p == nil {
-		panic(NewTypeError(Ref(String("no implicit conversion of nil into " + want))))
+		rbMustFail(want)
 	}
 	return *p
 }
@@ -1991,9 +1991,16 @@ func rbMust[T any](p *T, want string) T {
 // rbMustO is rbMust for an rbOpt (decision 396).
 func rbMustO[T any](o rbOpt[T], want string) T {
 	if !o.ok {
-		panic(NewTypeError(Ref(String("no implicit conversion of nil into " + want))))
+		rbMustFail(want)
 	}
 	return o.v
+}
+
+// rbMustFail raises rbMust's error, out of line so that rbMust and rbMustO inline as one branch.
+//
+//go:noinline
+func rbMustFail(want string) {
+	panic(NewTypeError(Ref(String("no implicit conversion of nil into " + want))))
 }
 
 // rbNilArg is a T? where T is wanted under --nil-check=runtime (decision 393): nil raises the error MRI raises there.

@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -812,10 +813,20 @@ func (f *fctx) literalOverload(m *Method, owner *Class, args []parser.Node) *ent
 	return nil
 }
 
+// unpackIntsRe is an unpack format whose every directive is a starred fixed-width integer or U: no nil for a short
+// String, no value past 64 bits (decision 465).
+var unpackIntsRe = regexp.MustCompile(`^(\s*[CcSsLlNnVvU][_!<>]*\*)+\s*$`)
+
 // stringLiteralOverload: String#scan with a pattern that has groups yields each match's groups, and force_encoding of a
 // literal BINARY and unpack1 of a literal a/A/Z/m/u/M first directive make a binary String (decisions 352, 439).
 func (f *fctx) stringLiteralOverload(m *Method, owner *Class, args []parser.Node) *entry {
 	arg := args[0]
+	if m.Name == "unpack" {
+		if s, ok := arg.(*parser.StringNode); ok && unpackIntsRe.MatchString(s.Unescaped.Value) {
+			return owner.lookup("__unpack_ints")
+		}
+		return nil
+	}
 	if m.Name == "unpack1" {
 		if s, ok := arg.(*parser.StringNode); ok && s.Unescaped.Value != "" && strings.IndexByte("aAZmuM", s.Unescaped.Value[0]) >= 0 {
 			return owner.lookup("__unpack1_binary")
