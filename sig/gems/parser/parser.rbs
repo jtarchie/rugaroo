@@ -1,0 +1,41 @@
+# Signatures for the parser gem (whitequark/parser 3.3), which ships none: the state of its Ragel-generated lexer.
+# The lexer's position and state pass through lambdas held in ivars (`p = @num_xfrm.call(digits, p)`) and through
+# LexerStrings and back, which inference leaves untyped (decision 466, "Not done"); every table lookup and comparison
+# in `advance` is then a dynamic call. With these, the gem's own parse of 21 files runs 2,470M instructions instead
+# of 7,945M. Each is what the gem assigns: a mismatch raises TypeError where it is stored.
+module Parser
+  class Lexer
+    @cs: Integer
+    @p: Integer
+    @ts: Integer?
+    @te: Integer?
+    @sharp_s: Integer?
+    @newline_s: Integer?
+    @num_base: Integer?
+    @num_digits_s: Integer?
+    @num_suffix_s: Integer?
+    @eq_begin_s: Integer?
+    @cs_before_block_comment: Integer
+    @emit_integer: ^(untyped, Integer) -> Integer
+    @emit_rational: ^(untyped, Integer) -> Integer
+    @emit_imaginary: ^(untyped, Integer) -> Integer
+    @emit_imaginary_rational: ^(untyped, Integer) -> Integer
+    @emit_integer_re: ^(untyped, Integer) -> Integer
+    @emit_integer_if: ^(untyped, Integer) -> Integer
+    @emit_integer_rescue: ^(untyped, Integer) -> Integer
+    @emit_float: ^(untyped, Integer) -> Integer
+    @emit_imaginary_float: ^(untyped, Integer) -> Integer
+    @emit_float_if: ^(untyped, Integer) -> Integer
+    @emit_float_rescue: ^(untyped, Integer) -> Integer
+    @num_xfrm: (^(untyped, Integer) -> Integer)?
+
+    def on_newline: (Integer) -> Integer
+    def stack_pop: () -> Integer
+    def arg_or_cmdarg: (untyped) -> Integer
+  end
+
+  class LexerStrings
+    def on_newline: (Integer) -> Integer
+    def advance: (Integer) -> [Integer, Integer?]
+  end
+end
