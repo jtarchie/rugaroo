@@ -255,3 +255,34 @@ round because its producer has not been typed yet, and that untyped value is the
   never trusted (one run on one input proves nothing); it only decides where the fixpoint starts, so a cycle that
   MRI resolved to Integer starts as Integer. The same recording, printed as RBS, is a first draft of a `sig/gems`
   file for a person to review.
+
+## Where it stands at main 5f33fcf3 (2026-11-16, end of the session)
+
+Compiled rubocop built from main (decisions 463-473 and the lexer signatures in `sig/gems/parser`), default config,
+its own work directory (`RUBOCOP_WORK`), instructions retired, second run; stdout and exit status equal MRI's and no
+cop raises on any input.
+
+| input | compiled | MRI | |
+|---|---:|---:|---|
+| empty file | 1,552M | 5,727M | 3.7x |
+| `a.rb` (2 lines) | 1,640M | 5,734M | 3.5x |
+| `cli.rb` | 2,597M | 6,401M | 2.5x |
+| `runner.rb` | 3,845M | 7,196M | 1.9x |
+| 20 files | 9,224M | 11,389M | 1.2x |
+| 60 lint files | 13,631M | 15,477M | 1.1x |
+| 80 lint files | 19,987M | 20,227M | 1.0x |
+
+The same inputs at 3561a4e9: 2,174M, 2,309M, 3,573M, 5,614M, 13,957M, 21,199M, 30,651M. Two changes made the
+difference: start-up (`docs/research/startup-2026-11.md`, decisions 471-473) and eight signature lines for the
+lexer's buffer, code points and LexerStrings state, which rubocop-ast hands over untyped (the parser-only program
+typed them by inference, so its 3.2x never reached rubocop).
+
+Not 10x: that is about 570M for one file and 1,140M for twenty. What the session measured about the rest: start-up
+has about 1,500M that is rubocop's own work (YAML twice, config validation, the registry); inference with a
+not-known-yet type (`docs/research/inference-2026-11.md`, branch `infer/unknown`, not merged) types 1,815 of
+rubocop's parameters against 1,692, and 2,416 with every cop callback declared by hand, so neither ordering nor the
+callbacks is where rubocop's types are lost. The loop that paid: profile, find the boundary where a typed value
+becomes untyped, type it there with a reviewed signature.
+
+Never share `$TMPDIR/rugaroo-rubocop` between two jobs: a `sig/` directory one job puts there is compiled into
+whatever the other builds.
