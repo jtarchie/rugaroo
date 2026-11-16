@@ -294,12 +294,10 @@ func rbASCIIFact(s string) bool {
 	return rbStrFactOf(s, rbFactASCII).ascii
 }
 
-// rbASCIIPrefix reports s[:e] is all ASCII: a short prefix by its own scan, a long one by the whole String's cached
-// fact first (a loop slicing one large String asks again and again), then its scan.
-func rbASCIIPrefix(s string, e int) bool {
-	if e < rbStrFactMin {
-		return rbASCII(s[:e])
-	}
+// rbASCIILongPrefix reports s[:e] is all ASCII for an e of rbStrFactMin or more: the whole String's cached fact first
+// (a loop slicing one large String asks again and again), then the prefix's scan. A shorter prefix is scanned where
+// it is asked, so an index near the start costs the one call it always did.
+func rbASCIILongPrefix(s string, e int) bool {
 	return rbASCIIFact(s) || rbASCII(s[:e])
 }
 
@@ -923,7 +921,7 @@ var rbRadixPrefixes = map[string]int{"0b": 2, "0B": 2, "0o": 8, "0O": 8, "0x": 1
 //
 //go:noinline
 func rbStrAt(s String, i Integer) (String, bool) {
-	if i >= 0 && int(i) < len(s) && rbASCIIPrefix(string(s), int(i)+1) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
+	if i >= 0 && int(i) < len(s) && (int(i) < rbStrFactMin && rbASCII(string(s[:i+1])) || int(i) >= rbStrFactMin && rbASCIILongPrefix(string(s), int(i)+1)) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
 		return rbNewStr(s, s[i:i+1]), true
 	}
 	if !rbValidUTF8(string(s)) { // ASCII-8BIT by decision 136: a byte is a character
@@ -1025,7 +1023,7 @@ func rbStrSub(s String, start, count Integer) (String, bool) {
 		if int(count) < e-int(start) {
 			e = int(start + count)
 		}
-		if rbASCIIPrefix(string(s), e) { // the whole String's cached fact, or its prefix's scan
+		if e < rbStrFactMin && rbASCII(string(s[:e])) || e >= rbStrFactMin && rbASCIILongPrefix(string(s), e) { // the whole String's cached fact, or its prefix's scan
 			return rbNewStr(s, s[start:e]), true
 		}
 	}
