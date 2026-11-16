@@ -38,4 +38,11 @@ module Parser
     def on_newline: (Integer) -> Integer
     def advance: (Integer) -> [Integer, Integer?]
   end
+
+  module Source
+    class Buffer
+      # gem_rbs_collection's parser 3.2 says Encoding: an empty String, or one with no magic comment, answers nil
+      def self.recognize_encoding: (String) -> Encoding?
+    end
+  end
 end
