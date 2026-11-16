@@ -1,6 +1,68 @@
+diff -ru a/lib/parser/builders/default.rb b/lib/parser/builders/default.rb
+--- a/lib/parser/builders/default.rb	2026-11-16 03:04:31
++++ b/lib/parser/builders/default.rb	2026-11-16 03:04:31
+@@ -391,14 +391,15 @@
+ 
+         case node.type
+         when :str
+-          str = node.children.first
+-          dedenter.dedent(str)
++          # rugaroo: the dedented String is the dedenter's value, put back into the node (see Dedenter#dedent)
++          node = node.updated(nil, [dedenter.dedent(node.children.first)])
+         when :dstr, :xstr
+           children = node.children.map do |str_node|
+             if str_node.type == :str
+-              str = str_node.children.first
+-              dedenter.dedent(str)
++              str = dedenter.dedent(str_node.children.first)
+               next nil if str.empty?
++
++              str_node = str_node.updated(nil, [str])
+             else
+               dedenter.interrupt
+             end
+diff -ru a/lib/parser/lexer/dedenter.rb b/lib/parser/lexer/dedenter.rb
+--- a/lib/parser/lexer/dedenter.rb	2026-11-16 03:04:31
++++ b/lib/parser/lexer/dedenter.rb	2026-11-16 03:04:31
+@@ -46,13 +46,11 @@
+         lines.map! {|s| s.force_encoding(original_encoding) }
+       end
+ 
+-      if @at_line_begin
+-        lines_to_dedent = lines
+-      else
+-        _first, *lines_to_dedent = lines
+-      end
++      # rugaroo: each line is replaced in `lines` and the result returned, not edited in place through shared
++      # references (a compiled String is immutable); MRI computes the same lines either way.
++      lines.each_with_index do |line, index|
++        next if !@at_line_begin && index == 0
+ 
+-      lines_to_dedent.each do |line|
+         left_to_remove = @dedent_level
+         remove = 0
+ 
+@@ -72,12 +70,14 @@
+           end
+         end
+ 
+-        line.slice!(0, remove)
++        lines[index] = line[remove..]
+       end
+ 
+-      string.replace(lines.join)
++      result = lines.join
++      string.replace(result) unless string.frozen?
+ 
+-      @at_line_begin = string.end_with?("\n")
++      @at_line_begin = result.end_with?("\n")
++      result
+     end
+ 
+     def interrupt
 diff -ru a/lib/parser/source/buffer.rb b/lib/parser/source/buffer.rb
---- a/lib/parser/source/buffer.rb	2026-11-15 21:24:15
-+++ b/lib/parser/source/buffer.rb	2026-11-15 21:24:15
+--- a/lib/parser/source/buffer.rb	2026-11-16 03:04:31
++++ b/lib/parser/source/buffer.rb	2026-11-16 03:04:31
 @@ -189,11 +189,8 @@
  
          @source = input.gsub("\r\n".freeze, "\n".freeze).freeze

@@ -148,8 +148,12 @@ In the order the parser gem's profile shows them:
    this branch (a blockless `each_key` through `def_delegators`, `Hash#merge` of a `Config` needing `to_hash`, and a
    forwarder's absent `&block` counted as an argument of `Config#replace`): with a config that sets a cop's style and
    disables a department the binary prints what MRI prints on `a.rb` and `dir20`. `ParserEngine: parser_prism` still
-   stops it (`ProcessedSource.lazy_tokens_parser_class does not compile`); a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
-   too; `kids << a << i` on an Array first seen holding one class
+   stops it (`ProcessedSource.lazy_tokens_parser_class does not compile`); a rational literal (`2.5r`) raised TypeError in the parser gem (`Rational("2.5")`), on main
+   too: fixed, `Kernel#Rational` now converts a String, Float or Rational. A squiggly heredoc (`<<~`) was not
+   dedented in the AST (the gem's `Dedenter#dedent` edits Strings in place through the node's reference): fixed by
+   two more hunks of `parser-3.3.13.0.patch`. Against MRI on 444 files (`p ast; p tokens`) every AST is now equal;
+   the token lists of 137 files still differ in the text of `tSTRING_CONTENT` tokens of such heredocs, which under
+   MRI are the same String objects the dedenter edits; `kids << a << i` on an Array first seen holding one class
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
 
