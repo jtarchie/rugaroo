@@ -3,8 +3,14 @@
 # LexerStrings and back, which inference leaves untyped (decision 466, "Not done"); every table lookup and comparison
 # in `advance` is then a dynamic call. With these, the gem's own parse of 21 files runs 2,470M instructions instead
 # of 7,945M. Each is what the gem assigns: a mismatch raises TypeError where it is stored.
+# The buffer, its code points and LexerStrings' own state are here for a program whose caller hands the buffer over
+# untyped (rubocop-ast's ProcessedSource): without them `pe`, `_trans` and every table lookup in both `advance`
+# loops are dynamic there, and Ragel's 370-arm `case` is a chain of untyped comparisons (rubocop on 20 files:
+# 13,982M -> 9,835M instructions, 2026-11-16).
 module Parser
   class Lexer
+    @source_buffer: Parser::Source::Buffer?
+    @source_pts: Array[Integer]?
     @cs: Integer
     @p: Integer
     @ts: Integer?
@@ -35,6 +41,13 @@ module Parser
   end
 
   class LexerStrings
+    @lexer: Parser::Lexer
+    @cs: Integer
+    @root_lexer_state: Integer
+    @_lex_actions: Array[Integer]
+    attr_accessor source_buffer: Parser::Source::Buffer?
+    attr_accessor source_pts: Array[Integer]?
+
     def on_newline: (Integer) -> Integer
     def advance: (Integer) -> [Integer, Integer?]
   end
