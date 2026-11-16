@@ -80,7 +80,8 @@ everything computed from it untyped too.
 in total (−10.7%); objects −40%, strings −35%, json −27%, collections −22%, pairing_heap −20%, bignum −17%, kramdown
 −14%, format −13%, regexp −10%, liquid −7%; the rows that never collect (fib, hash, math, splay, the thread rows)
 within ±1% on repeated runs. spinel's suite (67 rows that build, `--nil-check=runtime`): bm_gcbench −23%, bm_so_lists
-−23%, bm_ruby_xor +9% and bm_huffman +4% (the String facts' checks), the rest within noise; a binary's first run after
+−23%, the rest within noise (bm_ruby_xor and bm_huffman, +9% and +4% at first from the String facts' checks, are
+back to main's count and within 2% of it); a binary's first run after
 its build costs 4M instructions more, so measure a second run.
 
 The parser gem alone, 21 files: MRI 2,312M (1,360M of it parsing); compiled 7,945M → 1,751M.
