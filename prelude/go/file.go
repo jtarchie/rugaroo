@@ -352,7 +352,8 @@ func rbGlobStep(p, shown string, isDir bool, rest []string, flags int, out *[]st
 	}
 }
 
-// rbSourceDir is Kernel#__dir__: the source file's absolute directory, resolved against the working directory as MRI does at load.
+// rbSourceDir is Kernel#__dir__: the source file's absolute directory, resolved against the working directory as MRI
+// does at load. Each source file calls it once, at its first `__dir__`, and keeps the answer (decision S2).
 func rbSourceDir(name string) String {
 	p, err := filepath.Abs(name)
 	if err != nil {

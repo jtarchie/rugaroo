@@ -380,3 +380,13 @@ func (f *fctx) lenientRegexpCtor() string {
 	}
 	return "rbRegexpLenient"
 }
+
+// sourceDirVar is the package variable that answers `__dir__` for the source file name: its directory, resolved at
+// the file's first `__dir__` and kept, one sync.OnceValue per file (decision S2).
+func (c *Compiler) sourceDirVar(name string) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(name)) // a hash.Hash never fails
+	v := fmt.Sprintf("rbDir_%016x", h.Sum64())
+	c.addPkgVar("var " + v + " = sync.OnceValue(func() String { return rbSourceDir(" + strconv.Quote(name) + ") })")
+	return v
+}

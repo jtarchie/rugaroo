@@ -4799,6 +4799,13 @@ module ControlTests
       assert_equal File.dirname(File.expand_path(__FILE__)), __dir__
     end
 
+    # Resolved once per file, as MRI fixes a file's path at load: a later chdir does not move it (decision S2).
+    def test_dir_is_kept_across_chdir
+      here = __dir__
+      Dir.chdir("/") { assert_equal here, __dir__ }
+      assert_equal here, __dir__
+    end
+
     def test_interpolated_symbol
       x = "dyn"
       assert_equal [:dyn_sym, :plain2], [:"#{x}_sym", :"plain#{1 + 1}"]
