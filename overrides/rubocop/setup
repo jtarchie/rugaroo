@@ -11,7 +11,7 @@ G=${GEM_DIR:-$(ruby -e 'print Gem.dir')/gems}
 mkdir -p "$W/gems"
 W=$(cd "$W" && pwd -P) # the real path: MRI's trace records resolved paths, and macOS's $TMPDIR is under the /var symlink
 I=""
-for g in regexp_parser-2.13.1 rubocop-ast-1.50.0 rubocop-1.92.1; do
+for g in parser-3.3.13.0 regexp_parser-2.13.1 rubocop-ast-1.50.0 rubocop-1.92.1; do
   if [ ! -d "$W/gems/$g" ]; then
     [ -d "$G/$g" ] || { echo "setup: $G/$g not installed (gem install ${g%-*} -v ${g##*-})" >&2; return 1 2>/dev/null || exit 1; }
     cp -R "$G/$g" "$W/gems/" && patch -s -p1 -d "$W/gems/$g" < "$here/gem-patches/$g.patch"

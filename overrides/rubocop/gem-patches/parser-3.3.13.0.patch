@@ -1,0 +1,17 @@
+diff -ru a/lib/parser/source/buffer.rb b/lib/parser/source/buffer.rb
+--- a/lib/parser/source/buffer.rb	2026-11-15 21:24:15
++++ b/lib/parser/source/buffer.rb	2026-11-15 21:24:15
+@@ -189,11 +189,8 @@
+ 
+         @source = input.gsub("\r\n".freeze, "\n".freeze).freeze
+ 
+-        if !@source.ascii_only? &&
+-           @source.encoding != Encoding::UTF_32LE &&
+-           @source.encoding != Encoding::BINARY
+-          @slice_source = @source.encode(Encoding::UTF_32LE)
+-        end
++        # rugaroo: no UTF-32LE copy to slice by character (a compiled String carries no encoding, decision 136);
++        # @source[start, length] below reads the same characters.
+       end
+ 
+       def slice(start, length = nil)
