@@ -278,7 +278,7 @@ class String < Object
     if i < 0 {
       return rbOpt[Integer]{}
     }
-    if rbASCII(str) {
+    if rbASCIIFact(str) {
       return rbSome(start + Integer(i))
     }
     return rbSome(start + Integer(utf8.RuneCountInString(str[from:from+i])))

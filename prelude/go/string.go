@@ -267,13 +267,10 @@ func rbASCIIMapBytes(s string, f func(byte) byte) string {
 	return b.String()
 }
 
-// rbASCII reports s is all ASCII, where a character is a byte, as String#length and #[] ask it of the String on
-// every call (decision 399): the cached fact of a long String (decision 464), else a scan eight bytes a step (Go
-// combines the loads). The scan is written out here, not called, so a short String still costs one call.
+// rbASCII reports s is all ASCII, where a character is a byte: eight bytes a step (Go combines the loads), as
+// String#length and #[] ask it of the String on every call (decision 399). It calls nothing, so a short String pays
+// no frame; where a long String is asked again and again, the caller asks rbASCIIFact.
 func rbASCII(s string) bool {
-	if len(s) >= rbStrFactMin {
-		return rbStrFactOf(s, rbFactASCII).ascii
-	}
 	for len(s) >= 8 {
 		w := uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 | uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
 		if w&0x8080808080808080 != 0 {
@@ -287,32 +284,23 @@ func rbASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+// rbASCIIFact is rbASCII from a long String's cached fact (decision 464).
+func rbASCIIFact(s string) bool {
+	if len(s) < rbStrFactMin {
+		return rbASCII(s)
+	}
+	return rbStrFactOf(s, rbFactASCII).ascii
 }
 
 // rbASCIIPrefix reports s[:e] is all ASCII: a short prefix by its own scan, a long one by the whole String's cached
 // fact first (a loop slicing one large String asks again and again), then its scan.
 func rbASCIIPrefix(s string, e int) bool {
 	if e < rbStrFactMin {
-		return rbASCIIScan(s[:e])
+		return rbASCII(s[:e])
 	}
-	return rbASCII(s) || rbASCIIScan(s[:e])
-}
-
-// rbASCIIScan is rbASCII's scan for any length: the fact's own computation, and a prefix of a long String.
-func rbASCIIScan(s string) bool {
-	for len(s) >= 8 {
-		w := uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 | uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
-		if w&0x8080808080808080 != 0 {
-			return false
-		}
-		s = s[8:]
-	}
-	for i := range len(s) {
-		if s[i] >= utf8.RuneSelf {
-			return false
-		}
-	}
-	return true
+	return rbASCIIFact(s) || rbASCII(s[:e])
 }
 
 // rbCapitalizeASCII is capitalize of an ASCII s, a new String in one allocation.
@@ -957,7 +945,7 @@ func rbStrAt(s String, i Integer) (String, bool) {
 // rbStrLenA is a String's length, computed once before a loop that cannot change it, and the bound below which its
 // character i is byte i: its length when it is all ASCII and longer than one byte (a one-byte s[0] must not be s itself), else 0 (decision 399).
 func rbStrLenA(s String) (Integer, uint64) {
-	if rbASCII(string(s)) {
+	if rbASCIIFact(string(s)) {
 		if len(s) > 1 {
 			return Integer(len(s)), uint64(len(s))
 		}

@@ -102,7 +102,7 @@ func rbStrFactOf(s string, level int) *rbStrFact {
 		e = &c
 	} else {
 		e = &rbStrFact{p: p, n: len(s), level: rbFactASCII, chars: len(s)}
-		if e.ascii = rbASCIIScan(s); e.ascii {
+		if e.ascii = rbASCII(s); e.ascii {
 			e.valid, e.level = true, rbFactChars
 		}
 	}
@@ -130,7 +130,7 @@ func rbValidUTF8(s string) bool {
 // rbCharOffset is the byte offset of s's character k (k <= its length), and whether s has that many characters:
 // k itself in an ASCII String.
 func rbCharOffset(s string, k int) (int, bool) {
-	if k <= len(s) && rbASCII(s) {
+	if k <= len(s) && rbASCIIFact(s) {
 		return k, true
 	}
 	return rbRuneOffset(s, k)
@@ -138,7 +138,7 @@ func rbCharOffset(s string, k int) (int, bool) {
 
 // rbCharCount is how many characters s[:b] holds, b a character boundary of the valid UTF-8 s.
 func rbCharCount(s string, b int) int {
-	if rbASCII(s) {
+	if rbASCIIFact(s) {
 		return b
 	}
 	return utf8.RuneCountInString(s[:b])
