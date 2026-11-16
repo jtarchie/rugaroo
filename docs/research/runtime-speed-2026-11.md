@@ -73,6 +73,13 @@ everything computed from it untyped too.
 | sig/gems/parser | the lexer's ivars and five methods | parser gem 7,945M → 2,470M |
 | overrides/rubocop | `parser-3.3.13.0.patch`: no UTF-32LE slice copy | a file with a non-ASCII character lexed to `"\u0000"` tokens before (present on main; the reason `dir20` printed 25 offenses against MRI's 24) |
 
+`benchmarks/`, branch against main, default collector, one run each (instructions retired): 20,640M against 23,107M
+in total (−10.7%); objects −40%, strings −35%, json −27%, collections −22%, pairing_heap −20%, bignum −17%, kramdown
+−14%, format −13%, regexp −10%, liquid −7%; the rows that never collect (fib, hash, math, splay, the thread rows)
+within ±1% on repeated runs. spinel's suite (67 rows that build, `--nil-check=runtime`): bm_gcbench −23%, bm_so_lists
+−23%, bm_ruby_xor +9% and bm_huffman +4% (the String facts' checks), the rest within noise; a binary's first run after
+its build costs 4M instructions more, so measure a second run.
+
 The parser gem alone, 21 files: MRI 2,312M (1,360M of it parsing); compiled 7,945M → 1,751M.
 
 rubocop rebuilt with decisions 463-467 and the parser patch, before `sig/gems/parser` was added (every input prints
