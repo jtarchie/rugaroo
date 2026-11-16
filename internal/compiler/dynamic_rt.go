@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +19,9 @@ func (c *Compiler) emitClassOf() {
 		c.w("func (*rbNilClass) %s() String { return \"NilClass\" }\n\n", m)
 	}
 	c.w("var rbNilClassObj = &rbNilClass{}\n\n")
-	c.w("func rbClassOf(a any) ClassI {\n\tswitch v := a.(type) {\n\tcase nil:\n\t\treturn rbNilClassObj\n")
+	c.w("func rbClassOf(a any) ClassI {\n")
+	c.emitClassOfByID()
+	c.w("\tswitch v := a.(type) {\n\tcase nil:\n\t\treturn rbNilClassObj\n")
 	for _, cls := range c.classList {
 		switch {
 		case cls.universal || cls.IsModule || cls.meta == nil:
@@ -42,6 +45,34 @@ func (c *Compiler) emitClassOf() {
 	}
 	// ponytail: generic struct classes fall to NoMethodError; give them an _Any interface to switch on
 	c.w("\tpanic(rbNoMethod(\"class\", a, false))\n}\n\n")
+}
+
+// emitClassOfByID sends an object of a struct class straight to its root's case by class ID, as the dispatchers'
+// arms do (decision 468). The type switch below tests its interface cases in order, and Go builds an interface table
+// the first time a type meets each one, matched or not: an object of the 90th root paid for 89 tables it does not
+// have, once per class (a sixth of rubocop's start-up, over its 600 cop classes).
+func (c *Compiler) emitClassOfByID() {
+	ids := map[*Class][]string{}
+	var roots []*Class
+	for _, cls := range c.classList {
+		r := cls.root()
+		if cls.IsModule || cls.metaOf != nil || cls.GoType != "" || cls.universal || len(cls.TypeParams) > 0 ||
+			r.universal || r.IsModule || r.meta == nil || r.GoType != "" || len(r.TypeParams) > 0 {
+			continue
+		}
+		if ids[r] == nil {
+			roots = append(roots, r)
+		}
+		ids[r] = append(ids[r], strconv.Itoa(c.classID(cls)))
+	}
+	if len(roots) == 0 {
+		return
+	}
+	c.w("\tif id, ok := a.(interface{ _ClassID() int }); ok {\n\t\tswitch id._ClassID() {\n")
+	for _, r := range roots {
+		c.w("\t\tcase %s:\n\t\t\tif v, ok := a.(%s); ok {\n\t\t\t\treturn v._ClassOf().(ClassI)\n\t\t\t}\n", strings.Join(ids[r], ", "), c.goType(TClass{C: r}))
+	}
+	c.w("\t\tdefault:\n\t\t}\n\t}\n")
 }
 
 // emitDelegateObj emits rbDelegateObj(x): the object a Delegator (SimpleDelegator, a LazyObject's evaluated block, ...)
