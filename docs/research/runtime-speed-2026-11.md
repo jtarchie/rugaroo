@@ -68,6 +68,7 @@ everything computed from it untyped too.
 | 464 | a long String's ASCII flag, validity and length are cached; `index`/`rindex`/`match` with a position no longer convert the String to runes | untyped-library repro 31,261M → 130M |
 | 465 | `unpack("U*")` and other starred integer formats are `Array[Integer]`; `rbMustO` inlines | Ragel-shaped scanner 3,383M → 349M (MRI 4,653M) |
 | 466 | a call that passes real types to a callee still waiting for them has a provisional result | `Parser::Source::Buffer@source` typed |
+| 468 | `rbClassOf` switches on the class ID before its 90 interface cases | rubocop on a 2-line file about 3,100M → 2,400M |
 | 467 | Integer `case` as a Go `switch`; untyped `ary[start, len]` and `ary[start, len] = []` without copying the Array | parser gem 2,470M → 1,751M |
 | sig/gems/parser | the lexer's ivars and five methods | parser gem 7,945M → 2,470M |
 | overrides/rubocop | `parser-3.3.13.0.patch`: no UTF-32LE slice copy | a file with a non-ASCII character lexed to `"\u0000"` tokens before (present on main; the reason `dir20` printed 25 offenses against MRI's 24) |
@@ -89,6 +90,9 @@ With `sig/gems/parser` and the blockless `each_key` fix as well (the same inputs
 `a.rb` 2,966M, `cli.rb` 4,313M, `runner.rb` 6,369M, `dir20` 14,883M (1.3x slower than MRI's 11,462M), the 60 lint
 files 22,297M (1.45x slower). The lexer's signatures are worth 6% of rubocop on `dir20`: lexing is a small share
 once the String fixes are in; the cops and the AST walk are the rest.
+
+With decision 468 (`class` of an untyped value by class ID) the 2-line file is about 2,400M (2.4x faster than MRI),
+`dir20` 13,977M and the 60 lint files 21,204M.
 
 Per-file work fell by about a third (`dir20` minus `a.rb`: 19.8G → 12.9G; MRI 5.6G). The 10x budget is 580M for
 `a.rb` and 1,150M for `dir20`: start-up is 5x over it and untouched, per-file work 22x over it.
