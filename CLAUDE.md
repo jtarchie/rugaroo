@@ -35,7 +35,7 @@ RUGAROO_GO_STACK=1 ./prog                        # a Go runtime panic turned int
 RUGAROO_COST=1 go test -run TestCompileCost -v .    # compiled functions + compile time/memory of 005_word_count, 064_observable, 116_cuba_web (#96); or a comma list of examples
 RUGAROO_CPUPROFILE=gen.prof go run ./cmd/rugaroo gen x.rb > /dev/null  # CPU profile of the compile itself (go tool pprof -top gen.prof)
 go -C scripts/census run . /path/main.go           # what a generated main.go spends its functions on (forwarders, Dyn wrappers, stubs); ./inst walks generic instantiations
-scripts/gen-compare OLD NEW [--spinel DIR] [--only GLOB] [--keep DIR] [-v]   # which examples/testdata/benchmarks generate different Go under two CLI binaries (`go build -o OLD ./cmd/rugaroo` at two commits), newly compile or newly fail; hours for everything, so narrow with --only
+scripts/gen-compare OLD NEW [--spinel DIR] [--only GLOB] [--keep DIR] [-j N] [-v]   # which examples/testdata/benchmarks generate different Go under two CLI binaries (`go build -o OLD ./cmd/rugaroo` at two commits), newly compile or newly fail; ~20 min for everything at 4 jobs, --only narrows
 go test -run '^$' -fuzz FuzzCompile -fuzztime 60s .              # fuzz targets: FuzzCompile (.),
 go test -run '^$' -fuzz FuzzParseType -fuzztime 30s ./internal/rbs # FuzzParseType/FuzzParseMethodType (rbs),
 go test -run '^$' -fuzz FuzzTranslateRegexp ./internal/compiler    # FuzzGoMethodName/FuzzTranslateRegexp (compiler)
