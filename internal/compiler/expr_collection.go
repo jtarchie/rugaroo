@@ -166,6 +166,12 @@ func (f *fctx) genArray(n *parser.ArrayNode, expected Type) expr {
 			elemT = TAny{}
 		}
 	}
+	if elemT == nil && expected == nil && f.lenient() && nilSlotLiteral(n) {
+		// a gem's `[[], [], [], nil]`: a nil beside Array literals is a slot filled later, with another class than its
+		// neighbours' (rubocop's Team#investigate_fragment: `data[3] = corrector`), so the literal is an Array of
+		// untyped, not of the Arrays it starts with (decision 444)
+		elemT, hint = TAny{}, TAny{}
+	}
 	if slices.ContainsFunc(n.Elements, isSplat) {
 		return f.genSplatArray(n, elemT, hint)
 	}
@@ -380,4 +386,21 @@ func arrayLit(elemGo string, elems []string) string {
 		return "&Array[" + elemGo + "]{}"
 	}
 	return "&Array[" + elemGo + "]{s: []" + elemGo + "{" + strings.Join(elems, ", ") + "}}"
+}
+
+// nilSlotLiteral is an Array literal of two or more elements, at least one a literal nil and every other one an
+// Array literal: a record of accumulators with slots to fill.
+func nilSlotLiteral(n *parser.ArrayNode) bool {
+	nils, arrays := 0, 0
+	for _, el := range n.Elements {
+		switch el.(type) {
+		case *parser.NilNode:
+			nils++
+		case *parser.ArrayNode:
+			arrays++
+		default:
+			return false
+		}
+	}
+	return nils > 0 && arrays > 0
 }
