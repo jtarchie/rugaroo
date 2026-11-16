@@ -286,3 +286,26 @@ becomes untyped, type it there with a reviewed signature.
 
 Never share `$TMPDIR/rugaroo-rubocop` between two jobs: a `sig/` directory one job puts there is compiled into
 whatever the other builds.
+
+## Next levers, read off the saved profile (not built; each needs a rubocop build to measure)
+
+From the Linux profile of 20 files taken at 3561a4e9 (`~/.cache/rugaroo-linux/su`, tag `rdiroff`; before the lexer
+signatures, so the lexer's share below is now smaller and the cops' larger). Everything under the Commissioner's
+`public_send` is 40% of the run, and it is flat: the costliest single cop callback is 1.9%
+(`Layout/CommentIndentation#on_new_investigation`), then 1.6%, 1.3%, 0.9%, and a tail of several hundred under
+0.5%. No signature at one boundary will do for the cops what the lexer's did; what they share is the runtime under
+them. Leaf time inside the cops, largest first:
+
+- allocation and clearing (`mallocgc*`, `memclrNoHeapPointers`): about 3 s of 20.8 s;
+- `rbUnbox` 1.1 s and `rbEq[any]` 0.45 s: `rbEq` unboxes both sides through a type switch over every `T?` box the
+  program renders (hundreds in rubocop), then fails up to three interface assertions before `x == y`. A first
+  switch on the unboxed core values (Integer, Symbol, String, nil) ahead of the box switch is the candidate; it must
+  keep a program's own `==` on those classes (closed world: the compiler knows whether one is defined);
+- `itabTable.find` and `getitab` 0.9 s: interface assertions that miss the per-site cache, the same family as
+  decision 468's `rbClassOf`;
+- regexp matching (Go `regexp` backtracker and regexp2) about 2 s, `unicode.SimpleFold`/`lookupCaseRange` 0.6 s
+  under case-insensitive matches;
+- `convTstring` 0.4 s: a String boxed into `any` at an untyped call.
+
+These are general (every program with untyped values pays them: kramdown, liquid) and are runtime changes, so
+each is a before/after on `benchmarks/` and spinel's suite as well as on rubocop.
