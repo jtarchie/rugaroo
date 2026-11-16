@@ -171,6 +171,18 @@ Three stops in three 20-minute builds: the collection's signatures describe othe
 against this code, so each wrong one is a run-time TypeError found one build at a time. Not adopted for rubocop;
 `sig/gems/parser` keeps the two overrides, which are true of the gem with or without the collection.
 
+## What decision 444's `anyUse` costs rubocop itself (2026-11-16)
+
+rubocop transpiled with `RUGAROO_NO_ANY_USE=1`: 56,891 → 56,428 dynamic call sites (−0.8%), `rbAs` assertions 19,699 →
+31,381, gem methods that do not compile 5 → 10. A typed body with an untyped twin for those parameters would
+therefore give rubocop under 1%; it is worth kramdown's 5% and liquid's 9% and no more. The same run's inference
+log: about 1,750 gem parameters are typed from use in the whole program, 420 of them fed an untyped value by some
+call. Every other parameter has no typed caller at all: a cop's `on_send(node)` is reached only through
+`cop.public_send(callback, node)` with `callback` a variable, so nothing types `node`, and with it everything a cop
+computes from it. That, not the cycles of the next section, is most of rubocop's 56,000 dynamic sites: the types
+would have to come from somewhere other than a caller (what MRI's run observed, or signatures), with a fallback for
+what was not observed.
+
 ## A different inference, if the rounds are not enough
 
 Every root found here was a cycle the round-based inference resolved pessimistically: a value is untyped in the first
