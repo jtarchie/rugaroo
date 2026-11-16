@@ -368,7 +368,7 @@ func buildModule(ctx context.Context, code []byte, warnings []string, err error,
 		err = os.WriteFile(filepath.Join(dir, "main.go"), code, 0o600)
 	}
 	if err == nil && opts.profile != "" {
-		err = os.WriteFile(filepath.Join(dir, "profile.go"), profileGo(opts.profile), 0o600)
+		err = os.WriteFile(filepath.Join(dir, "a_profile.go"), profileGo(opts.profile), 0o600)
 	}
 	if err != nil {
 		return dir, fmt.Errorf("temp module: %w", err)
@@ -460,7 +460,8 @@ func pgoPath(p string) (string, error) {
 	return abs, f.Close() //nolint:wrapcheck // a close of a file only opened
 }
 
-// profileGo is the temp module's second file under -profile-out: CPU profiling from init to rbFinish (decision 449).
+// profileGo is the temp module's second file under -profile-out: CPU profiling from the package's first variable
+// initializer to rbFinish (decision 449); named to sort before main.go, since Go initializes variables in file order.
 func profileGo(path string) []byte {
 	return []byte(`package main
 
@@ -469,7 +470,9 @@ import (
 	"runtime/pprof"
 )
 
-func init() {
+// A package variable of the file that sorts first, not an init function: Go initializes every package variable
+// (a program's eager Regexp literals among them) before any init runs, and the profile should hold that work.
+var _ = func() bool {
 	f, err := os.Create(` + strconv.Quote(path) + `)
 	if err != nil {
 		panic(err)
@@ -480,9 +483,9 @@ func init() {
 	rbProfileStop = func() {
 		pprof.StopCPUProfile()
 		_ = f.Close()
-		rbProfileStop = nil
 	}
-}
+	return true
+}()
 `)
 }
 
