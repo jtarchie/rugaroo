@@ -229,7 +229,7 @@ Notes for whoever works on this:
   Integer(65)))` tests tried in order. Each test calls `rbUnbox` twice (203 ms flat in total, the largest single
   function in the profile) and then fails three interface assertions. Decision 467 made this a Go `switch` only
   when the subject is typed, so the fix that fits the rules is typing `_lex_trans_actions` (a `sig/gems/parser`
-  line, or inference of a class-level table read through `self.class.send`). An open question for the user: an
+  line, or inference of a class-level table read through `klass.send`). An open question for the user: an
   untyped subject whose every `when` is an Integer literal could compile to one assertion to Integer in front of a
   `switch`. That is a compile-time rule, but it sits close to the "no untyped fast path" constraint.
 - `Layout/TrailingEmptyLines#on_new_investigation` spends 24 ms per run (1.6% of the whole run) in regexp2
