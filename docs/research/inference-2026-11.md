@@ -22,6 +22,21 @@ solver would re-implement every rule. What needs to change is the lattice and th
 spinel's notes on its own fixpoint (`docs/internals/fixpoint-convergence.md` in its tree) say the same from the other
 side: a pass must be idempotent on its own output, and a round must not discard what it could not re-derive.
 
+## What it can reach (rubocop, measured 2026-11-16)
+
+`RUGAROO_TIMING=1` on the rubocop transpile, the last round, of about 14,000 parameters typed from use:
+
+| | parameters |
+|---|---:|
+| typed | 1,692 |
+| untyped, with a static call that passed something untyped | 8,712 |
+| untyped, with dynamic calls only (`send`, an untyped receiver) | 350 |
+| untyped, with no call in the program | 3,247 |
+
+The 8,712 are what this plan is for: each has a call the compiler resolved, whose argument was untyped when it was
+read. The 350 are out of its reach. The typed count also shows the rounds going back: 1,603, 1,938, 2,050, 2,082,
+2,094, then 1,755 and 1,692 once `settledRounds` and `anyUse` apply.
+
 ## The algorithm
 
 1. **`unknown` is a type**, below every other: `join(unknown, T) = T`. It is `any` in Go, so emission is unchanged;
