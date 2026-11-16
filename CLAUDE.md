@@ -17,6 +17,7 @@ go run ./cmd/rugaroo test testdata/test --seed 1  # the whole suite as one progr
 go run ./cmd/rugaroo test testdata/test/array_test.rb --seed 1 -v   # one test file (any minitest flags); a dir runs them all as one program
 RUGAROO_RUN_SKIPPED=1 go test -run TestRun .    # also run `# skip:` known failures
 RUGAROO_INT_OVERFLOW=wrap go test ./...         # the suite in another --int-overflow lane (wrap or promote); testdata/int-overflow/<mode>-skip.txt leaves out what pins another mode (decision 372)
+RUGAROO_REGEXP_COMPILE=eager go test ./...      # the suite with Regexp literals compiled at start instead of at first use (decision S1)
 RUGAROO_TEST_TIMING=run.tsv RUGAROO_TEST_KEEP=keep/ go test -json ./... > run.json; scripts/test-time run.json run.tsv   # where a run's time goes: per-step log (build cache hit/miss, -race, MRI/rbs cache, lint) and every program's main.go (docs/research/test-time-2026-11.md)
 RUGAROO_NO_MRI_CACHE=1 go test ./...            # rerun MRI and rbs instead of their cached results (`os.UserCacheDir()/rugaroo-test/{mri,rbs}`; key: Ruby description, TZ, checkout dir, sha256 of Gemfile.lock, extra args, sources; decisions 272, 435)
 RUGAROO_NO_PRUNE=1 go run ./cmd/rugaroo build -work ...  # emit the whole prelude (debugging the pruner)

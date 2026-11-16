@@ -51,6 +51,3 @@ func rbUntagGoroutine() { rbTinyGoTags.Delete(rbTinyTask()) }
 
 // rbGoIDStack is 1, gc's id for main: TinyGo's runtime.Stack writes nothing, so main and an untagged goroutine share it. Not 0, which Mutex reads as no owner.
 func rbGoIDStack() int64 { return 1 }
-
-// rbGCStart is a no-op here: TinyGo's collector has no GOGC to tune (decision 463).
-func rbGCStart() {}

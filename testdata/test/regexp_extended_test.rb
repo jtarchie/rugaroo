@@ -261,4 +261,86 @@ module RegexpExtendedTests
       assert_equal("b", "abc".match(/b/, 1).to_s)
     end
   end
+  # A literal compiles its pattern at its first use or when the program starts (--regexp-compile, decision S1): the
+  # same answers either way, and nothing that only reads the source needs the compile.
+  class RegexpCompileTimeTest < Minitest::Test
+    UNUSED = /(?<year>\d{4})-(?<mon>\d\d)/i
+    LOOKBEHIND = /(?<=a)b+/
+    SHARED = /\A(\w+)@(\w+)\z/
+    SCANNED = /[a-z]+/
+
+    def test_source_and_identity_without_a_match
+      assert_equal "(?<year>\\d{4})-(?<mon>\\d\\d)", UNUSED.source
+      assert_equal "/(?<year>\\d{4})-(?<mon>\\d\\d)/i", UNUSED.inspect
+      assert_equal "(?i-mx:(?<year>\\d{4})-(?<mon>\\d\\d))", UNUSED.to_s
+      assert_equal Regexp::IGNORECASE, UNUSED.options
+      assert UNUSED.casefold?
+      assert UNUSED.frozen?
+      assert_equal UNUSED, /(?<year>\d{4})-(?<mon>\d\d)/i
+      assert UNUSED.hash == /(?<year>\d{4})-(?<mon>\d\d)/i.hash # the trace logs operands, and the two hashes differ from MRI's
+      refute_equal UNUSED, /(?<year>\d{4})-(?<mon>\d\d)/
+      assert_equal 1, { UNUSED => 1 }[/(?<year>\d{4})-(?<mon>\d\d)/i]
+    end
+
+    def test_names_then_match
+      re = /(?<a>x)(?<b>y)?/
+      assert_equal ["a", "b"], re.names
+      assert_equal({ "a" => [1], "b" => [2] }, re.named_captures)
+      assert_equal "x", re.match("zx")[:a]
+    end
+
+    def test_first_use_from_several_threads
+      results = Array.new(8) do |i|
+        Thread.new { SHARED.match("user#{i}@host#{i}")&.captures }
+      end.map(&:value)
+      assert_equal (0...8).map { |i| ["user#{i}", "host#{i}"] }, results
+    end
+
+    def test_first_use_of_a_lookbehind_from_several_threads
+      results = Array.new(4) { |i| Thread.new { ("a" + "b" * (i + 1))[LOOKBEHIND] } }.map(&:value)
+      assert_equal ["b", "bb", "bbb", "bbbb"], results
+    end
+
+    def test_first_use_by_a_scanner
+      s = StringScanner.new("abc def")
+      assert_equal "abc", s.scan(SCANNED)
+      assert_nil s.scan(SCANNED)
+      assert_equal " def", s.scan(/ [a-z]+/)
+      assert_equal ["abc", "def"], "abc def".scan(SCANNED)
+    end
+
+    # /i also matches Unicode's multi-character case folds; the compiler expands the literal (rxFold).
+    def test_case_folds_of_a_literal
+      assert "straße".match?(/STRASSE/i)
+      assert "SS".match?(/ß/i)
+      assert "ﬀ".match?(/FF/i)
+      refute "strase".match?(/STRASSE/i)
+      refute "straße".match?(/STRASSE/)
+    end
+
+    def test_literal_in_a_branch_never_taken
+      taken = [1].empty? ? "x".match?(/(?<never>y)/) : "x".match?(/x/)
+      assert taken
+    end
+
+    def test_marshal_of_an_unused_literal
+      copy = Marshal.load(Marshal.dump(/a(?<n>b)+c/m))
+      assert_equal "a(?<n>b)+c", copy.source
+      assert_equal Regexp::MULTILINE, copy.options
+      assert copy.match?("abbc")
+      refute copy.match?("ac")
+    end
+
+    def test_interpolated_pattern_still_raises_where_it_is_built
+      bad = "("
+      raised = begin
+        /a#{bad}/
+        false
+      rescue RegexpError
+        true
+      end
+      assert raised
+    end
+  end
+
 end

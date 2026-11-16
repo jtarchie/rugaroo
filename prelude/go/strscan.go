@@ -13,20 +13,21 @@ import (
 // the text from the old pointer to the match end when str is set (else a
 // non-nil marker); nil on no match.
 func (s *StringScanner) do(re *Regexp, anchored, advance, str bool) *String {
-	rx := re.re
+	rx := re.rx()
 	if anchored {
 		// each Regexp's \A-anchored twin, so a failed scan costs one attempt at the pointer instead of a search of the rest
 		rx = nil
-		if re.anch != nil {
-			rx = re.anch.Load()
+		anch := re.anchSlot()
+		if anch != nil {
+			rx = anch.Load()
 		}
 		if rx == nil {
-			twin, err := rxCompile(`\A(?:` + re.re.String() + `)`)
+			twin, err := rxCompile(`\A(?:` + re.rx().String() + `)`)
 			if err != nil {
 				panic(NewRegexpError(Ref(String(err.Error()))))
 			}
-			if re.anch != nil {
-				re.anch.CompareAndSwap(nil, twin)
+			if anch != nil {
+				anch.CompareAndSwap(nil, twin)
 			}
 			rx = twin
 		}

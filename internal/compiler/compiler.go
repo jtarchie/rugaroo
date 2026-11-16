@@ -1021,6 +1021,7 @@ func compileEnv(opts *options) envConfig {
 	env := opts.env
 	env.IntOverflow = checkOverflowMode("--int-overflow", env.IntOverflow)
 	env.NilCheck = checkNilMode("--nil-check", env.NilCheck)
+	env.RegexpCompile = checkRegexpMode("--regexp-compile", env.RegexpCompile)
 	env.CGO = env.CGO && !opts.purego
 	if !slices.Contains([]string{"", "gc", "tinygo"}, env.Compiler) {
 		panic(compileError{msg: fmt.Sprintf("-compiler: %q is not gc or tinygo", env.Compiler)})

@@ -56,18 +56,20 @@ type rbGCSentinel struct{ _ [32]byte }
 // about 32 MiB as every later one will.
 const rbGCFirst = 800
 
-// rbGCStart puts the first collection off to the ballast's floor and arranges for the ballast itself, with GOGC back
-// at 100, once that collection has run. A program that never allocates that much never collects and pays nothing:
-// allocating 16 MiB up front starts a collection of its own (2M instructions on a program that runs 20M), and a
-// raised GOGC kept for good would scale a large heap's goal (decision 151). A GOGC or GOMEMLIMIT in the environment
-// wins.
-func rbGCStart() {
+// The first package variable to do any work puts the first collection off to the ballast's floor and arranges for
+// the ballast itself, with GOGC back at 100, once that collection has run. It is an initializer, not a call in
+// main, because Go runs the program's own package initializers (its eager Regexp literals, the tables of its
+// constants) before main, and those collected at 4 MB (decision 463). A program that never allocates that much
+// never collects and pays nothing: allocating 16 MiB up front costs every program 0.3M instructions, and a raised
+// GOGC kept for good would scale a large heap's goal (decision 151). A GOGC or GOMEMLIMIT in the environment wins.
+var _ = func() bool {
 	if os.Getenv("GOGC") != "" || os.Getenv("GOMEMLIMIT") != "" {
-		return
+		return false
 	}
 	debug.SetGCPercent(rbGCFirst)
 	runtime.SetFinalizer(new(rbGCSentinel), func(*rbGCSentinel) {
 		rbGCBallast = make([]byte, 16<<20)
 		debug.SetGCPercent(100)
 	})
-}
+	return true
+}()

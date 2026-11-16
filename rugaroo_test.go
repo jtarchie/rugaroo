@@ -1810,6 +1810,43 @@ func TestIntOverflowValuePanic(t *testing.T) {
 	}
 }
 
+// TestRegexpCompileMode: --regexp-compile picks where a literal's pattern compiles, a file's `# regexp_compile:` line wins
+// for its own literals, and an eager program still runs (the suite's default lane is lazy; decision S1).
+func TestRegexpCompileMode(t *testing.T) { //nolint:paralleltest // sets RUGAROO_REGEXP_COMPILE
+	requireToolchain(t)
+	const body = "R = /(a+)b/\nputs R.source, \"xaab\"[R, 1], \"a1\".sub(/\\d/, \"2\")\n"
+	for _, tc := range []struct{ env, src, has, hasNot string }{
+		{"", body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"lazy", body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"eager", body, "= rbRegexpStatic(", "= rbRegexpLazy("},
+		{"eager", "# regexp_compile: lazy\n" + body, "= rbRegexpLazy(", "= rbRegexpStatic("},
+		{"", "# regexp_compile: eager\n" + body, "= rbRegexpStatic(", "= rbRegexpLazy("},
+	} {
+		t.Setenv("RUGAROO_REGEXP_COMPILE", tc.env)
+		out, _, err := Compile(t.Context(), "main.rb", []byte(tc.src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(out, []byte(tc.has)) || bytes.Contains(out, []byte(tc.hasNot)) {
+			t.Errorf("RUGAROO_REGEXP_COMPILE=%q %q: want %q and no %q in the generated Go", tc.env, tc.src, tc.has, tc.hasNot)
+		}
+	}
+	t.Setenv("RUGAROO_REGEXP_COMPILE", "bogus")
+	_, _, err := Compile(t.Context(), "main.rb", []byte(body))
+	if err == nil || !strings.Contains(err.Error(), "is not lazy or eager") {
+		t.Errorf("a bad mode compiled: %v", err)
+	}
+	t.Setenv("RUGAROO_REGEXP_COMPILE", "")
+	_, _, err = Compile(t.Context(), "main.rb", []byte("# regexp_compile: soon\n"+body))
+	if err == nil || !strings.Contains(err.Error(), "is not lazy or eager") {
+		t.Errorf("a bad mode line compiled: %v", err)
+	}
+	gen := transpile(t, "eager.rb", []byte("# regexp_compile: eager\n"+body))
+	if got := binOutput(t, gen, progIO{}, goBuild(t, gen, ""), nil); got.Stdout != "(a+)b\naa\na2\n" || got.Code != 0 {
+		t.Errorf("eager program: exit %d, stdout %q, stderr %q", got.Code, got.Stdout, got.Stderr)
+	}
+}
+
 // TestStructWriterFrozenConst: the writer's frozen check folds away only when nothing can freeze (decision 400).
 func TestStructWriterFrozenConst(t *testing.T) {
 	t.Parallel()

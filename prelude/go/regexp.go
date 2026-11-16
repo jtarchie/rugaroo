@@ -10,13 +10,91 @@ import (
 	"regexp/syntax"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"unicode/utf8"
 )
 
 // rbRegexpOf wraps a compiled pattern; anch is the slot StringScanner fills with the \A-anchored twin, so the twin lives and dies with the Regexp.
 func rbRegexpOf(re *rxRegexp, src, opts string) *Regexp {
-	return &Regexp{re: re, src: src, opts: opts, anch: new(atomic.Pointer[rxRegexp]), u8: rbRegexpUTF8(src, opts)}
+	r := &Regexp{src: src, opts: opts, anch: new(atomic.Pointer[rxRegexp]), u8: rbRegexpUTF8(src, opts)}
+	r.re.Store(re)
+	return r
+}
+
+// rbRxLazy is the pattern of a Regexp that compiles at its first use (--regexp-compile=lazy, decision S1): a static
+// literal's translated pattern, or a gem's interpolated source (lenient). The compile runs once, behind this
+// Regexp's own sync.Once, and stores the result in the Regexp, so every use, lazy or not, is one atomic load and a
+// nil test. source, inspect, ==, hash and options read src and opts and never compile.
+type rbRxLazy struct {
+	anch  *atomic.Pointer[rxRegexp]
+	once  sync.Once
+	pat   string // static: the translated pattern; lenient: the flag prefix
+	src   string
+	opts  string
+	build func(*rbRxLazy) (*rbRxCompiled, error) // rbRxLenient, or nil for a static literal: a field, so a program without gem regexps does not link the translator
+}
+
+// rbRxLenient translates and compiles a gem's interpolated source, as rbRegexpLenient does where it is built.
+func rbRxLenient(l *rbRxLazy) (*rbRxCompiled, error) {
+	pat, err := rxPrepare(l.src, strings.Contains(l.opts, "x"))
+	if err != nil {
+		return nil, err
+	}
+	return rbRxCompile(rxFold(l.pat+pat), l.src, true)
+}
+
+// rx is r's compiled pattern, compiled now when r is lazy and this is its first use.
+func (r *Regexp) rx() *rxRegexp {
+	if re := r.re.Load(); re != nil {
+		return re
+	}
+	return r.rxFirst()
+}
+
+// rxFirst is a lazy Regexp's first use; out of line, so that rx inlines. A pattern the engines reject becomes a
+// Regexp that raises RegexpError at each use, as rbRegexpLenient's does: a static literal's cannot be one (the
+// compiler compiled this very pattern), a gem's may.
+//
+//go:noinline
+func (r *Regexp) rxFirst() *rxRegexp {
+	l := r.lz
+	l.once.Do(func() {
+		var c *rbRxCompiled
+		var err error
+		if l.build != nil {
+			c, err = l.build(l)
+		} else {
+			c, err = rbRxCompile(l.pat, l.src, false) // a static literal's pattern, translated and folded by the compiler
+		}
+		if err != nil {
+			c = &rbRxCompiled{re: &rxRegexp{unsupported: "regexp /" + l.src + "/ is not supported by rugaroo: " + err.Error()}, anch: new(atomic.Pointer[rxRegexp])}
+		}
+		l.anch = c.anch
+		r.re.Store(c.re)
+	})
+	return r.re.Load()
+}
+
+// anchSlot is the slot of r's \A-anchored twin (StringScanner): the compiled pattern's, so a lazy Regexp has it once compiled.
+func (r *Regexp) anchSlot() *atomic.Pointer[rxRegexp] {
+	if l := r.lz; l != nil {
+		r.rx()
+		return l.anch
+	}
+	return r.anch
+}
+
+// rbRegexpLazy is a static literal under --regexp-compile=lazy: pattern is translated and folded (rxFold) by the
+// compiler, which also compiled it once to validate it, and compiles here at the literal's first use (decision S1).
+func rbRegexpLazy(pattern, src, opts string) *Regexp {
+	return &Regexp{lz: &rbRxLazy{pat: pattern, src: src, opts: opts}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
+}
+
+// rbRegexpLenientLazy is rbRegexpLenient under --regexp-compile=lazy: the gem's regexp is built now and translated and
+// compiled at its first use, where one the engines reject raises, as rbRegexpLenient's does (decisions 176, S1).
+func rbRegexpLenientLazy(prefix, src, opts string) *Regexp {
+	return &Regexp{lz: &rbRxLazy{pat: prefix, src: src, opts: opts, build: rbRxLenient}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
 }
 
 // rbRxCompiled is a compiled pattern and its \A twin's slot, shared by every Regexp built from the same pattern.
@@ -32,16 +110,15 @@ type rbRxCompiled struct {
 // Regexp. Direct-mapped: bounded, no lock, and a collision only costs a recompile (decision 332).
 var rbRxCache [256]atomic.Pointer[rbRxCompiled]
 
-// rbRegexpCompiled is rxCompile through rbRxCache, as a Regexp; lazy compiles what only RE2 rejects at its first use
-// (rxCompileLazy).
-func rbRegexpCompiled(pat, src, opts string, lazy bool) (*Regexp, error) {
+// rbRxCompile is rxCompile through rbRxCache; lazy compiles what only RE2 rejects at its first use (rxCompileLazy).
+func rbRxCompile(pat, src string, lazy bool) (*rbRxCompiled, error) {
 	h := uint32(2166136261)
 	for i := range len(pat) {
 		h = (h ^ uint32(pat[i])) * 16777619
 	}
 	slot := &rbRxCache[h%uint32(len(rbRxCache))]
 	if c := slot.Load(); c != nil && c.pat == pat && (lazy || !c.lazy) {
-		return &Regexp{re: c.re, src: src, opts: opts, anch: c.anch, u8: rbRegexpUTF8(src, opts)}, nil
+		return c, nil
 	}
 	compile := rxCompile
 	if lazy {
@@ -53,7 +130,28 @@ func rbRegexpCompiled(pat, src, opts string, lazy bool) (*Regexp, error) {
 	}
 	c := &rbRxCompiled{pat, re, new(atomic.Pointer[rxRegexp]), lazy}
 	slot.Store(c)
-	return &Regexp{re: re, src: src, opts: opts, anch: c.anch, u8: rbRegexpUTF8(src, opts)}, nil
+	return c, nil
+}
+
+// rbRegexpCompiled is rbRxCompile's pattern as a Regexp.
+func rbRegexpCompiled(pat, src, opts string, lazy bool) (*Regexp, error) {
+	c, err := rbRxCompile(pat, src, lazy)
+	if err != nil {
+		return nil, err
+	}
+	r := &Regexp{src: src, opts: opts, anch: c.anch, u8: rbRegexpUTF8(src, opts)}
+	r.re.Store(c.re)
+	return r, nil
+}
+
+// rbRegexpStatic is a static literal under --regexp-compile=eager: pattern is translated and folded (rxFold) by the
+// compiler, so only the compile is left for the program's start.
+func rbRegexpStatic(pattern, src, opts string) *Regexp {
+	r, err := rbRegexpCompiled(pattern, src, opts, false)
+	if err != nil {
+		panic(NewRegexpError(Ref(String(rbRegexpErr(err, src)))))
+	}
+	return r
 }
 
 // rbRegexpNew compiles a translated pattern; dynamic (interpolated) ones
@@ -215,13 +313,13 @@ func rbMatch(r *Regexp, s string) *MatchData {
 // Regexp raises ArgumentError on it, as MRI's does on a UTF-8 String with a bad byte.
 func rbFindLoc(r *Regexp, s string) []int {
 	if rbValidUTF8(s) {
-		return r.re.FindStringSubmatchIndex(s)
+		return r.rx().FindStringSubmatchIndex(s)
 	}
 	if !strings.ContainsRune(r.opts, 'n') { // MRI's UTF-8 Regexp on a broken UTF-8 String
 		panic(NewArgumentError(Ref(String("invalid byte sequence in UTF-8"))))
 	}
 	t, back := rbLatin1(s)
-	loc := r.re.FindStringSubmatchIndex(t)
+	loc := r.rx().FindStringSubmatchIndex(t)
 	rbLatin1Back(loc, back)
 	return loc
 }
@@ -230,10 +328,10 @@ func rbFindLoc(r *Regexp, s string) []int {
 // characters of their value even where they form valid UTF-8 ("é".b is two).
 func rbFindLocBin(r *Regexp, s string) []int {
 	if !rbHighBytes(r, s) {
-		return r.re.FindStringSubmatchIndex(s)
+		return r.rx().FindStringSubmatchIndex(s)
 	}
 	t, back := rbLatin1(s)
-	loc := r.re.FindStringSubmatchIndex(t)
+	loc := r.rx().FindStringSubmatchIndex(t)
 	rbLatin1Back(loc, back)
 	return loc
 }
@@ -241,10 +339,10 @@ func rbFindLocBin(r *Regexp, s string) []int {
 // rbFindAllBin is rbFindAll for a String the compiler knows is binary (decision 352), as rbFindLocBin is rbFindLoc.
 func rbFindAllBin(r *Regexp, s string, n int) [][]int {
 	if !rbHighBytes(r, s) {
-		return r.re.FindAllStringSubmatchIndex(s, n)
+		return r.rx().FindAllStringSubmatchIndex(s, n)
 	}
 	t, back := rbLatin1(s)
-	locs := r.re.FindAllStringSubmatchIndex(t, n)
+	locs := r.rx().FindAllStringSubmatchIndex(t, n)
 	for _, loc := range locs {
 		rbLatin1Back(loc, back)
 	}
@@ -399,10 +497,10 @@ func rbLatin1Back(loc, back []int) {
 // keeps rxRegexp's FindAll.
 func rbFindAll(r *Regexp, s string, n int) [][]int {
 	if rbValidUTF8(s) || !strings.ContainsRune(r.opts, 'n') {
-		return r.re.FindAllStringSubmatchIndex(s, n)
+		return r.rx().FindAllStringSubmatchIndex(s, n)
 	}
 	t, back := rbLatin1(s)
-	locs := r.re.FindAllStringSubmatchIndex(t, n)
+	locs := r.rx().FindAllStringSubmatchIndex(t, n)
 	for _, loc := range locs {
 		rbLatin1Back(loc, back)
 	}
@@ -412,7 +510,7 @@ func rbFindAll(r *Regexp, s string, n int) [][]int {
 // rbMatches is whether r matches s: Go's MatchString, or rbFindLoc's byte reading of a binary String.
 func rbMatches(r *Regexp, s string) bool {
 	if rbValidUTF8(s) {
-		return r.re.MatchString(s)
+		return r.rx().MatchString(s)
 	}
 	return rbFindLoc(r, s) != nil
 }
@@ -426,7 +524,7 @@ func rbMatchAt(r *Regexp, s string, loc []int) *MatchData {
 			groups[i] = &g
 		}
 	}
-	return &MatchData{groups: groups, names: r.re.SubexpNames(), pre: s[:loc[0]], post: s[loc[1]:], subj: s, loc: loc}
+	return &MatchData{groups: groups, names: r.rx().SubexpNames(), pre: s[:loc[0]], post: s[loc[1]:], subj: s, loc: loc}
 }
 
 // rbSubject is the text a Regexp matches: a String, or a Symbol's name.
@@ -535,12 +633,12 @@ func rbReBlockLM(lm ***MatchData, re *Regexp, blk func(String) any) func(s strin
 
 // rbReSub replaces the first n matches of re in s (all when n < 0); rxRegexp's FindAll applies the Onigmo corrections.
 func rbReSub(re *Regexp, s string, n int, repl func(s string, loc []int, names []string) string) string {
-	return rbReplaceLocs(s, rbFindAll(re, s, n), re.re.SubexpNames(), repl)
+	return rbReplaceLocs(s, rbFindAll(re, s, n), re.rx().SubexpNames(), repl)
 }
 
 // rbReSubBin is rbReSub on a binary String (decision 352).
 func rbReSubBin(re *Regexp, s string, n int, repl func(s string, loc []int, names []string) string) string {
-	return rbReplaceLocs(s, rbFindAllBin(re, s, n), re.re.SubexpNames(), repl)
+	return rbReplaceLocs(s, rbFindAllBin(re, s, n), re.rx().SubexpNames(), repl)
 }
 
 // rbReplaceLocs is s with each match at locs replaced by repl's text.
@@ -756,7 +854,7 @@ func rbRindexLoc(r *Regexp, s string) []int {
 // rbFindFrom is r's search of a valid UTF-8 s for the first match starting at or after a byte offset, with the whole
 // of s as context (\A, ^ and lookbehind see what precedes it): rbRindexLoc and Regexp#match(s, pos).
 func rbFindFrom(r *Regexp, s string) func(from int) []int {
-	rx := r.re
+	rx := r.rx()
 	rx.check()
 	if rx.alt != nil {
 		return func(from int) []int {

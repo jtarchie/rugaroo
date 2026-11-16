@@ -49,7 +49,7 @@ func (f *fctx) genKernelIntrinsic(n *parser.CallNode, expected Type) (expr, bool
 		if n.Arguments != nil || n.Block != nil {
 			return expr{}, false
 		}
-		return expr{code: "rbSourceDir(" + strconv.Quote(f.f.Name) + ")", typ: f.cls("String")}, true
+		return expr{code: f.c.sourceDirVar(f.f.Name) + "()", typ: f.cls("String")}, true
 	case "lambda", "proc":
 		if bn, ok := n.Block.(*parser.BlockNode); ok && n.Arguments == nil {
 			return f.genLambda(n, bn, bn.Parameters, expected), true

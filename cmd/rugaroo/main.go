@@ -21,10 +21,10 @@ import (
 	"github.com/jtarchie/rugaroo"
 )
 
-const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [traced args...]
-       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [args...]
-       rugaroo gen [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] main.rb [traced args...] > main.go
-       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
+const usage = `usage: rugaroo build [-o prog] [-I dir]... [-gem dir]... [-main file | -trace [-trace-also args]... [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-regexp-compile lazy|eager] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [traced args...]
+       rugaroo run [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-regexp-compile lazy|eager] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] main.rb [args...]
+       rugaroo gen [-I dir]... [-gem dir]... [-main file | -trace [-rubyopt opt]...] [-int-overflow raise|wrap|promote] [-regexp-compile lazy|eager] [-cgo] [-compiler gc|tinygo] main.rb [traced args...] > main.go
+       rugaroo test [-I dir]... [-int-overflow raise|wrap|promote] [-regexp-compile lazy|eager] [-cgo] [-compiler gc|tinygo] [-race] [-gcflags flags] [-debug] [-pgo profile] [-profile-out file] [-work] [paths...] [minitest flags: -v, -s seed, -n pattern, -e pattern, -S kinds, --show-skips]
        rugaroo web [-addr 127.0.0.1:8080]
        rugaroo web -static dir -assets https://host/path/`
 
@@ -79,6 +79,9 @@ func main() {
 	})
 	fs.Func("int-overflow", "what an Integer result past 64 bits does: `raise` (RangeError, the default), wrap or promote (to a Bignum; decision 372)", func(m string) error {
 		return os.Setenv("RUGAROO_INT_OVERFLOW", m) // read per compile, as the other RUGAROO_* settings
+	})
+	fs.Func("regexp-compile", "when a Regexp literal compiles its pattern: `lazy`, at its first use (the default), or eager, when the program starts (decision S1)", func(m string) error {
+		return os.Setenv("RUGAROO_REGEXP_COMPILE", m)
 	})
 	fs.Func("nil-check", "a possibly-nil value where a value is expected: a `compile` error (the default), or a runtime check that raises on nil as MRI does (decision 393)", func(m string) error {
 		return os.Setenv("RUGAROO_NIL_CHECK", m)
@@ -365,7 +368,7 @@ func buildModule(ctx context.Context, code []byte, warnings []string, err error,
 		err = os.WriteFile(filepath.Join(dir, "main.go"), code, 0o600)
 	}
 	if err == nil && opts.profile != "" {
-		err = os.WriteFile(filepath.Join(dir, "profile.go"), profileGo(opts.profile), 0o600)
+		err = os.WriteFile(filepath.Join(dir, "a_profile.go"), profileGo(opts.profile), 0o600)
 	}
 	if err != nil {
 		return dir, fmt.Errorf("temp module: %w", err)
@@ -457,7 +460,8 @@ func pgoPath(p string) (string, error) {
 	return abs, f.Close() //nolint:wrapcheck // a close of a file only opened
 }
 
-// profileGo is the temp module's second file under -profile-out: CPU profiling from init to rbFinish (decision 449).
+// profileGo is the temp module's second file under -profile-out: CPU profiling from the package's first variable
+// initializer to rbFinish (decision 449); named to sort before main.go, since Go initializes variables in file order.
 func profileGo(path string) []byte {
 	return []byte(`package main
 
@@ -466,7 +470,9 @@ import (
 	"runtime/pprof"
 )
 
-func init() {
+// A package variable of the file that sorts first, not an init function: Go initializes every package variable
+// (a program's eager Regexp literals among them) before any init runs, and the profile should hold that work.
+var _ = func() bool {
 	f, err := os.Create(` + strconv.Quote(path) + `)
 	if err != nil {
 		panic(err)
@@ -477,9 +483,9 @@ func init() {
 	rbProfileStop = func() {
 		pprof.StopCPUProfile()
 		_ = f.Close()
-		rbProfileStop = nil
 	}
-}
+	return true
+}()
 `)
 }
 

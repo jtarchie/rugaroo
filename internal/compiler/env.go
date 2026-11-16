@@ -27,6 +27,7 @@ type envConfig struct {
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
 	UntypedWhy    bool   // RUGAROO_UNTYPED_WHY: each dynamic-call warning names where its untyped receiver came from
 	IntOverflow   string // RUGAROO_INT_OVERFLOW: raise (default), wrap or promote; the CLI's --int-overflow sets it (decision 372)
+	RegexpCompile string // RUGAROO_REGEXP_COMPILE: lazy (default) or eager; the CLI's --regexp-compile sets it (decision S1)
 	NilCheck      string // RUGAROO_NIL_CHECK: compile (default) or runtime; the CLI's --nil-check sets it (decision 393)
 	CGO           bool   // RUGAROO_CGO: Fiddle's backend is cgo, not purego; the CLI's --cgo sets it (decision 426)
 	Compiler      string // RUGAROO_COMPILER: the Go compiler the output is for, gc (default) or tinygo; the CLI's -compiler sets it (decision 443)
@@ -59,6 +60,7 @@ func loadEnv() envConfig {
 		GopoisonDump:  os.Getenv("RUGAROO_GOPOISON_DUMP"),
 		UntypedWhy:    set("RUGAROO_UNTYPED_WHY"),
 		IntOverflow:   os.Getenv("RUGAROO_INT_OVERFLOW"),
+		RegexpCompile: os.Getenv("RUGAROO_REGEXP_COMPILE"),
 		NilCheck:      os.Getenv("RUGAROO_NIL_CHECK"),
 		CGO:           set("RUGAROO_CGO"),
 		Compiler:      os.Getenv("RUGAROO_COMPILER"),

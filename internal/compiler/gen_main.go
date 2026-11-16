@@ -12,7 +12,7 @@ import (
 func (c *Compiler) emitMain() {
 	c.w("var rb_main = &Object{}\n\n")
 	c.labels["main"] = "<main>"
-	c.w("func main() {\n\trbGCStart()\n\trbTrapSignals()\n\tdefer rbFlush()\n\tdefer rbTopRecover()\n")
+	c.w("func main() {\n\trbTrapSignals()\n\tdefer rbFlush()\n\tdefer rbTopRecover()\n")
 	prelude, all := c.mainBodies()
 	gen := func(file *File, stmts []parser.Node, indent int) string {
 		f := c.newFctx(file, nil, nil)
