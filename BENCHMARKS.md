@@ -1,8 +1,7 @@
 # Benchmarks
 
 Wall-clock times for the workloads in [`benchmarks/`](benchmarks/), measured
-on one Apple-silicon machine (MRI 4.0.9, Crystal 1.22.1, Go 1.27.3) on 2026-11-13, at commit 0f0a8bf3 (decision 457); the spinel
-column (`baea3e28`, MRI 4.0.7) is carried from the 2026-10-26 run, there being no spinel build on this machine now. Each cell is the median of 9 runs.
+on one Apple-silicon machine (MRI 4.0.9, Crystal 1.22.1, Go 1.27.4, spinel `ae83631a`) on 2026-11-16, on branch `perf/rubocop-10x` (decisions 463-468). Each cell is the median of 9 runs.
 To reproduce:
 
 ```sh
@@ -12,27 +11,33 @@ COLS=ruby,rugaroo scripts/benchmark fib array  # some columns, some workloads
 
 | workload | MRI | MRI+YJIT | rugaroo | spinel | Crystal | Go |
 |---|---:|---:|---:|---:|---:|---:|
-| `fib(32)` | 0.26s | 0.092s | 0.015s | 0.015s | 0.017s | 0.015s |
-| `Hash` counting, 500k | 0.11s | 0.095s | 0.011s | 0.008s | 0.013s | 0.009s |
-| `Array#map`/`select`/`sum`, 1M | 0.15s | 0.14s | 0.018s | 0.011s | 0.012s | 0.011s |
-| string build/split, 100k | 0.11s | 0.11s | 0.022s | 0.018s | 0.024s | 0.017s |
-| `Math.sin`/`cos`, 200k | 0.085s | 0.071s | 0.008s | 0.007s | 0.008s | 0.007s |
-| classes, polymorphic calls, Comparable | 0.26s | 0.17s | 0.029s | - | 0.014s | 0.012s |
-| binary trees (allocation), depth 10 | 0.090s | 0.082s | 0.010s | 0.009s | 0.012s | 0.008s |
-| splay tree | 0.21s | 0.12s | 0.014s | 0.020s | 0.018s | 0.012s |
-| blocks, procs, lambdas, enumerator chains | 0.36s | 0.33s | 0.035s | 0.15s | 0.035s | 0.011s |
-| raise/rescue/retry, catch/throw | 0.28s | 0.25s | 0.11s | 0.077s | 2.50s | 0.018s |
-| regexp match/gsub/scan/tr, StringScanner | 0.77s | 0.74s | 0.20s | 0.83s | 0.21s | 0.28s |
-| sort_by/group_by/tally, Set, Struct | 0.57s | 0.55s | 0.12s | 1.10s | 0.051s | 0.070s |
-| format, StringIO, case mapping | 0.50s | 0.46s | 0.13s | 0.20s | 0.14s | 0.10s |
-| JSON generate + parse | 0.14s | 0.16s | 0.12s | 0.23s | 0.13s | 0.25s |
-| Bignum: Fibonacci, 2000!, 1,200 digits of pi | 0.21s | 0.21s | 0.066s | 0.12s | 0.075s | 0.040s |
-| pairing_heap gem: Dijkstra + heapsort | 0.68s | 0.35s | 0.097s | - | 0.038s | 0.036s |
+| `fib(32)` | 0.26s | 0.092s | 0.016s | 0.015s | 0.017s | 0.015s |
+| `Hash` counting, 500k | 0.11s | 0.095s | 0.012s | 0.007s | 0.012s | 0.009s |
+| `Array#map`/`select`/`sum`, 1M | 0.15s | 0.13s | 0.017s | 0.010s | 0.012s | 0.011s |
+| string build/split, 100k | 0.11s | 0.11s | 0.020s | 0.019s | 0.025s | 0.017s |
+| `Math.sin`/`cos`, 200k | 0.086s | 0.072s | 0.009s | 0.006s | 0.008s | 0.008s |
+| classes, polymorphic calls, Comparable | 0.26s | 0.17s | 0.023s | - | 0.014s | 0.012s |
+| binary trees (allocation), depth 10 | 0.082s | 0.069s | 0.010s | 0.008s | 0.010s | 0.007s |
+| splay tree | 0.21s | 0.12s | 0.014s | 0.019s | 0.018s | 0.012s |
+| blocks, procs, lambdas, enumerator chains | 0.36s | 0.33s | 0.036s | 0.13s | 0.037s | 0.012s |
+| raise/rescue/retry, catch/throw | 0.28s | 0.25s | 0.11s | 0.076s | 2.51s | 0.018s |
+| regexp match/gsub/scan/tr, StringScanner | 0.75s | 0.73s | 0.20s | 0.81s | 0.20s | 0.28s |
+| sort_by/group_by/tally, Set, Struct | 0.55s | 0.53s | 0.11s | 0.33s | 0.053s | 0.067s |
+| format, StringIO, case mapping | 0.50s | 0.46s | 0.13s | 0.21s | 0.14s | 0.10s |
+| JSON generate + parse | 0.13s | 0.15s | 0.11s | 0.088s | 0.13s | 0.25s |
+| Bignum: Fibonacci, 2000!, 1,200 digits of pi | 0.21s | 0.21s | 0.058s | 0.12s | 0.077s | 0.038s |
+| pairing_heap gem: Dijkstra + heapsort | 0.67s | 0.36s | 0.091s | - | 0.039s | 0.035s |
 | liquid gem: a template rendered 400 times | 0.38s | 0.30s | 0.17s | - | - | - |
-| kramdown gem: a 20-section document to HTML, 30 times | 0.46s | 0.57s | 0.42s | - | - | - |
-| total (rows each one ran) | 5.62s | 4.80s | 1.60s | 2.80s | 3.30s | 0.90s |
-| vs MRI on those rows | 1.0x | 1.2x | 3.5x | 1.4x | 1.5x | 5.3x |
+| kramdown gem: a 20-section document to HTML, 30 times | 0.46s | 0.59s | 0.40s | - | - | - |
+| total (rows each one ran) | 5.56s | 4.77s | 1.54s | 1.85s | 3.30s | 0.89s |
+| vs MRI on those rows | 1.0x | 1.2x | 3.6x | 2.0x | 1.4x | 5.3x |
 
+Re-measured on 2026-11-16 with decisions 463-468 (a heap floor of about 32 MiB, cached facts of long Strings, typed
+`unpack`, `class` of an untyped value by class ID) and a spinel built on this machine: against the 2026-11-13 table
+rugaroo's objects row is 0.029s → 0.023s, collections 0.12s → 0.11s, json 0.12s → 0.11s, bignum 0.066s → 0.058s,
+pairing_heap 0.097s → 0.091s, kramdown 0.42s → 0.40s. Wall time on rows this short is mostly start-up; in instructions
+retired the same change is −10.7% over all 24 workloads (objects −40%, strings −35%, json −27%, collections −22%;
+`docs/research/runtime-speed-2026-11.md`).
 Re-measured on 2026-10-29 after decisions 403-407 and a rubocop pass over the Ruby sources, with no performance work aimed at
 these rows: rugaroo's total is 1.55s against 1.53s and MRI's 5.58s against 5.50s, so the 3.6x holds and the rows are within noise.
 Re-measured on 2026-11-13 at commit 0f0a8bf3 (decisions 408-457): rugaroo 1.60s against 1.55s, MRI 5.62s, 3.5x. The Bignum row's
@@ -56,9 +61,7 @@ against 0.46s before.
   top of each file: for example, Go uses error values instead of exceptions and a
   value struct for `objects`' vectors. kramdown and liquid have no port, since a
   port would be a different markdown or template library.
-- Each "vs MRI" compares a column only on the rows it ran. That is why spinel's
-  ratio is low: its `collections` row (2x slower than MRI) weighs on a smaller
-  total.
+- Each "vs MRI" compares a column only on the rows it ran.
 
 ## Reading the numbers
 
