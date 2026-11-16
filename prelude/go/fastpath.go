@@ -84,6 +84,9 @@ const rbStrFactMin = 256
 // under rbStrSetbyte, which clears its slot.
 var rbStrFacts [16]atomic.Pointer[rbStrFact]
 
+// rbStrFactsUsed is set once any fact has been cached: until then rbStrSetbyte has nothing to clear and tests only this.
+var rbStrFactsUsed atomic.Bool
+
 func rbStrFactSlot(n int) *atomic.Pointer[rbStrFact] { return &rbStrFacts[(n^n>>4)&15] }
 
 // rbStrFactOf is s's facts up to level; len(s) >= rbStrFactMin. A non-ASCII String is validated and counted only
@@ -116,6 +119,9 @@ func rbStrFactOf(s string, level int) *rbStrFact {
 		e.level = level
 	}
 	slot.Store(e)
+	if !rbStrFactsUsed.Load() {
+		rbStrFactsUsed.Store(true)
+	}
 	return e
 }
 
