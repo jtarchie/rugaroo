@@ -556,18 +556,23 @@ func (f *fctx) genRespondTo(n parser.Node, recv expr, args []parser.Node) (expr,
 // Like MRI, only a call with an explicit receiver (other than self) cannot
 // reach a private method; send (implicitCall) can.
 func (f *fctx) genDynCall(n parser.Node, recv expr, name string, args []parser.Node) expr {
-	if e, ok := f.gemDynShortcut(n, recv, name, args); ok {
+	// a receiver not known yet in this round (docs/research/inference-2026-11.md): the call says nothing yet, so it is
+	// no dynamic use, no warning, and its result is not known either
+	unk := f.c.round && f.c.env.InferUnknown && isUnknown(recv.typ)
+	if e, ok := f.gemDynShortcut(n, recv, name, args); ok && !unk {
 		return e
 	}
 	if (name == "unpack" || name == "unpack1") && f.lenient() { // a gem's 64-bit fields wrap (decision 324)
 		name = "__" + name + "_wrap"
 	}
-	if e, ok := f.dynContainerCall(n, recv, name, args); ok {
+	if e, ok := f.dynContainerCall(n, recv, name, args); ok && !unk {
 		return e
 	}
-	f.c.noteDyn(name)
-	f.noteDynUses(name, args)
-	if (f.m == nil || !f.m.quietDynamic) && !f.patQuiet && !f.c.isNumericMod(classOf(recv.typ)) { // a Numeric's class is chosen at run time by design (decision 142)
+	if !unk {
+		f.c.noteDyn(name)
+		f.noteDynUses(name, args)
+	}
+	if !unk && (f.m == nil || !f.m.quietDynamic) && !f.patQuiet && !f.c.isNumericMod(classOf(recv.typ)) { // a Numeric's class is chosen at run time by design (decision 142)
 		if call, ok := n.(*parser.CallNode); ok && f.c.env.UntypedWhy && isAny(recv.typ) {
 			f.warn(n, "dynamic call: %s on %s [why: %s]", name, recv.typ, f.untypedWhy(call.Receiver, 0))
 		} else {
@@ -585,7 +590,7 @@ func (f *fctx) genDynCall(n parser.Node, recv expr, name string, args []parser.N
 		how = "rbFCall"
 	}
 	if spread, ok := f.anySpread(args); ok { // `x.m(a, *rest, *more, **kw)` untyped: one slice into the wrapper's ...any (decision 227)
-		return expr{code: rbDynFn(name) + "(" + how + ", " + f.coerce(n, recv, TAny{}) + ", " + spread + "...)", typ: TAny{}}
+		return expr{code: rbDynFn(name) + "(" + how + ", " + f.coerce(n, recv, TAny{}) + ", " + spread + "...)", typ: TAny{Unknown: unk}}
 	}
 	argCodes := f.anyArgs(args)
 	if i := slices.IndexFunc(argCodes, func(c string) bool { return strings.HasSuffix(c, "...") }); i >= 0 {
@@ -594,10 +599,10 @@ func (f *fctx) genDynCall(n parser.Node, recv expr, name string, args []parser.N
 		if len(argCodes) > i+1 {
 			spread = "append(" + spread + ", " + strings.Join(argCodes[i+1:], ", ") + ")"
 		}
-		return expr{code: rbDynFn(name) + "(" + how + ", " + f.coerce(n, recv, TAny{}) + ", " + spread + "...)", typ: TAny{}}
+		return expr{code: rbDynFn(name) + "(" + how + ", " + f.coerce(n, recv, TAny{}) + ", " + spread + "...)", typ: TAny{Unknown: unk}}
 	}
 	codes := append([]string{how, f.coerce(n, recv, TAny{})}, argCodes...)
-	return expr{code: rbDynFn(name) + "(" + strings.Join(codes, ", ") + ")", typ: TAny{}}
+	return expr{code: rbDynFn(name) + "(" + strings.Join(codes, ", ") + ")", typ: TAny{Unknown: unk}}
 }
 
 // jsonArgs is anyArgs for to_json, plus its `to_json(*a)` idiom: a lone

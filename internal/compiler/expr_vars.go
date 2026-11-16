@@ -153,6 +153,7 @@ func immediateLit(n parser.Node) bool {
 
 // ivarWriteValue is the value an ivar write stores and the type it declares; a nil type: the write declares nothing.
 func (f *fctx) ivarWriteValue(n *parser.InstanceVariableWriteNode, val expr, ann Type) (expr, Type) {
+	val.provisional = val.provisional || isUnknown(val.typ) // not known yet: it declares nothing this round
 	switch {
 	case ann != nil:
 		return f.annotatedIvarValue(n, val, ann)
@@ -409,6 +410,11 @@ func (f *fctx) ivar(n parser.Node, name string, assigned Type) *Ivar {
 			iv := f.c.declareIvar(f.owner, name, assigned, f.f, f.f.line(n.GetLocation().StartOffset))
 			iv.joins = !f.lenient()
 			return iv
+		}
+		if f.c.round && f.c.env.InferUnknown {
+			// every write so far stored a value not known yet: the ivar is not known yet either, not an error. It is
+			// not declared, so the round that types a write declares it (docs/research/inference-2026-11.md)
+			return &Ivar{Name: name, Type: TAny{Unknown: true}, Owner: f.owner}
 		}
 		f.errorf(n, "instance variable %s has no known type; assign it in initialize or add `# @rbs %s: T`", name, name)
 	}

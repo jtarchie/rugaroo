@@ -209,7 +209,7 @@ func (c *Compiler) resolvePending(m *Method, prm *Param, pp pendingParam) {
 			prm.Type = TAny{}
 		}
 	case how != pendNone: // learned from this round's calls, or only a dynamic call can reach it (decision 169)
-		prm.Type = TAny{}
+		prm.Type = TAny{Unknown: how == pendRound && c.env.InferUnknown}
 	case m.attrWriter, m.Owner != nil && m.Owner.isTemplate(): // a template's body is never compiled: its instances' are (decision 308)
 		prm.Type = TAny{}                 // an attr writer no call types: only a dynamic call can reach it (decision 179)
 		prm.UncalledWriter = m.attrWriter // until discovery gives it its ivar's type (decision 445)
@@ -641,6 +641,9 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 	if f.superTarget != nil && slices.ContainsFunc(f.superTarget.Params, func(q Param) bool { return q.Pending == p.Pending }) {
 		return
 	}
+	if f.c.env.InferUnknown && holdsUnknown(t) {
+		return // not known yet: it neither types the parameter nor untypes it
+	}
 	if en, ok := n.(*exprNode); ok && en.use != nil { // one use per source argument, not a member per arm: the param would flip between them (decision 150)
 		t = en.use
 	}
@@ -872,6 +875,25 @@ func (c *Compiler) updateInference(inf *inference) {
 				t = TAny{}
 			}
 			next[key], from[key] = t, at
+		}
+	}
+	if c.env.InferUnknown { // the state only goes up: a type a round could not re-derive is kept, one it derived otherwise joins in
+		for k, old := range inf.types {
+			old = c.rehome(old) // the previous round's classes are another compile's
+			t, ok := next[k]
+			switch {
+			case !ok:
+				next[k] = old
+				if at, ok := inf.from[k]; ok {
+					from[k] = at
+				}
+			case !typeEq(old, t):
+				if j, ok := join(old, t); ok {
+					next[k] = j
+				} else {
+					next[k] = TAny{}
+				}
+			}
 		}
 	}
 	diff := c.roundDiff(inf, next)

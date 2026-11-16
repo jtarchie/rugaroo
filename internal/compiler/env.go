@@ -20,6 +20,7 @@ type envConfig struct {
 	PruneWhy      bool   // RUGAROO_PRUNE_WHY: the keep chains of the pruner
 	KeepGoing     bool   // RUGAROO_KEEP_GOING: record a collect error and go on
 	DispatchDebug string // RUGAROO_DISPATCH_DEBUG: "all", or any other non-empty value for Kernel/Object/module owners
+	InferUnknown  bool   // RUGAROO_INFER_UNKNOWN: inference rounds with an explicit not-known-yet type (docs/research/inference-2026-11.md), until its gates pass
 	NoAnyUse      bool   // RUGAROO_NO_ANY_USE: keep a gem parameter typed when a gem call also passes it an untyped value (A/B for decision 444's settled-round rule)
 	NoEarlyRounds bool   // RUGAROO_NO_EARLY_ROUNDS: run inference rounds to the cap even once they have settled (A/B for decision 444)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
@@ -51,6 +52,7 @@ func loadEnv() envConfig {
 		PruneWhy:      set("RUGAROO_PRUNE_WHY"),
 		KeepGoing:     set("RUGAROO_KEEP_GOING"),
 		DispatchDebug: os.Getenv("RUGAROO_DISPATCH_DEBUG"),
+		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
 		NoAnyUse:      os.Getenv("RUGAROO_NO_ANY_USE") != "",
 		NoEarlyRounds: os.Getenv("RUGAROO_NO_EARLY_ROUNDS") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",

@@ -50,8 +50,9 @@ type (
 		Self        Type       // non-nil: a Proc (or block) that escaped, taking `self` as a leading Go param (decision 164)
 		SelfPending pendingKey // the inference key Self's type is recorded under (decision 164)
 	}
-	// TAny is `untyped`.
-	TAny struct{}
+	// TAny is `untyped`. Unknown marks one that is not known yet in an inference round (docs/research/inference-2026-11.md):
+	// the same `any` in Go, but below every type in join, where untyped is above them all.
+	TAny struct{ Unknown bool }
 	// TNil is the type of `nil`.
 	TNil struct{}
 	// TVoid is `void`: no value.
@@ -128,6 +129,26 @@ func isVoid(t Type) bool {
 }
 
 func isAny(t Type) bool { _, ok := t.(TAny); return ok }
+
+// isUnknown reports a type an inference round has not learned yet.
+func isUnknown(t Type) bool { a, ok := t.(TAny); return ok && a.Unknown }
+
+// holdsUnknown reports whether t is or contains a not-known-yet type.
+func holdsUnknown(t Type) bool {
+	switch t := t.(type) {
+	case TAny:
+		return t.Unknown
+	case TOpt:
+		return holdsUnknown(t.Elem)
+	case TClass:
+		return slices.ContainsFunc(t.Args, holdsUnknown)
+	case TTuple:
+		return slices.ContainsFunc(t.Elems, holdsUnknown)
+	case TUnion:
+		return slices.ContainsFunc(t.Members, holdsUnknown)
+	}
+	return false
+}
 
 // holdsAny reports whether t is or contains untyped.
 func holdsAny(t Type) bool {
@@ -425,6 +446,10 @@ func freeVars(t Type, out *[]string) {
 // join computes the type of `cond ? a : b`.
 func join(a, b Type) (Type, bool) {
 	switch {
+	case isUnknown(a): // not known yet: whatever the other is
+		return b, true
+	case isUnknown(b):
+		return a, true
 	case isNil(a) && isNil(b):
 		return TNil{}, true
 	case isNil(a):
