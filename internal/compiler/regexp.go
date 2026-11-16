@@ -221,7 +221,8 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 		f.c.regexpVars[args] = name
 		// the pattern goes out with its /i literals already folded (rxFold): a constant, so not folded again each run
 		folded := rxFold(flags.goPrefix() + goPat)
-		if _, err := rxCompile(folded); err != nil { // what the program compiles: it must not be the first to see an error
+		_, err := rxCompile(folded) // what the program compiles: it must not be the first to see an error
+		if err != nil {
 			f.errorf(n, "regexp /%s/ is not supported: %v", src, err)
 		}
 		init := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(folded), strconv.Quote(src), flags.opts())

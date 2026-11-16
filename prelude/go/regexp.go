@@ -32,7 +32,16 @@ type rbRxLazy struct {
 	pat     string // static: the translated pattern; lenient: the flag prefix
 	src     string
 	opts    string
-	lenient bool
+	build   func(*rbRxLazy) (*rbRxCompiled, error) // rbRxLenient, or nil for a static literal: a field, so a program without gem regexps does not link the translator
+}
+
+// rbRxLenient translates and compiles a gem's interpolated source, as rbRegexpLenient does where it is built.
+func rbRxLenient(l *rbRxLazy) (*rbRxCompiled, error) {
+	pat, err := rxPrepare(l.src, strings.Contains(l.opts, "x"))
+	if err != nil {
+		return nil, err
+	}
+	return rbRxCompile(rxFold(l.pat+pat), l.src, true)
 }
 
 // rx is r's compiled pattern, compiled now when r is lazy and this is its first use.
@@ -43,11 +52,27 @@ func (r *Regexp) rx() *rxRegexp {
 	return r.rxFirst()
 }
 
-// rxFirst is a lazy Regexp's first use; out of line, so that rx inlines.
+// rxFirst is a lazy Regexp's first use; out of line, so that rx inlines. A pattern the engines reject becomes a
+// Regexp that raises RegexpError at each use, as rbRegexpLenient's does: a static literal's cannot be one (the
+// compiler compiled this very pattern), a gem's may.
 //
 //go:noinline
 func (r *Regexp) rxFirst() *rxRegexp {
-	r.lz.compile(r)
+	l := r.lz
+	l.once.Do(func() {
+		var c *rbRxCompiled
+		var err error
+		if l.build != nil {
+			c, err = l.build(l)
+		} else {
+			c, err = rbRxCompile(l.pat, l.src, false) // a static literal's pattern, translated and folded by the compiler
+		}
+		if err != nil {
+			c = &rbRxCompiled{re: &rxRegexp{unsupported: "regexp /" + l.src + "/ is not supported by rugaroo: " + err.Error()}, anch: new(atomic.Pointer[rxRegexp])}
+		}
+		l.anch = c.anch
+		r.re.Store(c.re)
+	})
 	return r.re.Load()
 }
 
@@ -60,28 +85,6 @@ func (r *Regexp) anchSlot() *atomic.Pointer[rxRegexp] {
 	return r.anch
 }
 
-// compile is the first use. A pattern the engines reject becomes a Regexp that raises RegexpError at each use, as
-// rbRegexpLenient's does: a static literal's cannot be one (the compiler compiled this very pattern), a gem's may.
-func (l *rbRxLazy) compile(r *Regexp) {
-	l.once.Do(func() {
-		var c *rbRxCompiled
-		var err error
-		if l.lenient {
-			var pat string
-			if pat, err = rxPrepare(l.src, strings.Contains(l.opts, "x")); err == nil {
-				c, err = rbRxCompile(rxFold(l.pat+pat), l.src, true)
-			}
-		} else {
-			c, err = rbRxCompile(l.pat, l.src, false)
-		}
-		if err != nil {
-			c = &rbRxCompiled{re: &rxRegexp{unsupported: "regexp /" + l.src + "/ is not supported by rugaroo: " + err.Error()}, anch: new(atomic.Pointer[rxRegexp])}
-		}
-		l.anch = c.anch
-		r.re.Store(c.re)
-	})
-}
-
 // rbRegexpLazy is a static literal under --regexp-compile=lazy: pattern is translated and folded (rxFold) by the
 // compiler, which also compiled it once to validate it, and compiles here at the literal's first use (decision S1).
 func rbRegexpLazy(pattern, src, opts string) *Regexp {
@@ -91,7 +94,7 @@ func rbRegexpLazy(pattern, src, opts string) *Regexp {
 // rbRegexpLenientLazy is rbRegexpLenient under --regexp-compile=lazy: the gem's regexp is built now and translated and
 // compiled at its first use, where one the engines reject raises, as rbRegexpLenient's does (decisions 176, S1).
 func rbRegexpLenientLazy(prefix, src, opts string) *Regexp {
-	return &Regexp{lz: &rbRxLazy{pat: prefix, src: src, opts: opts, lenient: true}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
+	return &Regexp{lz: &rbRxLazy{pat: prefix, src: src, opts: opts, build: rbRxLenient}, src: src, opts: opts, u8: rbRegexpUTF8(src, opts)}
 }
 
 // rbRxCompiled is a compiled pattern and its \A twin's slot, shared by every Regexp built from the same pattern.
