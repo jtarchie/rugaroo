@@ -1051,12 +1051,23 @@ func rbHashViewBlockCall(name string, s rbHashView, args []any) (any, bool) { //
 		return s, true
 	case "each_key":
 		rbArity(len(args), 0, 0)
+		if b == nil { // without a block: the keys as an Array standing in for the Enumerator, as an Array's blockless each does (rubocop's `hash.each_key.with_object([])`)
+			return &Array[any]{s: slices.Clone(rbHashViewKeys(s))}, true
+		}
 		for _, k := range rbHashViewKeys(s) {
 			rbViewYield(b, k)
 		}
 		return s, true
 	case "each_value":
 		rbArity(len(args), 0, 0)
+		if b == nil {
+			keys := rbHashViewKeys(s)
+			vals := make([]any, len(keys))
+			for i, k := range keys {
+				vals[i] = s._Get(k)
+			}
+			return &Array[any]{s: vals}, true
+		}
 		for _, k := range rbHashViewKeys(s) {
 			rbViewYield(b, s._Get(k))
 		}

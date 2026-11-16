@@ -196,7 +196,24 @@ func (f *fctx) forwardedEnum(n parser.Node, recv expr, name string, args []parse
 			f.c.dynBlockNames = map[string]bool{}
 		}
 		f.c.dynBlockNames[name] = true // only here: a generic method's wrapper cannot bind its type parameters to a block
-		return dispatch(), true
+		// no block: the target's blockless call (rubocop's `derived_hash.each_key.with_object([])` through Config's
+		// def_delegators), not a nil block the iterator would yield to
+		res := f.newTmp()
+		f.emit("var %s any", res)
+		f.emit("if blk == nil {")
+		f.indent++
+		saved := f.enterBlock()
+		f.emit("%s = %s", res, f.genDynCall(n, recv, name, args).code)
+		f.leaveBlock(saved)
+		f.indent--
+		f.emit("} else {")
+		f.indent++
+		saved = f.enterBlock()
+		f.emit("%s = %s", res, dispatch().code)
+		f.leaveBlock(saved)
+		f.indent--
+		f.emit("}")
+		return expr{code: res, typ: TAny{}}, true
 	}
 	rest := f.genExpr(args[0].(*parser.SplatNode).Expression, nil)
 	if !isClass(rest.typ, "Array") {
