@@ -225,6 +225,21 @@ these can only be where a typing starts: either verified by the closed world (a 
 when every call that can reach it passes that class, which fails at `public_send` with a variable name), or kept
 with a second, untyped body for the calls that pass something else.
 
+## Exact node classes on the cop callbacks, measured (2026-11-16)
+
+The 349 `on_<type>`/`after_<type>` callbacks MRI's `dir20` run called, each declared with the node class it
+observed (`on_send: (RuboCop::AST::SendNode? node)`, 59 of them; `DefNode?` 48; `BlockNode?` 46; ...) and nothing
+else changed. Output equal to MRI's on `a.rb`, `dir20` and 19 naming cops with no cop error; two errors in
+`Style/PercentLiteralDelimiters` on the 80 lint files. Instructions: `dir20` 14,252M → 14,024M (−1.6%), naming
+11,456M → 11,339M (−1%), `a.rb` unchanged.
+
+So the callbacks' parameter is not where the time is, with the exact class or with the base class (decision 470's
+measurement). What is left is inside the gems, reached by ordinary calls: the lexer and racc, the AST node's own
+ivars and accessors, the traversal and the Commissioner, the generated node-pattern matchers, source ranges. That is
+what inference over ordinary calls can reach (`docs/research/inference-2026-11.md`), and it takes typing the dynamic
+entry points off the critical path. An experiment that declared every observed parameter (3,300 of them) never ran:
+four builds each stopped at a signature the gem's own code contradicts on another path.
+
 ## A different inference, if the rounds are not enough
 
 Every root found here was a cycle the round-based inference resolved pessimistically: a value is untyped in the first
