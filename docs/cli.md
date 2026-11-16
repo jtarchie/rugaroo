@@ -15,7 +15,7 @@ anything after the file is passed to the program. Tiers are as in
 
 ## Build flags
 
-For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, `-cgo`, `-compiler`, `-race`,
+For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-regexp-compile`, `-nil-check`, `-cgo`, `-compiler`, `-race`,
 `-gcflags`, `-debug` and `-work`.
 
 | Flag | Tier | What it does |
@@ -24,6 +24,7 @@ For `run`, `build` and `gen`; `test` takes `-I`, `-int-overflow`, `-nil-check`, 
 | `-I dir` | stable | A directory `require` searches for your own files, as `ruby -I`. Repeatable. |
 | `-gem dir` | experimental | A directory of library code the program carries (a framework's runtime, a vendored gem), compiled as an installed gem is: only what the program reaches, leniently, its `sig/` beside a `lib/` read. `-I` is for your own code, compiled whole and strictly. Repeatable ([decision 406](decisions/406.md)). |
 | `-int-overflow mode` | stable (`raise`, `wrap`), experimental (`promote`) | What an Integer result past 64 bits does: `raise` a `RangeError` (the default), `wrap` around as two's complement, or `promote` to a Bignum as MRI does. A `# int_overflow: mode` line in a file does the same for the arithmetic written in that file, whatever the flag says (decision 381). |
+| `-regexp-compile mode` | stable | When a Regexp literal compiles its pattern: `lazy`, at the literal's first use (the default; a program starts without compiling the patterns it never matches), or `eager`, when the program starts (every pattern is compiled before the first line runs, the choice for failing fast and for a first match with no compile in it). A `# regexp_compile: mode` line in a file does the same for the literals written in that file. The same holds for the regexps a gem builds by interpolation while it loads. Results are the same in both modes ([decision S1](decisions/startup-S1.md)). |
 | `-nil-check mode` | experimental (`runtime`) | A possibly-nil value (`T?`) where a `T` is expected: `compile` makes it a compile error until you check it (the default), `runtime` compiles it to a check that raises when it is nil, MRI's own `TypeError`/`ArgumentError` at a core operator (`"x" + nil`, `1 + nil`, `1 < nil`). A `# nil_check: mode` line in a file does the same for the code written in that file (decision 393). Under `compile`, a read that only an unannotated `[]`/`{}` rugaroo typed itself makes possibly-nil is still checked at run time, with a warning (decision 440). |
 | `-cgo` | experimental | Fiddle, FFI and sqlite3 call C through cgo instead of purego, so purego is not linked; needs a C compiler at build time. ([decision 426](decisions/426.md)). |
 | `-compiler gc\|tinygo` | experimental (`tinygo`) | The Go compiler that builds the program: `gc` (the default, the `go` command) or [TinyGo](https://tinygo.org), which needs `tinygo` on PATH and makes binaries several times smaller, builds several times slower and runs many-thread programs poorly. Under `tinygo`, `-race`, `-gcflags` and `-pgo` are errors, and so is a `require` of `socket`, `net/*`, `webrick`, `open-uri`, `open3`, `fiddle`, `ffi`, `sqlite3` or `prism`; no Ruby backtraces (`RUGAROO_BACKTRACE`), and backticks/`system` do not run ([decision 443](decisions/443.md)). |
@@ -80,6 +81,7 @@ For the compiler:
 | Variable | What it does |
 |---|---|
 | `RUGAROO_INT_OVERFLOW=mode` | The same as `-int-overflow`. |
+| `RUGAROO_REGEXP_COMPILE=mode` | The same as `-regexp-compile`. |
 | `RUGAROO_NIL_CHECK=mode` | The same as `-nil-check`. |
 | `RUGAROO_CGO=1` | The same as `-cgo`. |
 | `RUGAROO_COMPILER=tinygo` | The same as `-compiler tinygo`. |

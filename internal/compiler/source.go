@@ -27,6 +27,7 @@ type File struct {
 	pinLine        int     // every position reports this line: generated source, whose errors belong to its declaration
 	path           string  // a user file's real path on disk, which require_relative resolves against
 	data           *string // the text after `__END__`, which DATA reads
+	rxCompile      string  // its own `# regexp_compile: mode` line, which governs when the Regexp literals written in it compile (decision S1)
 	overflow       string  // its own `# int_overflow: mode` line, which governs the Integer arithmetic written in it (decision 381)
 	nilCheck       string  // its own `# nil_check: mode` line, else its require_relative-ing file's; governs the T? uses written in it (decisions 393, 404)
 
@@ -89,6 +90,9 @@ func parseFile(ctx context.Context, p *parser.Parser, name string, src []byte, o
 	if origin != originPrelude {
 		if m := intOverflowComment.FindSubmatch(src); m != nil {
 			f.overflow = checkOverflowMode(name+": # int_overflow", string(m[1]))
+		}
+		if m := regexpCompileComment.FindSubmatch(src); m != nil {
+			f.rxCompile = checkRegexpMode(name+": # regexp_compile", string(m[1]))
 		}
 		if m := nilCheckComment.FindSubmatch(src); m != nil {
 			f.nilCheck = checkNilMode(name+": # nil_check", string(m[1]))

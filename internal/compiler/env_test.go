@@ -25,6 +25,7 @@ func TestLoadEnv(t *testing.T) {
 		"RUGAROO_GOPOISON_DUMP":  func(e envConfig) string { return e.GopoisonDump },
 		"RUGAROO_INT_OVERFLOW":   func(e envConfig) string { return e.IntOverflow },
 		"RUGAROO_NIL_CHECK":      func(e envConfig) string { return e.NilCheck },
+		"RUGAROO_REGEXP_COMPILE": func(e envConfig) string { return e.RegexpCompile },
 		"RUGAROO_COMPILER":       func(e envConfig) string { return e.Compiler },
 		"RUGAROO_RBS_COLLECTION": func(e envConfig) string { return e.RBSCollection },
 	}

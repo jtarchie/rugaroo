@@ -74,7 +74,7 @@ func TestRxAltByPruner(t *testing.T) {
 		t.Error("pattern var not named by its pattern")
 	}
 	look := compileOne(t, "p(\"ab\" =~ /(?<=a)b/)\n")
-	if !strings.Contains(look, "rbRxAlt(rxAltReady, rbRegexpNew(") || !strings.Contains(look, "var rxAltReady") {
+	if !strings.Contains(look, "rbRxAlt(rxAltReady, rbRegexp") /* Lazy or New: --regexp-compile */ || !strings.Contains(look, "var rxAltReady") {
 		t.Error("lookbehind pattern without the engine")
 	}
 	dyn := compileOne(t, "s = gets.to_s\np(Regexp.new(s).match?(\"x\"))\n")

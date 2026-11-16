@@ -203,19 +203,23 @@ func (f *fctx) genStaticRegexp(n *parser.RegularExpressionNode) expr {
 		alt = rx != nil && rx.alt != nil
 	}
 	if err != nil && f.lenient() {
-		return expr{code: fmt.Sprintf("rbRegexpLenient(%s, %s, %q)", strconv.Quote(flags.goPrefix()), strconv.Quote(src), flags.opts()), typ: f.cls("Regexp")}
+		return expr{code: fmt.Sprintf("%s(%s, %s, %q)", f.lenientRegexpCtor(), strconv.Quote(flags.goPrefix()), strconv.Quote(src), flags.opts()), typ: f.cls("Regexp")}
 	}
 	if err != nil {
 		f.errorf(n, "regexp /%s/ is not supported: %v", src, err)
 	}
-	args := fmt.Sprintf("%s, %s, %q", strconv.Quote(flags.goPrefix()+goPat), strconv.Quote(src), flags.opts())
+	ctor := "rbRegexpNew"
+	if f.regexpLazy() { // compiled at its first use, not in this variable's initializer (decision S1)
+		ctor = "rbRegexpLazy"
+	}
+	args := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(flags.goPrefix()+goPat), strconv.Quote(src), flags.opts())
 	name, ok := f.c.regexpVars[args]
 	if !ok {
 		h := fnv.New64a()
 		_, _ = h.Write([]byte(args))                // a hash.Hash never fails
 		name = fmt.Sprintf("rbRe_%016x", h.Sum64()) // by pattern, not by when it was first rendered (decision 432)
 		f.c.regexpVars[args] = name
-		init := "rbRegexpNew(" + args + ")"
+		init := args
 		if alt { // after the regexp2 engine registers, which naming it keeps (decision 242)
 			init = "rbRxAlt(rxAltReady, " + init + ")"
 		}
@@ -325,7 +329,7 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 	}
 	ctor := "rbRegexpDyn"
 	if f.lenient() {
-		ctor = "rbRegexpLenient"
+		ctor = f.lenientRegexpCtor()
 	}
 	code := fmt.Sprintf("%s(%s, %s, %q)", ctor, strconv.Quote(flags.goPrefix()), strings.Join(srcParts, " + "), flags.opts())
 	if alt { // names the regexp2 engine, so the pruner keeps it (decision 242)
@@ -343,3 +347,31 @@ func (f *fctx) genRegexp(n parser.Node) expr {
 }
 
 func isConstPath(n parser.Node) bool { _, ok := n.(*parser.ConstantPathNode); return ok }
+
+// regexpCompileComment is a source's `# regexp_compile: mode` line (decision S1).
+var regexpCompileComment = regexp.MustCompile(`(?m)^# regexp_compile: (\S+)\s*$`)
+
+// checkRegexpMode rejects a mode other than lazy or eager ("" is lazy).
+func checkRegexpMode(where, mode string) string {
+	if !slices.Contains([]string{"", "lazy", "eager"}, mode) {
+		panic(compileError{msg: fmt.Sprintf("%s: %q is not lazy or eager", where, mode)})
+	}
+	return mode
+}
+
+// regexpLazy: the Regexp literal being compiled compiles its pattern at its first use, not where it is created (its
+// file's own `# regexp_compile:` line, else --regexp-compile; decision S1).
+func (f *fctx) regexpLazy() bool {
+	if f.f != nil && f.f.rxCompile != "" {
+		return f.f.rxCompile == "lazy"
+	}
+	return f.c.env.RegexpCompile != "eager"
+}
+
+// lenientRegexpCtor builds a gem's regexp that RE2 may reject (decision 176): at its first use when lazy (decision S1).
+func (f *fctx) lenientRegexpCtor() string {
+	if f.regexpLazy() {
+		return "rbRegexpLenientLazy"
+	}
+	return "rbRegexpLenient"
+}

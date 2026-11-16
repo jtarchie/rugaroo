@@ -80,15 +80,9 @@ func testBuildFlags(argv []string) (buildOpts, []string, error) {
 			if err != nil {
 				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
 			}
-		case strings.HasPrefix(a, "-int-overflow="), strings.HasPrefix(a, "--int-overflow="):
+		case modeEnv(a) != "":
 			_, m, _ := strings.Cut(a, "=")
-			err := os.Setenv("RUGAROO_INT_OVERFLOW", m)
-			if err != nil {
-				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
-			}
-		case strings.HasPrefix(a, "-nil-check="), strings.HasPrefix(a, "--nil-check="):
-			_, m, _ := strings.Cut(a, "=")
-			err := os.Setenv("RUGAROO_NIL_CHECK", m)
+			err := os.Setenv(modeEnv(a), m)
 			if err != nil {
 				return opts, nil, fmt.Errorf("rugaroo test: %w", err)
 			}
@@ -190,4 +184,13 @@ func expandTestPath(p string) ([]string, error) {
 func exists(p string) bool {
 	_, err := os.Stat(p) //nolint:gosec // the user's own paths
 	return err == nil
+}
+
+// modeEnv is the RUGAROO_* variable a `-flag=mode` argument sets (decisions 372, 393, S1), or "".
+func modeEnv(arg string) string {
+	name, _, ok := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+	if !ok || !strings.HasPrefix(arg, "-") {
+		return ""
+	}
+	return map[string]string{"int-overflow": "RUGAROO_INT_OVERFLOW", "regexp-compile": "RUGAROO_REGEXP_COMPILE", "nil-check": "RUGAROO_NIL_CHECK"}[name]
 }

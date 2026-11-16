@@ -7,7 +7,7 @@
 # match; see internal/compiler/regexp.go. rxRegexp (rxtranslate.go) matches
 # Onigmo's `^`, `\b` and multi-character `/i` folds where RE2's differ.
 
-# @go_type struct { re *rxRegexp; src string; opts string; anch *atomic.Pointer[rxRegexp]; u8 bool }
+# @go_type struct { re atomic.Pointer[rxRegexp]; lz *rbRxLazy; src string; opts string; anch *atomic.Pointer[rxRegexp]; u8 bool }
 class Regexp < Object
   # Regexp.last_match(n): the compiler passes the caller's $~ (decision 232).
   #: (MatchData?, untyped) -> String?
@@ -187,7 +187,7 @@ class Regexp < Object
 
   # Whether the pattern has capture groups: String#scan then gives each match's groups (decision 331).
   #: () -> bool
-  def __groups? = %x{ Boolean(self.re.NumSubexp() > 0) }
+  def __groups? = %x{ Boolean(self.rx().NumSubexp() > 0) }
 
   #: (String | Symbol) -> String
   def self.quote(str) = escape(str)
@@ -205,7 +205,7 @@ class Regexp < Object
   end
 
   #: () -> Array[String]
-  def names = %x{ return rbUniqNames(self.re.SubexpNames()) }
+  def names = %x{ return rbUniqNames(self.rx().SubexpNames()) }
 
   #: () -> Hash[String, Array[Integer]]
   def named_captures
@@ -221,7 +221,7 @@ class Regexp < Object
   #: () -> Array[String]
   def __group_names = %x{
     out := &Array[String]{}
-    for _, n := range self.re.SubexpNames() {
+    for _, n := range self.rx().SubexpNames() {
       out.s = append(out.s, String(n))
     }
     return out
@@ -589,7 +589,7 @@ class String
   # __scan_groups, which the compiler picks for a literal with groups.
   #: (Regexp) -> Array[String]
   def scan(re) = %x{
-    if re.re.NumSubexp() > 0 {
+    if re.rx().NumSubexp() > 0 {
       panic(NewNotImplementedError(Ref(String("rugaroo: String#scan with capture groups needs a Regexp literal"))))
     }
     return rbScanLocs(self, rbFindAll(re, string(self), -1))
@@ -635,7 +635,7 @@ class String
   # A binary String's matches read its bytes (decision 352).
   #: (Regexp) -> Array[String]
   def __bin_scan(re) = %x{
-    if re.re.NumSubexp() > 0 {
+    if re.rx().NumSubexp() > 0 {
       panic(NewNotImplementedError(Ref(String("rugaroo: String#scan with capture groups needs a Regexp literal"))))
     }
     return rbScanLocs(self, rbFindAllBin(re, string(self), -1))
