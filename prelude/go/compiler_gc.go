@@ -7,6 +7,7 @@ import (
 	"hash/maphash"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"unsafe"
 )
 
@@ -41,17 +42,32 @@ func rbGoIDStack() int64 {
 	return id
 }
 
-// rbGCBallast raises the heap size at which Go first collects (decision 463). Go starts collecting at 4 MB and again
-// at every doubling of the live heap, so a program with a few MB of live data collects dozens of times a second;
-// MRI's own heap starts larger. The ballast is never written, so the OS never backs it with memory; the collector
-// counts it as live, which puts the first collection at twice its size and adds that much headroom, a constant,
-// to a large heap's goal. Raising GOGC instead would scale with the heap (and with the globals Go adds to the goal).
+// rbGCBallast raises the heap size at which Go collects (decision 463). Go starts collecting at 4 MB and again at
+// every doubling of the live heap, so a program with a few MB of live data collects dozens of times a second; MRI's
+// own heap starts larger. The ballast is never written, so the OS never backs it with memory; the collector counts
+// it as live, which puts the next collection at twice its size and adds that much headroom, a constant, to a large
+// heap's goal. Raising GOGC instead would scale with the heap (and with the globals Go adds to the goal).
 var rbGCBallast []byte
 
-// rbGCStart allocates the ballast. A GOGC or GOMEMLIMIT in the environment wins.
+// rbGCSentinel is an object nothing holds: its finalizer runs after the first collection.
+type rbGCSentinel struct{ _ [32]byte }
+
+// rbGCFirst is the GOGC until the first collection: Go's 4 MB minimum heap times 8, so that collection waits for
+// about 32 MiB as every later one will.
+const rbGCFirst = 800
+
+// rbGCStart puts the first collection off to the ballast's floor and arranges for the ballast itself, with GOGC back
+// at 100, once that collection has run. A program that never allocates that much never collects and pays nothing:
+// allocating 16 MiB up front starts a collection of its own (2M instructions on a program that runs 20M), and a
+// raised GOGC kept for good would scale a large heap's goal (decision 151). A GOGC or GOMEMLIMIT in the environment
+// wins.
 func rbGCStart() {
 	if os.Getenv("GOGC") != "" || os.Getenv("GOMEMLIMIT") != "" {
 		return
 	}
-	rbGCBallast = make([]byte, 16<<20)
+	debug.SetGCPercent(rbGCFirst)
+	runtime.SetFinalizer(new(rbGCSentinel), func(*rbGCSentinel) {
+		rbGCBallast = make([]byte, 16<<20)
+		debug.SetGCPercent(100)
+	})
 }

@@ -892,8 +892,10 @@ func rbStrSetbyte(buf *[]byte, s String, i, v Integer) String {
 		*buf = b
 		s = String(unsafe.String(unsafe.SliceData(b), len(b))) //nolint:gosec // the proof: s is the only String over buf, and every later read of it follows this store
 	}
-	if len(s) >= rbStrFactMin {
-		rbStrFactSlot(len(s)).Store(nil) // the bytes change in place: their cached facts go (decision 464)
+	if (b[j]|byte(v)) >= utf8.RuneSelf && len(s) >= rbStrFactMin {
+		// the bytes change in place: their cached facts go (decision 464). One ASCII byte for another changes none of
+		// them (ASCII or not, valid or not, as many characters), so a loop over ASCII text never comes here
+		rbStrFactSlot(len(s)).Store(nil)
 	}
 	b[j] = byte(v)
 	return s
