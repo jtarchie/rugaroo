@@ -104,6 +104,16 @@ once the String fixes are in; the cops and the AST walk are the rest.
 With decision 468 (`class` of an untyped value by class ID) the 2-line file is about 2,400M (2.4x faster than MRI),
 `dir20` 13,977M and the 60 lint files 21,204M.
 
+Branch head (every change above; second run of each binary; all equal to MRI's output):
+
+| input | MRI | main | branch | branch / MRI |
+|---|---:|---:|---:|---|
+| `a.rb` (2 lines) | 5,810M | 3,239M | 2,235M | 2.6x faster |
+| `cli.rb` | 6,479M | 5,229M | 3,598M | 1.8x faster |
+| `runner.rb` | 7,325M | 10,758M | 5,616M | 1.3x faster |
+| `dir20` | 11,472M | 23,072M | 13,974M | 1.2x slower |
+| 60 files of `cop/lint/` | 15,334M | - | 21,135M | 1.4x slower |
+
 Per-file work fell by about a third (`dir20` minus `a.rb`: 19.8G → 12.9G; MRI 5.6G). The 10x budget is 580M for
 `a.rb` and 1,150M for `dir20`: start-up is 5x over it and untouched, per-file work 22x over it.
 
@@ -130,8 +140,10 @@ In the order the parser gem's profile shows them:
 6. **Known wrong results** found on the way, not fixed: a project `.rubocop.yml` stops the compiled binary, so only the default
    configuration runs: first `no block given (yield)` in `RuboCop::Config#each_key` (a blockless `each_key` through
    `def_delegators`, fixed on this branch), then `no implicit conversion of RuboCop::Config into Hash` at
-   `config_loader_resolver.rb:129` (`base_hash.merge(derived_hash)` needs `to_hash`), not fixed: that path was never
-   in the `-trace` run; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
+   `config_loader_resolver.rb:129` (`base_hash.merge(derived_hash)` needs `to_hash`, fixed on this branch too), then
+   `wrong number of arguments (given 2, expected 1)` in `RuboCop::Config#replace` (`config_loader_resolver.rb:182`),
+   not fixed: that path was never in the `-trace` run, so each step is new. With `ParserEngine: parser_prism` the
+   binary stops earlier: `ProcessedSource.lazy_tokens_parser_class does not compile`; a rational literal (`2.5r`) raises TypeError in the parser gem (`Rational("2.5")`), on main
    too; `kids << a << i` on an Array first seen holding one class
    raises TypeError in gem code (the chain's second push is a dynamic call on the first's result, and the element
    type never widens); `Layout/LineLength` raises on `prelude/string.rb` as an input.
