@@ -942,6 +942,9 @@ func (c *Compiler) settleRound(inf *inference, settled bool, bets []pendingKey, 
 		return
 	}
 	inf.settled++
+	if c.env.NoAnyUse {
+		return
+	}
 	for _, key := range bets {
 		if t := next[key]; t != nil && !isAny(t) && c.goType(t) != "any" {
 			if inf.anyUse == nil {

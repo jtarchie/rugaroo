@@ -39,7 +39,10 @@ are within ±1% or better (objects −12%, collections −7%), and spinel's suit
 two gem rows did regress: liquid +15%, kramdown +8%. `git bisect` on kramdown's dynamic call sites (948 at 7c2e5b62,
 1,463 at be30d759) lands on bae8243e (2026-11-12, decision 444's `anyUse`): once the rounds settle, a gem parameter
 that any gem call passes an untyped value becomes untyped, so that the call cannot raise TypeError where MRI runs.
-That commit alone takes kramdown to 1,287 sites; later rubocop commits add the rest. It is the same trade as
+That commit alone takes kramdown to 1,287 sites; later rubocop commits add the rest. With the rule off (`RUGAROO_NO_ANY_USE=1`) kramdown has 1,150 sites and runs 5% fewer instructions, liquid 9%
+fewer, both still printing what MRI prints: they never needed it, rubocop does (parser's
+`StaticEnvironment#declared?(name)`). The compiler cannot tell the two apart; a typed body with an untyped twin to
+fall back to (one guard at the call) would keep both. It is the same trade as
 everywhere below: a typed parameter fed an untyped value must either assert (and may raise) or give up its type.
 
 ## Where the per-file time goes
