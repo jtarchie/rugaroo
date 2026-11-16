@@ -64,34 +64,56 @@ func rbReadUntil(r *bufio.Reader, want []byte) []byte {
 type rbStrFact struct {
 	p     *byte // the key: the String's data pointer and length. Holding p keeps the bytes from being reused.
 	n     int
+	level int  // how much is known: rbFactASCII, then valid, then chars. An ASCII String knows all three.
 	ascii bool
 	valid bool // valid UTF-8
 	chars int  // its length in characters: bytes unless valid and not ASCII
 }
 
+const (
+	rbFactASCII = iota
+	rbFactValid
+	rbFactChars
+)
+
 // rbStrFactMin is the length from which a String's facts are cached; a shorter one costs less to scan than to look up.
 const rbStrFactMin = 256
 
 // rbStrFacts is a direct-mapped cache by length: whole immutable entries swapped atomically, so no lock; a
-// collision only rescans. Go strings never change in place except under rbStrSetbyte, which clears its slot.
+// collision only rescans, and at most 16 Strings are kept alive by it. Go strings never change in place except
+// under rbStrSetbyte, which clears its slot.
 var rbStrFacts [16]atomic.Pointer[rbStrFact]
 
 func rbStrFactSlot(n int) *atomic.Pointer[rbStrFact] { return &rbStrFacts[(n^n>>4)&15] }
 
-// rbStrFactOf is s's facts; len(s) >= rbStrFactMin.
+// rbStrFactOf is s's facts up to level; len(s) >= rbStrFactMin. A non-ASCII String is validated and counted only
+// when asked, as its ASCII scan stops at the first high byte.
 //
 //go:noinline
-func rbStrFactOf(s string) *rbStrFact {
+func rbStrFactOf(s string, level int) *rbStrFact {
 	p := unsafe.StringData(s) //nolint:gosec // the key: compared only
 	slot := rbStrFactSlot(len(s))
-	if e := slot.Load(); e != nil && e.p == p && e.n == len(s) {
-		return e
+	e := slot.Load()
+	if e != nil && e.p == p && e.n == len(s) {
+		if e.level >= level {
+			return e
+		}
+		c := *e
+		e = &c
+	} else {
+		e = &rbStrFact{p: p, n: len(s), level: rbFactASCII, chars: len(s)}
+		if e.ascii = rbASCIIScan(s); e.ascii {
+			e.valid, e.level = true, rbFactChars
+		}
 	}
-	e := &rbStrFact{p: p, n: len(s), chars: len(s)}
-	if e.ascii = rbASCIIScan(s); e.ascii {
-		e.valid = true
-	} else if e.valid = utf8.ValidString(s); e.valid {
-		e.chars = utf8.RuneCountInString(s)
+	if e.level < level {
+		if e.level < rbFactValid {
+			e.valid = utf8.ValidString(s)
+		}
+		if level == rbFactChars && e.valid {
+			e.chars = utf8.RuneCountInString(s)
+		}
+		e.level = level
 	}
 	slot.Store(e)
 	return e
@@ -102,7 +124,7 @@ func rbValidUTF8(s string) bool {
 	if len(s) < rbStrFactMin {
 		return utf8.ValidString(s)
 	}
-	return rbStrFactOf(s).valid
+	return rbStrFactOf(s, rbFactValid).valid
 }
 
 // rbCharOffset is the byte offset of s's character k (k <= its length), and whether s has that many characters:

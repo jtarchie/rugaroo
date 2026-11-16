@@ -268,15 +268,37 @@ func rbASCIIMapBytes(s string, f func(byte) byte) string {
 }
 
 // rbASCII reports s is all ASCII, where a character is a byte, as String#length and #[] ask it of the String on
-// every call (decision 399): a scan of a short String, the cached fact of a long one (decision 464).
+// every call (decision 399): the cached fact of a long String (decision 464), else a scan eight bytes a step (Go
+// combines the loads). The scan is written out here, not called, so a short String still costs one call.
 func rbASCII(s string) bool {
-	if len(s) < rbStrFactMin {
-		return rbASCIIScan(s)
+	if len(s) >= rbStrFactMin {
+		return rbStrFactOf(s, rbFactASCII).ascii
 	}
-	return rbStrFactOf(s).ascii
+	for len(s) >= 8 {
+		w := uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 | uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
+		if w&0x8080808080808080 != 0 {
+			return false
+		}
+		s = s[8:]
+	}
+	for i := range len(s) {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
 
-// rbASCIIScan reads s eight bytes a step (Go combines the loads).
+// rbASCIIPrefix reports s[:e] is all ASCII: a short prefix by its own scan, a long one by the whole String's cached
+// fact first (a loop slicing one large String asks again and again), then its scan.
+func rbASCIIPrefix(s string, e int) bool {
+	if e < rbStrFactMin {
+		return rbASCIIScan(s[:e])
+	}
+	return rbASCII(s) || rbASCIIScan(s[:e])
+}
+
+// rbASCIIScan is rbASCII's scan for any length: the fact's own computation, and a prefix of a long String.
 func rbASCIIScan(s string) bool {
 	for len(s) >= 8 {
 		w := uint64(s[0]) | uint64(s[1])<<8 | uint64(s[2])<<16 | uint64(s[3])<<24 | uint64(s[4])<<32 | uint64(s[5])<<40 | uint64(s[6])<<48 | uint64(s[7])<<56
@@ -733,7 +755,7 @@ func rbEachChar(s string) iter.Seq[string] {
 
 func rbStrLen(s string) int {
 	if len(s) >= rbStrFactMin {
-		return rbStrFactOf(s).chars
+		return rbStrFactOf(s, rbFactChars).chars
 	}
 	if rbASCII(s) { // one pass, not a validity pass and then a rune count (decision 399)
 		return len(s)
@@ -913,7 +935,7 @@ var rbRadixPrefixes = map[string]int{"0b": 2, "0B": 2, "0o": 8, "0O": 8, "0x": 1
 //
 //go:noinline
 func rbStrAt(s String, i Integer) (String, bool) {
-	if i >= 0 && int(i) < len(s) && (len(s) >= rbStrFactMin && rbASCII(string(s)) || rbASCIIScan(string(s[:i+1]))) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
+	if i >= 0 && int(i) < len(s) && rbASCIIPrefix(string(s), int(i)+1) { // an ASCII prefix: character i is byte i, UTF-8 or binary (decision 399)
 		return rbNewStr(s, s[i:i+1]), true
 	}
 	if !rbValidUTF8(string(s)) { // ASCII-8BIT by decision 136: a byte is a character
@@ -1015,7 +1037,7 @@ func rbStrSub(s String, start, count Integer) (String, bool) {
 		if int(count) < e-int(start) {
 			e = int(start + count)
 		}
-		if len(s) >= rbStrFactMin && rbASCII(string(s)) || rbASCIIScan(string(s[:e])) { // the whole String's cached fact, or its prefix's scan
+		if rbASCIIPrefix(string(s), e) { // the whole String's cached fact, or its prefix's scan
 			return rbNewStr(s, s[start:e]), true
 		}
 	}

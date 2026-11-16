@@ -80,7 +80,7 @@ class Regexp < Object
     str := string(s)
     n := Integer(utf8.RuneCountInString(str))
     if len(str) >= rbStrFactMin {
-      n = Integer(rbStrFactOf(str).chars)
+      n = Integer(rbStrFactOf(str, rbFactChars).chars)
     }
     if pos < 0 {
       pos += n
