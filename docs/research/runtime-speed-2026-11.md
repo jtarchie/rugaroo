@@ -205,6 +205,26 @@ node-pattern matcher, and those stay dynamic. So the receiver's exact class matt
 that would pay are per node class (`on_send` takes a `SendNode`), which is what MRI's run observes and a signature on
 the base class cannot say safely.
 
+## What MRI's run observes (2026-11-16)
+
+`overrides/rubocop/observe.rb` (a TracePoint on `:call`) recorded the class of every parameter of every gem method
+called while MRI's rubocop inspects `dir20` (19 s; 8,326 methods, 5.1M calls):
+
+| a parameter held | parameters | share of calls |
+|---|---:|---:|
+| one class | 3,343 | 62% |
+| one class or nil | 118 | 8% |
+| nil only | 124 | 2% |
+| several classes | 711 | 28% |
+
+92% of the methods called (85% of the calls) had every parameter hold one class, or one class and nil. The mixed
+28% is a few generic entry points: `Commissioner#with_cop_error_handling(cop, node)` (328 cop classes, 38 node
+classes), Psych's visitors, `Util#line(node_or_range)`. Inference today types about 1,750 parameters in the whole
+program; this run alone saw 3,461 that are monomorphic. One run on 20 files proves nothing about another input, so
+these can only be where a typing starts: either verified by the closed world (a parameter keeps its observed class
+when every call that can reach it passes that class, which fails at `public_send` with a variable name), or kept
+with a second, untyped body for the calls that pass something else.
+
 ## A different inference, if the rounds are not enough
 
 Every root found here was a cycle the round-based inference resolved pessimistically: a value is untyped in the first
