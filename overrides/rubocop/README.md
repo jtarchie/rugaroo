@@ -7,7 +7,10 @@ the test inputs, and it runs 1.4-5.3x faster than `ruby` (`docs/research/rubocop
 - `gem-patches/<gem>-<version>.patch`: applied with `patch -p1` to a copy of the installed gem. Each one replaces a
   dynamic Ruby feature a compiled program cannot do, or rewrites a line the same way under MRI. Two drop behaviour:
   ERB in `.rubocop.yml` raises `RuboCop::Error`, and the config duplicate-key warning is gone. Decision 444 lists
-  every hunk and why.
+  every hunk and why. `parser-3.3.13.0.patch` (2026-11-16) has three more: no UTF-32LE copy of a non-ASCII source to
+  slice by character (a compiled String carries no encoding), and `Lexer::Dedenter#dedent` returning the dedented
+  String, which `Builders::Default#dedent_string` puts back into the node, instead of editing Strings in place
+  through shared references. Under MRI the ASTs are unchanged.
 - `main.rb`: `exe/rubocop`'s non-server path (`--server` is not supported).
 - `setup`: copies the installed gems into the work dir once and applies the patches (`GEM_DIR` to use other gems).
   The work dir is `RUBOCOP_WORK`, else `$TMPDIR/rugaroo-rubocop`: outside any project, because rubocop reads the
