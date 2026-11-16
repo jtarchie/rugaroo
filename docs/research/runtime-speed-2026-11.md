@@ -128,8 +128,14 @@ In the order the parser gem's profile shows them:
 2. **Stored lambdas.** An ivar assigned from other ivars holding lambdas (`@num_xfrm = @emit_integer`) loses the
    lambda's parameter and result types; `sig/gems/parser` covers the lexer's by hand.
 3. **A dynamic call's result is untyped even when every method of that name in the program returns one type.**
-   `node.loc.expression.begin_pos` restarts typed after one hop only if `loc`'s result is known. The closed world
-   knows every definer of a name; where they agree, the result can be that type behind one assertion.
+   Tried (2026-11-16, not kept): type the result, behind one assertion, when every definer of the name *declares*
+   the same return (inferred returns can change between rounds). Outputs stayed equal to MRI; kramdown typed 177
+   results and lost 67 dynamic sites, liquid 60 and 10, for under 1% fewer instructions each: what agrees today is
+   `empty?`, `length`, `include?`, comparisons. In rubocop's generated Go 15% of the 56,892 dynamic call sites have
+   one return type by that test, and the large names do not: `[]` (7,429 sites), `children` (4,178), `+` (3,021),
+   `size` (2,394), `loc` (1,674), `source` (1,206), each because some gem's method of that name has no signature
+   (`AST::Node#children` is an attr of an untyped ivar) or because core classes disagree. It becomes worth having
+   only with signatures for ast, parser, rubocop-ast and regexp_parser, and then the receivers are what to type.
 4. **Start-up** (3.2G for a 2-line file; the 10x target is 0.58G). Linux profile of `a.rb`: 29% scheduler and
    system calls (config and glob), 23% allocation, 20% interface lookups (`getitab`: the first assertion of each
    (interface, class) pair across ~2,000 class objects), 11% maps. Not worked on yet.
