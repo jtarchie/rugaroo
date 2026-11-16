@@ -1,0 +1,6 @@
+module CbGem
+  class Base
+    def on_send: (CbGem::Node node) -> untyped
+    def on_int: (CbGem::Node node) -> untyped
+  end
+end

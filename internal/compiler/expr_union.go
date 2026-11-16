@@ -151,6 +151,11 @@ func (f *fctx) unionCall(n parser.Node, recv expr, u TUnion, name string, args [
 		if isNil(m) && nilOwn { // the program's own NilClass method (decision 186)
 			return f.genMethodCall(n, expr{code: "(*NilClass)(nil)", typ: f.cls("NilClass")}, name, args, block), true
 		}
+		if _, tuple := m.(TTuple); tuple && f.lenient() {
+			// a gem's mixed literal held in a union (`Node.new(:send, [left, right, :name])` beside `[1]`): the Array
+			// it is in Ruby, so `children.each { }` runs on it as on the other member (decision 444)
+			return f.genMethodCall(n, expr{code: code + "._ToAny()", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}, name, args, block), true
+		}
 		return f.genMethodCall(n, expr{code: code, typ: m}, name, args, block), true
 	}, func(m Type, msg string) string { return fmt.Sprintf("%s (a member of %s)", msg, u) })
 }

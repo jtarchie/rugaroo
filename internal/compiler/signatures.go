@@ -168,6 +168,11 @@ func (c *Compiler) resolveMethod(m *Method) {
 		return
 	}
 	if m.sig == nil && m.sigText == "" {
+		if sig := c.ancestorSig(m); sig != nil { // a signature a superclass declares for a method only its subclasses define (decision 470)
+			m.sig, m.declared = sig, true
+		}
+	}
+	if m.sig == nil && m.sigText == "" {
 		// unannotated override inherits the parent's signature
 		if !typesInclude(m) && c.inheritSignature(m) {
 			return
@@ -584,6 +589,28 @@ func superPassesLocals(body parser.Node) bool {
 		}
 		return false
 	})
+}
+
+// ancestorSig is the signature a sig file gives m's name on a superclass that does not define the method itself: an
+// abstract declaration, as rubocop's Cop::Base documents `on_send(node)` and every cop defines it (decision 470).
+// A superclass that defines the method is inheritSignature's case. Gem code only, and only a single overload that
+// fits the def's parameters, as a method's own sig-file entry must (decision 427).
+func (c *Compiler) ancestorSig(m *Method) *rbs.MethodType {
+	if m.Owner == nil || m.Node == nil || m.File == nil || !c.gemFile(m.File) {
+		return nil
+	}
+	for s := m.Owner.Super; s != nil; s = s.Super {
+		if s.Methods[m.Name] != nil {
+			return nil
+		}
+		if sd := c.sigMethod(s, m.Name); sd != nil {
+			if len(sd.Overloads) == 1 && sigFitsDef(sd.Overloads[0], m.Node.Parameters) {
+				return sd.Overloads[0]
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 // inheritSignature copies the signature of the method m overrides, if any.

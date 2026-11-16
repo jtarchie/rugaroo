@@ -1023,6 +1023,9 @@ func (f *fctx) genUnionIterCall(n *parser.CallNode, u TUnion, t tail) bool {
 			f.emit("panic(rbNoMethod(%q, nil, false))", n.Name)
 		case entries[i] != nil:
 			f.genIterLoop(n, entries[i], expr{code: sw, typ: m})
+		case f.lenient() && isTuple(m) && f.resolve(arrayOfAny(f.c), n.Name) != nil && f.resolve(arrayOfAny(f.c), n.Name).M.Iterator:
+			// a gem's mixed literal is a tuple in Go and an Array in Ruby: its loop is the Array's (decision 444)
+			f.genIterLoop(n, f.resolve(arrayOfAny(f.c), n.Name), expr{code: sw + "._ToAny()", typ: arrayOfAny(f.c)})
 		case f.lenient() && f.resolve(m, n.Name) == nil && f.c.isDelegator(classOf(m)): // a Delegator forwards the loop to its object (Homebrew's Requirements)
 			obj := f.genMethodCall(n, expr{code: sw, typ: m}, "__getobj__", nil, nil)
 			f.genStmt(&parser.CallNode{Location: n.Location, Receiver: &exprNode{Node: n, e: obj}, Name: n.Name, Arguments: n.Arguments, Block: n.Block}, tail{})
@@ -1389,3 +1392,8 @@ func (f *fctx) bindBlockRet(n parser.Node, sig *BlockSig, env map[string]Type, g
 	}
 	return false
 }
+
+func isTuple(t Type) bool { _, ok := t.(TTuple); return ok }
+
+// arrayOfAny is Array[untyped].
+func arrayOfAny(c *Compiler) TClass { return TClass{C: c.classes["Array"], Args: []Type{TAny{}}} }

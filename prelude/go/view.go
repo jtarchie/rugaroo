@@ -35,6 +35,18 @@ type rbHashView interface {
 	rbCheckFrozen()
 }
 
+// rbTupleArray is a tuple value as the Array untyped code sees (decision 22): a mixed literal (`[left, right, :name]`)
+// is a Go tuple, and one held in a union reaches a dispatcher unconverted. An Array is a view already: not ok.
+func rbTupleArray(recv any) (*Array[any], bool) {
+	if _, ok := recv.(rbView); ok {
+		return nil, false
+	}
+	if t, ok := recv.(interface{ _ToAny() *Array[any] }); ok {
+		return t._ToAny(), true
+	}
+	return nil, false
+}
+
 func rbViewElems(s rbView) []any {
 	n := int(s._Len())
 	out := make([]any, n)

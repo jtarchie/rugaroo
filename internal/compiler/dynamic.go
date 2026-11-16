@@ -368,6 +368,8 @@ func (c *Compiler) emitDynFallback(name, gn string) {
 	if name != "__getobj__" {
 		c.w("\tif o, ok := rbDelegateObj(recv); ok {\n\t\treturn rbDyn%s(how, o, args...)\n\t}\n", gn)
 	}
+	// a tuple that reached untyped code as it is (a union member keeps its Go type, decision 150): the Array it is
+	c.w("\tif t, ok := rbTupleArray(recv); ok {\n\t\treturn rbDyn%s(how, t, args...)\n\t}\n", gn)
 	switch name { // Kernel's block-taking methods on a value whose class defines none of its own (a gem class defines `then`, an Array does not)
 	case "then", "yield_self":
 		c.w("\tif blk, rest := rbPopBlock(args); blk != nil && len(rest) == 0 {\n\t\treturn blk.fn(recv)\n\t}\n")
