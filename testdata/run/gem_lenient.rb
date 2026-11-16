@@ -32,6 +32,7 @@ require "dynish"
 require "fwdish"
 require "findish"
 require "bufish"
+require "ragelish"
 require "cmpish"
 require "sexpish"
 require "capish"
@@ -188,3 +189,5 @@ p s.connect("h"), s.reuse
 # a call with a block takes Matrix.build's value, not its Enumerator (decision 460)
 bl = Buildish.build(2) { |i, j| i >= j ? 1 : 0 }
 p bl.lower?, bl.to_s
+# a parameter reassigned from a call that takes it, unpack("U*"), an Integer case as a switch, `stack[-n, n]` (decisions 465-467)
+Ragelish.demo.each { |v| p v }

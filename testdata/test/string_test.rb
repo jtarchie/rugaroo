@@ -3005,6 +3005,31 @@ module StringTests
     end
   end
 
+  # unpack of a literal format of starred integer directives is an Array[Integer] (decision 465).
+  class StringUnpackIntsTest < Minitest::Test
+    def test_code_points
+      pts = "h\u00e9llo \u65e5\u672c".unpack("U*")
+      assert_equal [104, 233, 108, 108, 111, 32, 26_085, 26_412], pts
+      assert_equal 53_193, pts.sum
+      assert_equal 26_412, pts.max
+      assert_equal [], "".unpack("U*")
+    end
+
+    def test_bytes_and_words
+      assert_equal [104, 195, 169], "h\u00e9".unpack("C*")
+      assert_equal [-61, -87], "\u00e9".unpack("c*")
+      assert_equal [0x6162, 0x6364], "abcd".unpack("n*")
+      assert_equal [0x6261, 0x6463], "abcde".unpack("v*")
+      assert_equal [0x61626364], "abcdef".unpack("N*")
+      assert_equal [97, 98, 0x6364], "abcd".unpack("C2n*")
+      assert_equal [98, 99], "abc".unpack("C*", offset: 1)
+    end
+
+    def test_malformed_utf8
+      assert_raises(ArgumentError) { "a\xFFb".b.unpack("U*") }
+    end
+  end
+
   class StringRebindTest < Minitest::Test
     def test_replace_and_clear_on_a_local
       s = +"k"

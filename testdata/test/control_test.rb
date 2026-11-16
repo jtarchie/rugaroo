@@ -6202,4 +6202,50 @@ module ControlTests
       assert_equal 2, maybe.call(1) { |x| x + 1 }
     end
   end
+
+  # A case whose whens are all Integer literals is one Go switch on the value (decision 467).
+  class ControlIntCaseTest < Minitest::Test
+    #: (Integer?) -> String
+    def control_int_name(code)
+      case code
+      when 1 then "one"
+      when 2, 3 then "few"
+      when -1 then "minus"
+      when 0x10 then "hex"
+      when 1_000 then "k"
+      else "other"
+      end
+    end
+
+    #: (Integer) -> Integer?
+    def control_int_weight(n)
+      case n
+      when 0 then 10
+      when 1 then 20
+      when 2 then 30
+      when 7, 8, 9 then 40
+      end
+    end
+
+    def test_nilable_subject
+      assert_equal %w[one few few minus hex k other other], [1, 2, 3, -1, 16, 1000, 5, nil].map { |c| control_int_name(c) }
+    end
+
+    def test_no_else_is_nil
+      assert_equal [10, 20, 30, nil, nil, nil, nil, 40, 40, 40, nil], (0..10).map { |n| control_int_weight(n) }
+    end
+
+    def test_side_effects_in_arms
+      hits = []
+      [4, 5, 6, 7, 4].each do |n|
+        case n
+        when 4 then hits << :a
+        when 5 then hits << :b
+        when 6 then hits << :c
+        when 8 then hits << :never
+        end
+      end
+      assert_equal %i[a b c a], hits
+    end
+  end
 end
