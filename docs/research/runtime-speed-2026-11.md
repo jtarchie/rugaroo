@@ -36,7 +36,11 @@ Start-up is 1.8x better than MRI; the work per file is 3-5x worse (`dir20` minus
 
 "The benchmarks got slower" did not reproduce for the typed rows: against 7c2e5b62 (decision 402), `benchmarks/` rows
 are within ±1% or better (objects −12%, collections −7%), and spinel's suite is 11% fewer instructions in total. The
-two gem rows did regress: liquid +15%, kramdown +8%.
+two gem rows did regress: liquid +15%, kramdown +8%. `git bisect` on kramdown's dynamic call sites (948 at 7c2e5b62,
+1,463 at be30d759) lands on bae8243e (2026-11-12, decision 444's `anyUse`): once the rounds settle, a gem parameter
+that any gem call passes an untyped value becomes untyped, so that the call cannot raise TypeError where MRI runs.
+That commit alone takes kramdown to 1,287 sites; later rubocop commits add the rest. It is the same trade as
+everywhere below: a typed parameter fed an untyped value must either assert (and may raise) or give up its type.
 
 ## Where the per-file time goes
 
