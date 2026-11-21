@@ -126,6 +126,7 @@ func (f *fctx) genWhile(pred parser.Node, body *parser.StatementsNode, negate bo
 	}
 	f.indent++
 	f.applyNarrow(narrow)
+	f.applyNarrow(f.callNarrowing(pred)) // the condition ran before the body: a local it called a method on is not nil (decision 357)
 	f.redoLabel(body)
 	f.c.markSureTake(pred, !negate, body)
 	f.genStmts(body, tail{})
@@ -133,6 +134,9 @@ func (f *fctx) genWhile(pred parser.Node, body *parser.StatementsNode, negate bo
 	f.leaveBlock(saved)
 	f.emit("}")
 	f.popLoop()
+	if body == nil || !blockBreaks(body) && !blockBreaksValue(body) {
+		f.applyNarrow(f.callNarrowing(pred)) // and it ran last before the loop ended, when no break leaves it
+	}
 	if valued == nil || t.kind != tailAssign {
 		f.emptyTail(pred, t)
 	}

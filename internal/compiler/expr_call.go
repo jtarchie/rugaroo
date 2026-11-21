@@ -181,6 +181,9 @@ func (f *fctx) genCall0(n *parser.CallNode, expected Type) expr {
 	if e, ok := f.genFrozenLiteral(n, expected); ok {
 		return e
 	}
+	if e, ok := f.mapFlatten(n, expected); ok {
+		return e
+	}
 	if e, ok := f.lenientCall(n); ok {
 		return e
 	}

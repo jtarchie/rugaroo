@@ -6,10 +6,10 @@ module Kramdown
     @value: untyped
     @attr: Hash[String, untyped]?
     @options: Hash[Symbol, untyped]?
-    @children: Array[untyped] # update_tree maps children to Arrays, then flattens them
+    @children: Array[Kramdown::Element] # update_tree's `map! { ... }.flatten!` is one step (decision 482)
     attr_accessor type: Symbol
     attr_accessor value: untyped
-    attr_accessor children: Array[untyped]
+    attr_accessor children: Array[Kramdown::Element]
     def initialize: (Symbol type, ?untyped value, ?Hash[String, untyped]? attr, ?Hash[Symbol, untyped]? options) -> void
     def attr: () -> Hash[String, untyped]
     def options: () -> Hash[Symbol, untyped]

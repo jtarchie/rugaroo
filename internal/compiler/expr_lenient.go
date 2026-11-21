@@ -317,3 +317,24 @@ func (f *fctx) lenientSplat(a expr) expr {
 	}
 	return expr{code: "(&Array[any]{s: rbSplatObj(" + a.code + ")})", typ: TClass{C: f.c.classes["Array"], Args: []Type{TAny{}}}}
 }
+
+// mapFlatten is a gem's `xs.map! do |x| ... end.flatten!` (kramdown's update_tree and
+// four more: each child becomes itself, its children or nothing): Array#__map_flatten! does both in one step, so the
+// Array is never one of Arrays in between and its elements keep their type (decision 482).
+func (f *fctx) mapFlatten(n *parser.CallNode, expected Type) (expr, bool) {
+	if !f.lenient() || n.Name != "flatten!" || n.Arguments != nil || n.Block != nil {
+		return expr{}, false
+	}
+	in, ok := n.Receiver.(*parser.CallNode)
+	if !ok || in.Name != "map!" || in.Arguments != nil || in.Receiver == nil {
+		return expr{}, false
+	}
+	if _, lit := in.Block.(*parser.BlockNode); !lit {
+		return expr{}, false
+	}
+	// whatever the receiver's type here: an untyped `element.children` is the typed Array at run time, and a plain map!
+	// would store the block's Arrays in it
+	call := *in
+	call.Name, call.Location = "__map_flatten!", n.Location
+	return f.genCall(&call, expected), true
+}

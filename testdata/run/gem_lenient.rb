@@ -24,6 +24,7 @@ require "strapish"
 require "prepish"
 require "shapish"
 require "walkish"
+require "treeish"
 require "redish"
 require "nodish"
 require "srcish"
@@ -201,3 +202,9 @@ p Methish.demo
 # a gem's own iterator as a value: the break's value, nil when it runs to its end (decision 475)
 wu = WalkishUser.new(Walkish.new([1, 3, 4, 6]))
 p wu.first_even(2), wu.first_even(7)
+# `map! { ... }.flatten!` in one step keeps a typed Array's elements (decision 482)
+tree_root = Treeish.new(:root)
+tree_group = Treeish.new(:group)
+tree_group.children << Treeish.new(:a) << Treeish.new(:b)
+tree_root.children << Treeish.new(:x) << tree_group << Treeish.new(:drop)
+p tree_root.flatten_groups, tree_root.flatten_groups

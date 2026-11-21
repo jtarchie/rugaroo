@@ -1113,6 +1113,33 @@ class Array < Object
     return &Array[E]{s: slices.Clone(self.s)}
   }
 
+  # `xs.map! { ... }.flatten!` on typed elements, in one step (kramdown's update_tree, decision 482): each element is
+  # what the block answers, an Array's elements spliced in, so the Array never holds the Arrays in between; self when
+  # one was spliced, else nil, as flatten! answers.
+  #: () { (E) -> untyped } -> Array[E]?
+  def __map_flatten! = %x{
+    self.rbCheckFrozen()
+    flat := &Array[any]{}
+    spliced := false
+    for _, x := range self.s {
+      v := blk(x)
+      if _, isArr := v.(Array_Any); isArr {
+        spliced = true
+      }
+      rbFlattenInto(flat, []any{v}, -1)
+    }
+    out := make([]E, len(flat.s))
+    for i, y := range flat.s {
+      out[i] = rbAs[E](y, "Array element")
+    }
+    self.s = out
+    if !spliced {
+      return nil
+    }
+    p := self
+    return &p
+  }
+
   # flatten in place: self when anything was spliced, else nil (typed elements are never Arrays here).
   #: (?Integer) -> Array[E]?
   def flatten!(depth = -1) = %x{
