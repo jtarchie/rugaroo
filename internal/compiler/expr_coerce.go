@@ -628,10 +628,7 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 		// an untyped value where the rounds typed a container (liquid's For#render_segment(context, segment), its segment
 		// Array[String] in the rounds and untyped in the final pass): converting it copies the elements and raises on the
 		// first that does not fit, where MRI runs on, so the parameter is untyped and the final pass runs again
-		if c.widenPending == nil {
-			c.widenPending = map[pendingKey]Type{}
-		}
-		c.widenPending[p.Pending] = TAny{}
+		c.widenParam(p.Pending, TAny{})
 		return
 	}
 	ac, ok2 := stripOpt(a.typ).(TClass)
@@ -639,10 +636,7 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 		// a core value of another class than the rounds typed the parameter (rubocop-ast's `ProcessedSource#[](*args)`, typed
 		// Integer by its other callers, given a Range): the call would raise TypeError where MRI runs, so the parameter is
 		// untyped and the final pass runs again
-		if c.widenPending == nil {
-			c.widenPending = map[pendingKey]Type{}
-		}
-		c.widenPending[p.Pending] = TAny{}
+		c.widenParam(p.Pending, TAny{})
 		return
 	}
 	if !ok || !ok2 || pc.C != ac.C || len(pc.Args) == 0 || pc.C.RubyName != "Hash" && pc.C.RubyName != "Array" {
@@ -651,14 +645,40 @@ func (f *fctx) noteWidenPending(a expr, p Param) {
 	if slices.ContainsFunc(ac.Args, func(t Type) bool { return !isAny(t) }) || !slices.ContainsFunc(pc.Args, func(t Type) bool { return !isAny(t) }) {
 		return
 	}
-	if c.widenPending == nil {
-		c.widenPending = map[pendingKey]Type{}
-	}
 	var t Type = ac
 	if isOpt(p.Type) {
 		t = TOpt{Elem: ac}
 	}
-	c.widenPending[p.Pending] = t
+	c.widenParam(p.Pending, t)
+}
+
+// widenParam records a parameter the final pass widens to t. The pass runs again for it, so its output is not kept,
+// and the parameter takes t at once: a method emitted after this sees it widened, and what that method passes on is
+// widened in this pass too, not one pass per link (rubocop's UnifiedDiff: `backtrack(trace)`, its elements to
+// `previous_position(furthest)`, that to `previous_diagonal(furthest)`: three more passes, now one; decision 480).
+func (c *Compiler) widenParam(key pendingKey, t Type) {
+	if c.widenPending == nil {
+		c.widenPending = map[pendingKey]Type{}
+	}
+	c.widenPending[key] = t
+	if !c.widenChain {
+		return // the last pass allowed: its output is the program, so its signatures stay as they are
+	}
+	if c.pendingParams == nil {
+		c.pendingParams = map[pendingKey]*Param{}
+		for _, cls := range c.classList {
+			for _, m := range cls.MethodList {
+				for i := range m.Params {
+					if k := m.Params[i].Pending; k != "" && m.Owner == cls {
+						c.pendingParams[k] = &m.Params[i]
+					}
+				}
+			}
+		}
+	}
+	if p := c.pendingParams[key]; p != nil {
+		p.Type = t
+	}
 }
 
 // typedContainer reports an Array, Hash or Set with a typed element (or key/value) type.

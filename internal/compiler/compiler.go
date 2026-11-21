@@ -275,6 +275,8 @@ type refineState struct {
 	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
 	baseFailed          map[*Method]bool         // gem methods that fail in refineIvars' untyped baseline: their failure vetoes nothing
 	widenPending        map[pendingKey]Type      // noteWidenPending's parameters (decision 444)
+	widenChain          bool                     // this pass runs again if it widens a parameter, so it may widen in place (decision 480)
+	pendingParams       map[pendingKey]*Param    // each inferred parameter by its key, built on first use
 	dynSites            map[string]why           // RUGAROO_UNTYPED_REPORT: each dynamic call's root, by its entry in Warnings (noteDynSite)
 	ivarNotes           map[*Ivar]ivarNote       // RUGAROO_UNTYPED_REPORT: why each untyped ivar is (noteIvar)
 	ivarDeclWhy         string                   // RUGAROO_UNTYPED_REPORT: the rule declaring ivars just now, for declareIvar's note
@@ -543,6 +545,9 @@ func (c *Compiler) widenRedo(opts *options) bool {
 	}
 	if opts.env.Timing {
 		fmt.Fprintf(os.Stderr, "rugaroo: final pass again: %d parameters widened to an untyped container\n", len(c.widenPending))
+		for _, k := range slices.Sorted(maps.Keys(c.widenPending)) {
+			fmt.Fprintf(os.Stderr, "rugaroo: final pass again: %s is %s\n", k, typeString(c.widenPending[k]))
+		}
 	}
 	return true
 }
@@ -693,6 +698,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.roundRefine = opts.roundRefines()
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
+	c.widenChain = opts.widenChain()
 	c.noPrune = opts.noPrune
 	c.methodRequiresRuntime = opts.mainLast
 	c.env = compileEnv(opts)
@@ -1457,3 +1463,8 @@ func parseDelegators(m map[string][]string) map[boot.Loc][]string {
 
 // addPkgVar declares a package-level var once.
 func (c *Compiler) addPkgVar(decl string) { c.pkgVars[decl] = true }
+
+// widenChain reports a pass that runs again when it widens a parameter (decision 480).
+func (o *options) widenChain() bool {
+	return o.widenRedo < maxWidenRedo && !o.env.NoWidenChain
+}
