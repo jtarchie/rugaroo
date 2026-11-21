@@ -833,6 +833,10 @@ func (c *Compiler) collectUses() {
 					t = TAny{}
 				}
 				c.uses[p.Pending] = append(c.uses[p.Pending], paramUse{typ: t, file: m.File, off: p.Default.GetLocation().StartOffset, deflt: true})
+				if h, ok := p.Default.(*parser.HashNode); ok && len(h.Elements) == 0 && c.env.InferUnknown { // `opts = {}`: a record of no fields (infer_record.go)
+					mk := recMarkKey(p.Pending)
+					c.uses[mk] = append(c.uses[mk], paramUse{typ: TClass{C: c.classes["Boolean"]}, file: m.File, off: p.Default.GetLocation().StartOffset, deflt: true})
+				}
 			}
 		}
 	}
@@ -937,6 +941,7 @@ func (c *Compiler) updateInference(inf *inference) {
 			}
 		}
 	}
+	c.inferRecords(next, order)
 	c.growState(inf, next, from)
 	diff := c.roundDiff(inf, next)
 	c.roundTiming(next, diff, len(bets))

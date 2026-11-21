@@ -282,7 +282,7 @@ func (f *fctx) emptyRefinements() map[localKey]Type {
 			}
 			continue
 		}
-		if t := refineContainer(li.typ, li.open, li.elems, f.lenient()); t != nil {
+		if t := refineContainer(li.typ, li.open, li.elems, f.lenient(), f.lenient() && f.c.env.InferUnknown); t != nil {
 			out[k] = t
 		}
 		if r, ok := f.refined[k]; ok && li.open {
@@ -373,7 +373,7 @@ func (f *fctx) searchLocals(order []localKey, refined map[localKey]Type, try fun
 // was put in it, or nil: still typed, or no typed evidence to join.
 // Untyped evidence is skipped (`h[k] = h[k] + 1` is untyped only because h
 // is): if it really is untyped, the typed run converts it and is rejected.
-func refineContainer(t Type, open bool, elems [2][]Type, gem bool) Type {
+func refineContainer(t Type, open bool, elems [2][]Type, gem, shapes bool) Type {
 	c, ok := stripOpt(t).(TClass)
 	if !open || !ok || !slices.ContainsFunc(c.Args, isAny) {
 		return nil
@@ -393,6 +393,10 @@ func refineContainer(t Type, open bool, elems [2][]Type, gem bool) Type {
 			skip = func(t Type) bool { return isAny(stripOpt(t)) }
 		}
 		typed := slices.DeleteFunc(slices.Clone(elems[i]), skip)
+		if u := tupleShapes(typed); shapes && u != nil {
+			args[i] = u // a stack of entries of several shapes (kramdown's `[tree, src, ial]` and `[tree, text_type]`)
+			continue
+		}
 		if args[i] = joinOrAny(typed); len(typed) == 0 || holdsAny(args[i]) {
 			return nil
 		}
@@ -401,6 +405,51 @@ func refineContainer(t Type, open bool, elems [2][]Type, gem bool) Type {
 		return TOpt{Elem: TClass{C: c.C, Args: args}}
 	}
 	return TClass{C: c.C, Args: args}
+}
+
+// tupleShapes is the element type of a container that holds tuples of more than one length, or tuples beside
+// values of a class: the union of one tuple per length (each the field-by-field join of the tuples of that length)
+// and of the join of the other values. nil when there is no tuple, when one type holds everything (joinOrAny's
+// case), when a length's tuples or the other values do not join, or when the union would have more than four members.
+func tupleShapes(ts []Type) Type {
+	byLen := map[int]Type{}
+	var rest []Type
+	for _, t := range ts {
+		tt, ok := t.(TTuple)
+		if !ok {
+			rest = append(rest, t)
+			continue
+		}
+		cur, has := byLen[len(tt.Elems)]
+		if !has {
+			byLen[len(tt.Elems)] = tt
+			continue
+		}
+		j, ok := joinTuples(cur, tt)
+		if !ok {
+			return nil
+		}
+		byLen[len(tt.Elems)] = j
+	}
+	if len(byLen) == 0 || len(byLen) == 1 && len(rest) == 0 {
+		return nil
+	}
+	members := make([]Type, 0, len(byLen)+1)
+	for _, n := range slices.Sorted(maps.Keys(byLen)) {
+		members = append(members, byLen[n])
+	}
+	if len(rest) > 0 {
+		other := joinOrAny(rest)
+		if holdsAny(other) {
+			return nil
+		}
+		members = append(members, other)
+	}
+	u := unionOf(members...)
+	if ut, ok := stripOpt(u).(TUnion); !ok || len(ut.Members) > 4 {
+		return nil
+	}
+	return u
 }
 
 // localSeed is what one of refineIvars' dry-runs kept of a method's local typings (decision 444): the next dry-run of

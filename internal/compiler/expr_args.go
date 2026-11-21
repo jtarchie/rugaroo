@@ -77,6 +77,7 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 	take := func(p Param, i int) {
 		an, a := f.argAt(n, p, env, args, exprs, i, codes)
 		f.noteUse(p, an, a.typ)
+		f.noteRecUse(p, an, a.typ)
 		f.noteWideningUse(m, p, an, a.typ)
 		a = f.truncFloat(m, p, env, a)
 		unify(p.Type, a.typ, env)

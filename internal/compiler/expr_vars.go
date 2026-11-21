@@ -33,6 +33,13 @@ func (f *fctx) descendantIvar(name string) bool {
 
 // genIvarWrite is an @x assignment: the value converted to the ivar's type, declaring it during discovery.
 func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
+	if e, ok := f.recEmptyIvarWrite(n); ok {
+		return e
+	}
+	return f.genIvarWrite1(n)
+}
+
+func (f *fctx) genIvarWrite1(n *parser.InstanceVariableWriteNode) expr {
 	if f.includerIvar(n.Name) {
 		return f.genIncluderIvarWrite(n)
 	}

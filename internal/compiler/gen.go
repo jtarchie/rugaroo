@@ -98,6 +98,7 @@ type fctx struct {
 	retTok           string                   // a gem method whose block returns: the per-call token its rbReturn panics carry (decision 247)
 	rescues          int                      // nesting depth of rescue clause bodies, where `raise` sets the new exception's cause (r_)
 	yielderFed       *[]Type                  // what a probed Enumerator.new block feeds its yielder (inferYielder)
+	recLocals        map[string]recShape      // recOfLocal's answers, this def
 	mwProvisional    bool                     // destructuring a round's provisional value: its targets are as provisional (decision 466)
 	typedUse         map[pendingKey]bool      // from-use parameters this body passed a real type, this round (decision 466)
 	paramWiden       map[string]Type          // a gem method's params reassigned what their type does not hold: their widened type (decision 241)

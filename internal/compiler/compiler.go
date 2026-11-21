@@ -200,13 +200,14 @@ type memoState struct {
 	sendArmsN           int
 	privateInMemo       map[string][]*Class // memo of privateIn, valid while classList has privateInN classes
 	privateInN          int
-	objFreezeMemo       int             // objFreeze: 0 unasked, 1 no, 2 yes
-	discovering         bool            // discoverIvars is walking the classes (unknownNow)
-	pendingSigs         int             // signatures rendered while their return was still being inferred: memos taken across one are provisional
-	goCalledNames       map[string]bool // memo of goCalled
-	renderingConstraint bool            // constraintNamesSelf is rendering a module interface
-	coerceOwned         *bool           // memo of ownCoerce
-	bareRaise           int             // gemBareRaise's memo: 0 unknown, 1 no, 2 yes
+	objFreezeMemo       int                     // objFreeze: 0 unasked, 1 no, 2 yes
+	recMemo             map[pendingKey]recShape // paramShape's answers, this compile
+	discovering         bool                    // discoverIvars is walking the classes (unknownNow)
+	pendingSigs         int                     // signatures rendered while their return was still being inferred: memos taken across one are provisional
+	goCalledNames       map[string]bool         // memo of goCalled
+	renderingConstraint bool                    // constraintNamesSelf is rendering a module interface
+	coerceOwned         *bool                   // memo of ownCoerce
+	bareRaise           int                     // gemBareRaise's memo: 0 unknown, 1 no, 2 yes
 }
 
 // branchKey is where an if/unless/case starts: its line and the column on it (boot.BranchInfo's Loc and Col).

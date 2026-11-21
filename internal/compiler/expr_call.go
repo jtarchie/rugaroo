@@ -156,6 +156,18 @@ func (f *fctx) genFrozenLiteral(n *parser.CallNode, expected Type) (expr, bool) 
 }
 
 func (f *fctx) genCall(n *parser.CallNode, expected Type) expr {
+	if e, ok := f.recAbsent(n); ok {
+		return e
+	}
+	e := f.genCall0(n, expected)
+	if t := f.recRead(n); t != nil && !typeEq(e.typ, t) && (isAny(stripOpt(e.typ)) || e.nilable) {
+		// a record's field (infer_record.go): the untyped value read, converted to what every source put there
+		return expr{code: f.coerce(n, e, t), typ: t}
+	}
+	return e
+}
+
+func (f *fctx) genCall0(n *parser.CallNode, expected Type) expr {
 	defer f.afterCall(n) // after the arguments, which still read narrowed ivars
 	if e, ok := f.genFusedIndexAssign(n); ok {
 		return e
