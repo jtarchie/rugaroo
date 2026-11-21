@@ -325,6 +325,29 @@ module NetTests
         assert_equal "500", http.get("/boom").code
       end
     end
+
+    # error! raises by status class, value answers nil for a 2xx and raises otherwise (rubocop's RemoteConfig)
+    def test_error_bang_and_value
+      app = lambda do |env|
+        case env["PATH_INFO"]
+        when "/ok" then [200, {}, ["ok"]]
+        when "/moved" then [301, { "location" => "/ok" }, []]
+        when "/boom" then raise "boom"
+        else [404, {}, ["no"]]
+        end
+      end #: ^(Hash[String, untyped]) -> untyped
+      net_rack(app) do |http, _|
+        res = http.get("/missing")
+        err = assert_raises(Net::HTTPClientException) { res.error! }
+        assert_equal ["404 \"Not Found\"", true, true], [err.message, err.response.equal?(res), err.is_a?(Net::HTTPExceptions)]
+        assert_raises(Net::HTTPClientException) { res.value }
+        assert_nil http.get("/ok").value
+        assert_raises(Net::HTTPError) { http.get("/ok").error! }
+        assert_raises(Net::HTTPRetriableError) { http.get("/moved").value }
+        assert_raises(Net::HTTPFatalError) { http.get("/boom").error! }
+        assert_kind_of Net::ProtocolError, err
+      end
+    end
   end
 
   # WEBrick refuses a request line past MAX_URI_LENGTH (2083) with 414 and request line plus headers past MAX_HEADER_LENGTH (112 KiB) with 413.

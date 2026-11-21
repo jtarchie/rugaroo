@@ -238,14 +238,93 @@ module Net
 
     #: () -> String
     def inspect = "#<#{__class_name} #{code} #{message} readbody=true>"
+
+    # MRI's error!: raises the exception of the response's status class (its EXCEPTION_TYPE), HTTPError for one that
+    # has none of its own.
+    #: () -> void
+    def error! = raise(HTTPError.new("#{code} #{message.dump}", self))
+
+    # MRI's value: nil for a 2xx response, error! for any other.
+    #: () -> nil
+    def value
+      error!
+      nil
+    end
+  end
+
+  # MRI's net/protocol and net/http/exceptions: what error! raises, each holding its response.
+  class ProtocolError < StandardError; end
+  class ProtoFatalError < ProtocolError; end
+  class ProtoRetriableError < ProtocolError; end
+  class ProtoServerError < ProtocolError; end
+  module HTTPExceptions; end
+
+  class HTTPError < ProtocolError
+    include HTTPExceptions
+    attr_reader :response #: Net::HTTPResponse
+
+    #: (String, Net::HTTPResponse) -> void
+    def initialize(msg, res)
+      super(msg)
+      @response = res
+    end
+  end
+
+  class HTTPRetriableError < ProtoRetriableError
+    include HTTPExceptions
+    attr_reader :response #: Net::HTTPResponse
+
+    #: (String, Net::HTTPResponse) -> void
+    def initialize(msg, res)
+      super(msg)
+      @response = res
+    end
+  end
+
+  class HTTPClientException < ProtoServerError
+    include HTTPExceptions
+    attr_reader :response #: Net::HTTPResponse
+
+    #: (String, Net::HTTPResponse) -> void
+    def initialize(msg, res)
+      super(msg)
+      @response = res
+    end
+  end
+
+  class HTTPFatalError < ProtoFatalError
+    include HTTPExceptions
+    attr_reader :response #: Net::HTTPResponse
+
+    #: (String, Net::HTTPResponse) -> void
+    def initialize(msg, res)
+      super(msg)
+      @response = res
+    end
   end
 
   class HTTPUnknownResponse < HTTPResponse; end
   class HTTPInformation < HTTPResponse; end
-  class HTTPSuccess < HTTPResponse; end
-  class HTTPRedirection < HTTPResponse; end
-  class HTTPClientError < HTTPResponse; end
-  class HTTPServerError < HTTPResponse; end
+
+  class HTTPSuccess < HTTPResponse
+    #: () -> nil
+    def value = nil
+  end
+
+  class HTTPRedirection < HTTPResponse
+    #: () -> void
+    def error! = raise(HTTPRetriableError.new("#{code} #{message.dump}", self))
+  end
+
+  class HTTPClientError < HTTPResponse
+    #: () -> void
+    def error! = raise(HTTPClientException.new("#{code} #{message.dump}", self))
+  end
+
+  class HTTPServerError < HTTPResponse
+    #: () -> void
+    def error! = raise(HTTPFatalError.new("#{code} #{message.dump}", self))
+  end
 
   class HTTPContinue < HTTPInformation; end
   class HTTPSwitchProtocol < HTTPInformation; end
