@@ -298,7 +298,7 @@ func TestMulti(t *testing.T) {
 			}
 			stablePreludeLines(t, filepath.Join(gen, "main.go"), true)
 			bin := goBuild(t, gen, "-l")
-			loader := append([]string{"-e", "ARGV.each { |f| require File.expand_path(f) }"}, paths...)
+			loader := slices.Concat(mriGems("."), []string{"-e", "ARGV.each { |f| require File.expand_path(f) }"}, paths)
 			wantOut, wantErr, wantCode, rerr := runIO(t, ".", progIO{}, "ruby", loader...)
 			if rerr != nil || wantCode != 0 { // MRI must pass, or two identical crashes would agree
 				t.Fatalf("ruby failed (exit %d, err %v): the case is wrong\n%s\n%s", wantCode, rerr, wantOut, wantErr)
@@ -1198,7 +1198,7 @@ type mriCached struct {
 	Code   int    `json:"code"`
 }
 
-// gemfileLock keys the cache on the gem versions (minitest, rack) MRI loads: a bundle update must not replay old output.
+// gemfileLock keys the cache on the gem versions MRI loads (mriGems): a bundle update must not replay old output.
 var gemfileLock = sync.OnceValue(func() string {
 	data, _ := os.ReadFile("Gemfile.lock") // absent just keys as empty
 	sum := sha256.Sum256(data)
@@ -1247,6 +1247,29 @@ var mtTracePreload = sync.OnceValues(func() (string, []byte) {
 	}
 	return path, src
 })
+
+// mriGemsPreload holds MRI to Gemfile.lock's gem versions (decision 481), read once: its source keys the cache too.
+var mriGemsPreload = sync.OnceValues(func() (string, []byte) {
+	path, err := filepath.Abs("testdata/mri_gems.rb")
+	if err != nil {
+		panic(err)
+	}
+	src, err := os.ReadFile(path) //nolint:gosec // testdata path
+	if err != nil {
+		panic(err)
+	}
+	return path, src
+})
+
+// mriGems is the flags that run MRI in dir on the repo bundle: none where dir has its own Gemfile, as example 135's program sets up its own.
+func mriGems(dir string) []string {
+	_, err := os.Stat(filepath.Join(dir, "Gemfile"))
+	if err == nil {
+		return nil
+	}
+	path, _ := mriGemsPreload()
+	return []string{"-r", path}
+}
 
 // rubyOutput is `ruby file`'s result, cached by source (which holds the args/env/stdin directives), Ruby, TZ, Gemfile.lock and checkout (RUGAROO_NO_MRI_CACHE=1 skips the cache).
 func rubyOutput(t *testing.T, dir, file string, src []byte, pio progIO, args []string) mriResult {
@@ -1328,8 +1351,9 @@ func exampleSources(t *testing.T, dir string) []byte {
 func mriRun(t *testing.T, dir string, src []byte, pio progIO, rubyArgs []string) mriResult {
 	t.Helper()
 	wd, _ := os.Getwd() // the checkout: output holding __dir__ or a testdata path differs per worktree
-	key := "v6\x00" +   // v6: exampleSources hashes non-.rb files too (decision 272)
-		rubyDescription() + "\x00" + os.Getenv("TZ") + "\x00" + wd + "\x00" + gemfileLock() + "\x00"
+	_, gemsSrc := mriGemsPreload()
+	key := "v7\x00" + // v7: MRI runs on the Gemfile's bundle (decision 481)
+		rubyDescription() + "\x00" + os.Getenv("TZ") + "\x00" + wd + "\x00" + gemfileLock() + "\x00" + string(gemsSrc) + "\x00"
 	if args := rubyArgs[1:]; len(args) > 0 { // `# args:` are in src; TestMinitest adds more
 		key += strings.Join(args, "\x00") + "\x00args\x00"
 	}
@@ -1341,6 +1365,7 @@ func mriRun(t *testing.T, dir string, src []byte, pio progIO, rubyArgs []string)
 		pio.env = append(slices.Clone(pio.env), "RUGAROO_MT_TRACE="+tracePath)
 		rubyArgs = append([]string{"-r", preload}, rubyArgs...)
 	}
+	rubyArgs = append(mriGems(dir), rubyArgs...) // first: mt_trace.rb requires minitest
 	sum := sha256.Sum256(slices.Concat([]byte(key), src))
 	cacheDir, err := os.UserCacheDir()
 	cached := filepath.Join(cacheDir, "rugaroo-test", "mri", hex.EncodeToString(sum[:]))

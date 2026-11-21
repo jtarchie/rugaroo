@@ -42,7 +42,7 @@ func TestFuzzDiff(t *testing.T) {
 			}
 			bin := goBuild(t, transpile(t, rb, src), "-l")
 			in := strings.Join(cases, "\n") + "\n"
-			want, _, _, err := runIO(t, filepath.Dir(rb), progIO{stdin: in}, "ruby", filepath.Base(rb))
+			want, _, _, err := runIO(t, filepath.Dir(rb), progIO{stdin: in}, "ruby", append(mriGems(filepath.Dir(rb)), filepath.Base(rb))...)
 			if err != nil {
 				t.Fatal(err)
 			}

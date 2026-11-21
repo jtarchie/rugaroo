@@ -31,7 +31,7 @@ gem "tyda", require: false, group: :development
 gem "kramdown", "~> 2.5"
 
 # Templates (example 124): Jekyll 4's liquid, compiled unmodified from a traced run.
-gem "bigdecimal", "~> 3.1" # liquid 4 requires it; a bundled gem since Ruby 3.4, so Bundler must list it
+gem "bigdecimal", "4.0.1" # liquid 4 requires it; what Ruby 4.0.9 bundles (decision 481); a bundled gem since Ruby 3.4, so Bundler must list it
 gem "liquid", "~> 4.0"
 
 # SQLite under MRI for example 122; rugaroo maps `require "sqlite3"` onto its own Fiddle port of this gem (decision 327).
@@ -42,6 +42,16 @@ gem "ffi", "~> 1.17"
 
 # MRI's side of the prism oracle (prism_test, example 136) at the release rugaroo bundles in vendored/prism (decision 427).
 gem "prism", "1.9.0"
+
+# MRI's oracle runs on this bundle (testdata/mri_gems.rb, decision 481): non-default gems tests require, at the measured version.
+gem "abbrev", "0.1.2"
+gem "benchmark", "0.5.0"
+gem "csv", "3.3.5"
+gem "fiddle", "1.1.8"
+gem "json", "2.21.1" # newer than Ruby 4.0.9's default 2.18.0: json_test and rxjson_test pin 2.19+ behaviour
+gem "minitest", "6.1.0"
+gem "observer", "0.1.2"
+gem "ostruct", "0.6.3"
 
 # Bundled gems ruby/spec's library/ directories exercise (decision 409): pinned to what Ruby 4.0.9 (.mri-version, decision 413) bundles, so the spec
 # numbers in docs/support.md name one version. rugaroo compiles them unmodified, as installed gems.
