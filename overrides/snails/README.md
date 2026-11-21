@@ -7,6 +7,10 @@ this checkout's rugaroo, and diffs the HTTP answers: they are equal (13 requests
 
 Snails' runtime is copied unchanged except for what is listed under "Upstream candidates".
 
+For building your own Snails app, use the [snails-rugaroo](https://github.com/jtarchie/snails-rugaroo) gem
+(`snails-rugaroo build`): it packages the stand-ins, fixes and signatures here and leaves the app untouched. This
+directory stays as the test and benchmark harness.
+
 ## Serving: Tep::APP on WEBrick
 
 Everything Snails does per request sits behind `Tep::APP.dispatch(req, res)`, over plain request and response
