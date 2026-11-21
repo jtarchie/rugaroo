@@ -21,6 +21,7 @@ type envConfig struct {
 	KeepGoing     bool   // RUGAROO_KEEP_GOING: record a collect error and go on
 	DispatchDebug string // RUGAROO_DISPATCH_DEBUG: "all", or any other non-empty value for Kernel/Object/module owners
 	InferUnknown  bool   // RUGAROO_INFER_UNKNOWN: inference rounds with an explicit not-known-yet type (docs/research/inference-2026-11.md), until its gates pass
+	InferUses     string // RUGAROO_INFER_USES: print each round's recorded uses of the parameters whose key holds this text (file:line:col:Class#name)
 	NoAnyUse      bool   // RUGAROO_NO_ANY_USE: keep a gem parameter typed when a gem call also passes it an untyped value (A/B for decision 444's settled-round rule)
 	NoEarlyRounds bool   // RUGAROO_NO_EARLY_ROUNDS: run inference rounds to the cap even once they have settled (A/B for decision 444)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
@@ -54,6 +55,7 @@ func loadEnv() envConfig {
 		KeepGoing:     set("RUGAROO_KEEP_GOING"),
 		DispatchDebug: os.Getenv("RUGAROO_DISPATCH_DEBUG"),
 		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
+		InferUses:     os.Getenv("RUGAROO_INFER_USES"),
 		NoAnyUse:      os.Getenv("RUGAROO_NO_ANY_USE") != "",
 		NoEarlyRounds: os.Getenv("RUGAROO_NO_EARLY_ROUNDS") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",

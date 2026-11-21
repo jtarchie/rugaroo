@@ -4,10 +4,14 @@
 # load_path: gem_inference/lib
 # Gem code whose types only settle across inference rounds (docs/research/inference-2026-11.md, gate 1): a scan
 # position that flows through helper methods and through lambdas held in ivars (cyc_gem), a parameter reassigned from
-# a method that takes it (buf_gem), and a Ragel-shaped scanner's class-level tables read through `send` (ragel_gem).
+# a method that takes it (buf_gem), a Ragel-shaped scanner's class-level tables read through `send` (ragel_gem), its
+# state constants read as `self.class.lex_en_x` by two classes (lexen_gem), and arguments that reach a constructor
+# through a `*args` forwarder (fwd_gem).
 require "cyc_gem"
 require "buf_gem"
 require "ragel_gem"
+require "lexen_gem"
+require "fwd_gem"
 
 puts CycLexer.new.advance(30_000)
 
@@ -22,3 +26,11 @@ total = 0
   total += scanner.advance
 end
 puts total
+
+puts LexEn.new.step(3)
+
+stack = FwdStack.new
+stack.push("<<", 3)
+stack.push("<<~", 5, 40, true)
+puts stack.jump(7)
+puts stack.top.kind

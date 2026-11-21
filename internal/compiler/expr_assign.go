@@ -299,7 +299,7 @@ func (f *fctx) genMultiWrite(n *parser.MultiWriteNode) expr {
 	}
 	saved, savedProv := f.destructuring, f.mwProvisional
 	f.destructuring = f.discover && f.lenient() && f.storageDestructure(n.Value)
-	f.mwProvisional = v.provisional
+	f.mwProvisional = v.provisional || isUnknown(v.typ) // a value not known yet: so are its parts
 	f.destructureInto(n, expr{code: tmp, typ: v.typ}, n.Lefts, n.Rest, n.Rights)
 	f.destructuring, f.mwProvisional = saved, savedProv
 	if len(n.Lefts) == 0 && len(n.Rights) == 0 && isBareRest(n.Rest) { // `(*) = x` reads nothing of x

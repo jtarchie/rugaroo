@@ -226,13 +226,30 @@ func (c *Compiler) discoverIvars() {
 	c.untypedIvars = nil
 	c.declareGemModuleIvars()
 	c.declareComputedIvars()
-	for range 2 {
+	walks := 2
+	if c.env.InferUnknown {
+		walks = 3 // a type crosses one class per walk: Lexer reads LexerStrings' ivars through its methods' results
+	}
+	c.discovering = true
+	for range walks {
 		for _, cls := range c.classList {
 			for _, iv := range cls.Ivars {
 				iv.elems = [2][]Type{} // the last round's, when every ivar has a type
 			}
 		}
-		for _, cls := range c.classList {
+		// class objects first: an instance method's `@cs = self.class.lex_en_start` reads a class-level accessor, whose
+		// ivar must have its type by then or @cs is declared untyped for good (Ragel's generated state constants)
+		order := slices.Clone(c.classList)
+		slices.SortStableFunc(order, func(a, b *Class) int {
+			switch {
+			case a.metaOf != nil && b.metaOf == nil:
+				return -1
+			case a.metaOf == nil && b.metaOf != nil:
+				return 1
+			}
+			return 0
+		})
+		for _, cls := range order {
 			module := cls.IsModule && len(cls.TypeParams) == 0 && !cls.universal // a module's ivars are discovered from its own methods too (decision 317)
 			if !cls.isStruct() && !cls.hashBase && !module || cls.universal || cls.isTemplate() {
 				continue
@@ -250,6 +267,7 @@ func (c *Compiler) discoverIvars() {
 			}
 		}
 	}
+	c.discovering = false
 	for _, d := range c.classBodyLits {
 		if k := d.cls.meta; k != nil && c.findIvar(k, d.name) == nil {
 			c.declareIvar(k, d.name, c.resolveType(d.rbs, typeScope{class: d.cls, lex: d.scope, srcPos: srcPos{d.cls.File, d.line}}), d.cls.File, d.line)
@@ -259,7 +277,7 @@ func (c *Compiler) discoverIvars() {
 		return cmp.Or(cmp.Compare(a.cls.Name, b.cls.Name), cmp.Compare(a.name, b.name))
 	}) {
 		if p := c.untypedIvars[k]; c.findIvar(k.cls, k.name) == nil { // no typed write: untyped, as its first write declared it before (decision 392)
-			c.declareIvar(k.cls, k.name, TAny{}, p.File, p.Line)
+			c.declareIvar(k.cls, k.name, TAny{Unknown: c.unknownNow()}, p.File, p.Line) // in a round, maybe only waiting for a parameter's type
 		}
 	}
 	c.untypedIvars = nil
@@ -267,7 +285,7 @@ func (c *Compiler) discoverIvars() {
 	for _, g := range c.gemNilIvars { // only ever nil in what is compiled (a gem's pruned writes, decision 169; a user's nil-only ivar, 183)
 		if c.findIvar(g.cls, g.name) == nil {
 			c.warnAt(g.srcPos, "instance variable %s is only ever nil, so it is untyped (`# @rbs %s: T` for static calls; decision 183)", g.name, g.name)
-			c.declareIvar(g.cls, g.name, TAny{}, g.File, g.Line)
+			c.declareIvar(g.cls, g.name, TAny{Unknown: c.unknownNow()}, g.File, g.Line)
 		}
 	}
 	c.declareGemClassIvars()
@@ -305,7 +323,7 @@ func (c *Compiler) declareGemClassIvars() {
 			}
 			eachIvarName(m.Node.Body, func(name string, n parser.Node) {
 				if c.findIvar(cls, name) == nil {
-					c.declareIvar(cls, name, TAny{}, m.File, m.File.line(n.GetLocation().StartOffset))
+					c.declareIvar(cls, name, TAny{Unknown: c.unknownNow()}, m.File, m.File.line(n.GetLocation().StartOffset))
 				}
 			})
 		}

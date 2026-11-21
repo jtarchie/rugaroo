@@ -64,6 +64,11 @@ type inference struct {
 	// resolved: the rounds reached their fixed point with not-known-yet values (RUGAROO_INFER_UNKNOWN); what is still
 	// not known is untyped from here on, and the rounds go on so a typed parameter such a value reaches is untyped too
 	resolved bool
+	// settling: the step between. The rounds first run with types only (an untyped result is dropped: it may be a
+	// value whose type arrives a round later), then, at that fixed point, with untyped results kept while values
+	// may still be not known yet (a parameter that really is untyped now makes its calls dynamic, and those calls'
+	// arguments type what only they reach: liquid's Tag#render(context)), and last resolved
+	settling bool
 	// procAlias: lambda literals one slot holds (`@xfrm = flag ? @plain : @skip`), each mapped to the first of them in
 	// source order. During the not-known-yet rounds they share that one's parameter keys, so every call types them
 	// alike and the slot holds one Go func type, not a union of two that only a dynamic call can call
@@ -118,8 +123,10 @@ func (c *Compiler) plainRounds() bool {
 }
 
 // unknownNow reports a round in which a value no call has typed is "not known yet" instead of untyped.
+// So is ivar discovery's walk over the classes, in any compile: a method read there before the class that declares its
+// ivars has been walked answers "not known yet", not an untyped value that would declare the reader's ivars untyped.
 func (c *Compiler) unknownNow() bool {
-	return c.round && c.env.InferUnknown && (c.infer == nil || !c.infer.resolved)
+	return c.env.InferUnknown && (c.discovering || c.round && (c.infer == nil || !c.infer.resolved))
 }
 
 // pendingParam is a parameter whose type comes from use: its key across compiles, and its name for messages.
@@ -703,6 +710,9 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 	if f.c.env.InferUnknown && holdsUnknown(t) {
 		return // not known yet: it neither types the parameter nor untypes it
 	}
+	if f.c.env.InferUnknown {
+		t = f.concreteSelf(t) // `Strings.new(self)` in a method generic over Self passes its class (parser's LexerStrings#initialize(lexer))
+	}
 	if en, ok := n.(*exprNode); ok && en.use != nil { // one use per source argument, not a member per arm: the param would flip between them (decision 150)
 		t = en.use
 	}
@@ -901,6 +911,15 @@ func (c *Compiler) updateInference(inf *inference) {
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
+		if c.env.InferUses != "" && strings.Contains(string(key), c.env.InferUses) {
+			for _, u := range uses {
+				fmt.Fprintf(os.Stderr, "rugaroo: use %s <- %v (dynamic %v, default %v, widening %v) at %s\n", key, u.typ, u.dyn, u.deflt, u.widen, u.at())
+			}
+		}
+		if isRestPosKey(key) && slices.ContainsFunc(uses, func(u paramUse) bool { return isAny(u.typ) }) {
+			next[key] = TAny{} // one call passed that position something untyped: nothing is forwarded for it
+			continue
+		}
 		if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
 			// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
 			// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
@@ -944,6 +963,16 @@ func (c *Compiler) updateInference(inf *inference) {
 				t = TAny{}
 			}
 			next[key], from[key] = t, at
+		}
+	}
+	if c.env.InferUnknown && !inf.resolved && !inf.settling {
+		// at first only types accumulate: an untyped result may be a value whose type has not arrived yet
+		// (an ivar discovered a round late, an intrinsic on a waiting receiver), and kept it would untype for good
+		// everything it reaches. Untyped is decided after resolution, when nothing is "not known yet" any more
+		for k, t := range next {
+			if isAny(t) {
+				delete(next, k)
+			}
 		}
 	}
 	if c.env.InferUnknown { // the state only goes up: a type a round could not re-derive is kept, one it derived otherwise joins in
@@ -1064,7 +1093,7 @@ func (c *Compiler) settleRound(inf *inference, settled bool, bets []pendingKey, 
 		return
 	}
 	inf.settled++
-	if c.env.NoAnyUse {
+	if c.env.NoAnyUse || c.env.InferUnknown { // not-known-yet rounds untype after resolution, by updateInference's rule
 		return
 	}
 	for _, key := range bets {

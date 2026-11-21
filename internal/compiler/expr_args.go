@@ -55,7 +55,9 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 		nargs = len(args)
 	}
 	splatTmp, splatAt, splatElem := f.splatArgs(m, args, exprs != nil || hasRest, npos)
+	var splatNode *parser.SplatNode
 	if splatTmp != "" {
+		splatNode, _ = args[splatAt].(*parser.SplatNode)
 		args, nargs = args[:splatAt], splatAt
 	}
 	if exprs == nil && !hasRest && nargs-1 == npos && f.emptySplat(args) {
@@ -116,6 +118,9 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 			continue
 		}
 		if splatTmp != "" {
+			if t := f.restForwardType(splatNode, ai-splatAt); t != nil {
+				f.noteUse(p, n, t) // what every call of this forwarder passed at that position
+			}
 			codes = append(codes, f.splatParam(n, m, p, env, splatTmp, ai-splatAt, splatElem))
 			ai++
 			continue
@@ -556,6 +561,7 @@ func (f *fctx) genRestArgs(n parser.Node, p Param, env map[string]Type, args []p
 					f.errorf(an, "splat of non-array %s", a.typ)
 				}
 				f.noteUse(p, an, ac.Args[0])
+				f.noteRestPos(p, an, -1, nil)
 				f.noteAnyRest(p, an, ac.Args[0])
 				unify(p.Type, ac.Args[0], env)
 				if splats == nil {
@@ -570,6 +576,7 @@ func (f *fctx) genRestArgs(n parser.Node, p Param, env map[string]Type, args []p
 			f.pinBefore(mark, codes)
 		}
 		f.noteUse(p, an, a.typ)
+		f.noteRestPos(p, an, len(codes), a.typ)
 		f.noteAnyRest(p, an, a.typ)
 		unify(p.Type, a.typ, env)
 		codes = append(codes, f.coerceArg(an, a, p, env))

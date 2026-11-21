@@ -317,6 +317,16 @@ var storeNames = map[string]bool{"<<": true, "push": true, "append": true, "unsh
 
 // genMethodCall dispatches a call on an already-generated receiver.
 func (f *fctx) genMethodCall(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) expr {
+	e := f.genMethodCall0(n, recv, name, args, block)
+	if isUnknown(recv.typ) && isAny(e.typ) && f.c.unknownNow() {
+		// whatever a value not known yet answers untyped is not known yet either: `@lexer.class.lex_en_start` while
+		// @lexer waits for its type (an intrinsic like `class` answered a plain untyped value, which stuck)
+		e.typ = TAny{Unknown: true}
+	}
+	return e
+}
+
+func (f *fctx) genMethodCall0(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) expr {
 	if storeNames[name] && (isClass(recv.typ, "Hash") || isClass(recv.typ, "Array")) {
 		f.storing++
 		defer func() { f.storing-- }()

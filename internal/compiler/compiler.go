@@ -201,6 +201,7 @@ type memoState struct {
 	privateInMemo       map[string][]*Class // memo of privateIn, valid while classList has privateInN classes
 	privateInN          int
 	objFreezeMemo       int             // objFreeze: 0 unasked, 1 no, 2 yes
+	discovering         bool            // discoverIvars is walking the classes (unknownNow)
 	pendingSigs         int             // signatures rendered while their return was still being inferred: memos taken across one are provisional
 	goCalledNames       map[string]bool // memo of goCalled
 	renderingConstraint bool            // constraintNamesSelf is rendering a module interface
@@ -579,7 +580,7 @@ func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) (roundErr error) {
 	rounds := maxInferRounds
 	if opts.env.InferUnknown {
-		rounds *= 3 // the state only goes up, so the rounds end by themselves; a type travels one call level per round
+		rounds *= 6 // three phases, each to its fixed point (the state only goes up); a type travels one call level per round
 	}
 	for range rounds {
 		opts.round = true
@@ -598,7 +599,10 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		early := opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds && !opts.env.InferUnknown // not-known-yet rounds end by themselves
 		done := !errors.Is(err, errInferRound) || !opts.infer.changed || early
 		if done && opts.env.InferUnknown && opts.infer != nil && !opts.infer.resolved && (err == nil || errors.Is(err, errInferRound)) {
-			opts.infer.resolved, opts.infer.settled = true, 0
+			if opts.infer.settling {
+				opts.infer.resolved = true
+			}
+			opts.infer.settling, opts.infer.settled = true, 0
 			continue
 		}
 		if !errors.Is(err, errInferRound) || !opts.infer.changed {
