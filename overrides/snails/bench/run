@@ -1,0 +1,56 @@
+#!/bin/bash
+# usage: ./run workdir [duration] [rounds] [vus...]   k6 against each contender, as snails-benchmark's bin/bench (constant VUs, 8-VU warmup, rotating order, logging off).
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+W=$1
+DURATION=${2:-15s}
+ROUNDS=${3:-3}
+shift $(($# < 3 ? $# : 3))
+VUS=("${@:-8 32 64 128}")
+read -r -a VUS <<< "${VUS[*]}"
+H=$W/snails-benchmark/harness
+OUT=$W/results/$(date +%Y%m%d-%H%M%S)
+mkdir -p "$OUT"
+CONTENDERS=(spinel rugaroo ${WITH_MRI:+mri})
+
+start() { # contender port
+  export DATABASE_PATH=$W/items.sqlite3 SNAILS_LOG_LEVEL=fatal PORT=$2
+  case $1 in
+    spinel) "$W/snails-spinel" > "$OUT/$1.log" 2>&1 & ;;
+    rugaroo) "$W/snails-rugaroo" > "$OUT/$1.log" 2>&1 & ;;
+    mri) (cd "$W/bench-rugaroo" && exec ruby serve.rb) > "$OUT/$1.log" 2>&1 & ;;
+  esac
+  pid=$!
+  for _ in $(seq 1 100); do curl -fsS "http://127.0.0.1:$2/up" > /dev/null 2>&1 && return; sleep 0.1; done
+  echo "$1 did not come up" >&2; exit 1
+}
+
+k6run() { # script url-var url vus export
+  k6 run -e VUS="$4" -e DURATION="$DURATION" -e "$2=$3" --quiet --no-color --summary-mode compact --summary-export "$5" "$H/$1" > /dev/null
+}
+
+port=18100
+for round in $(seq 1 "$ROUNDS"); do
+  n=${#CONTENDERS[@]}
+  for i in $(seq 0 $((n - 1))); do
+    c=${CONTENDERS[$(((i + round) % n))]} # rotate order per round
+    port=$((port + 1))
+    start "$c" $port
+    rss_max=0
+    k6run up.js URL "http://127.0.0.1:$port/up" 8 /dev/null # warmup
+    for v in "${VUS[@]}"; do
+      for route in up items; do
+        if [ $route = up ]; then
+          k6run up.js URL "http://127.0.0.1:$port/up" "$v" "$OUT/$c-$route-$v-r$round.json"
+        else
+          k6run scenario.js BASE_URL "http://127.0.0.1:$port" "$v" "$OUT/$c-$route-$v-r$round.json"
+        fi
+        rss=$(ps -o rss= -p "$pid" | tr -d ' ')
+        [ "$rss" -gt "$rss_max" ] && rss_max=$rss
+      done
+    done
+    echo "$c $rss_max" >> "$OUT/rss-kb.txt"
+    kill "$pid"; wait "$pid" 2> /dev/null || true
+  done
+done
+ruby "$here/report.rb" "$OUT"

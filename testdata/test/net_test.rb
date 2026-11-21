@@ -368,6 +368,30 @@ module NetTests
       server.shutdown
       thread.join
     end
+
+    # Concurrent requests each run in a Thread of their own: one request's thread-locals are not another's (Snails keeps its DB lease there).
+    def test_handler_thread_locals_are_per_request
+      bad = Queue.new #: Queue[String]
+      server = WEBrick::HTTPServer.new(Port: 0, BindAddress: "127.0.0.1")
+      server.mount_proc("/") do |req, res|
+        Thread.current[:net_test_path] = req.path
+        sleep 0.002
+        bad << req.path unless Thread.current[:net_test_path] == req.path && Thread.current != Thread.main
+        res.body = "ok"
+      end
+      thread = Thread.new { server.start }
+      port = server.config[:Port]
+      clients = (1..8).map do |t|
+        Thread.new do
+          http = Net::HTTP.new("127.0.0.1", port)
+          10.times { |i| http.get("/#{t}-#{i}") }
+        end
+      end
+      clients.each(&:join)
+      assert_equal 0, bad.size
+      server.shutdown
+      thread.join
+    end
   end
 
   # Net::HTTP against a raw TCPServer: the bytes on the wire, which WEBrick hides.
