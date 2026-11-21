@@ -198,19 +198,22 @@ type memoState struct {
 	dispatchMemo        map[*Method]bool    // memo of dispatchable
 	sendArmsMemo        map[[2]any][]*Class // memo of sendArms, valid while classList has sendArmsN classes
 	sendArmsN           int
+	below               map[*Class]map[*Class]bool // classesBelow's answers, valid while classList has belowN classes
+	belowN              int
 	privateInMemo       map[string][]*Class // memo of privateIn, valid while classList has privateInN classes
 	privateInN          int
-	objFreezeMemo       int                     // objFreeze: 0 unasked, 1 no, 2 yes
-	recMemo             map[pendingKey]recShape // paramShape's answers, this compile
-	srcCache            *fileCache              // the compile's parsed source files, kept across its passes (decision 479)
-	filesUsed           []fileKey               // those this pass took or put
-	blockWrites         map[blockWriteKey]bool  // blockWritesLocal's answers, this compile: a pure walk of a body, asked per call in it
-	discovering         bool                    // discoverIvars is walking the classes (unknownNow)
-	pendingSigs         int                     // signatures rendered while their return was still being inferred: memos taken across one are provisional
-	goCalledNames       map[string]bool         // memo of goCalled
-	renderingConstraint bool                    // constraintNamesSelf is rendering a module interface
-	coerceOwned         *bool                   // memo of ownCoerce
-	bareRaise           int                     // gemBareRaise's memo: 0 unknown, 1 no, 2 yes
+	objFreezeMemo       int                           // objFreeze: 0 unasked, 1 no, 2 yes
+	recMemo             map[pendingKey]recShape       // paramShape's answers, this compile
+	ivarNodes           map[parser.Node][]parser.Node // eachIvarName's nodes by body, this compile
+	srcCache            *fileCache                    // the compile's parsed source files, kept across its passes (decision 479)
+	filesUsed           []fileKey                     // those this pass took or put
+	blockWrites         map[blockWriteKey]bool        // blockWritesLocal's answers, this compile: a pure walk of a body, asked per call in it
+	discovering         bool                          // discoverIvars is walking the classes (unknownNow)
+	pendingSigs         int                           // signatures rendered while their return was still being inferred: memos taken across one are provisional
+	goCalledNames       map[string]bool               // memo of goCalled
+	renderingConstraint bool                          // constraintNamesSelf is rendering a module interface
+	coerceOwned         *bool                         // memo of ownCoerce
+	bareRaise           int                           // gemBareRaise's memo: 0 unknown, 1 no, 2 yes
 }
 
 // branchKey is where an if/unless/case starts: its line and the column on it (boot.BranchInfo's Loc and Col).

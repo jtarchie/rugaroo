@@ -336,7 +336,7 @@ func (c *Compiler) declareGemClassIvars() {
 			if m.Node == nil || m.File == nil || !c.gemFile(m.File) {
 				continue
 			}
-			eachIvarName(m.Node.Body, func(name string, n parser.Node) {
+			c.eachIvarName(m.Node.Body, func(name string, n parser.Node) {
 				if c.findIvar(cls, name) == nil {
 					c.declareIvar(cls, name, TAny{Unknown: c.unknownNow()}, m.File, m.File.line(n.GetLocation().StartOffset))
 				}
@@ -364,17 +364,33 @@ func ivarNodeName(n parser.Node) (name string, write bool) {
 	return "", false
 }
 
-// eachIvarName calls fn for each instance variable n reads or writes, outside nested defs and class bodies.
-func eachIvarName(n parser.Node, fn func(string, parser.Node)) {
-	walkNode(n, func(x parser.Node) (bool, bool) {
-		if opensScope(x) {
-			return false, false
+// eachIvarName calls fn for each instance variable n reads or writes, outside nested defs and class bodies. The nodes
+// are found once per body and pass: includerClassWrites asks about every method of every includer for each ivar a
+// module names, which walked rubocop's bodies for 4% of its compile.
+func (c *Compiler) eachIvarName(n parser.Node, fn func(string, parser.Node)) {
+	if n == nil {
+		return
+	}
+	nodes, ok := c.ivarNodes[n]
+	if !ok {
+		walkNode(n, func(x parser.Node) (bool, bool) {
+			if opensScope(x) {
+				return false, false
+			}
+			if name, _ := ivarNodeName(x); name != "" {
+				nodes = append(nodes, x)
+			}
+			return false, true
+		})
+		if c.ivarNodes == nil {
+			c.ivarNodes = map[parser.Node][]parser.Node{}
 		}
-		if name, _ := ivarNodeName(x); name != "" {
-			fn(name, x)
-		}
-		return false, true
-	})
+		c.ivarNodes[n] = nodes
+	}
+	for _, x := range nodes {
+		name, _ := ivarNodeName(x)
+		fn(name, x)
+	}
 }
 
 // gemNilIvar is a gem class's ivar discovery saw assigned only nil (decision 169).
@@ -414,7 +430,7 @@ func (c *Compiler) includerClassWrites(mod *Class, name string) bool {
 				if m.Node == nil || m.Owner != k {
 					continue
 				}
-				eachIvarName(m.Node.Body, func(n string, x parser.Node) {
+				c.eachIvarName(m.Node.Body, func(n string, x parser.Node) {
 					if _, w := ivarNodeName(x); w && n == name {
 						writes = true
 					}
@@ -446,7 +462,7 @@ func (c *Compiler) declareGemModuleIvars() {
 			if m.Node == nil || !c.gemFile(m.File) {
 				continue
 			}
-			eachIvarName(m.Node.Body, func(name string, n parser.Node) {
+			c.eachIvarName(m.Node.Body, func(name string, n parser.Node) {
 				switch {
 				case c.findIvar(mod, name) != nil:
 				case c.includerClassWrites(mod, name): // the includer's class keeps it (elftools' Dynamic reading Segment's @offset_from_vma): read by name (decision 324)

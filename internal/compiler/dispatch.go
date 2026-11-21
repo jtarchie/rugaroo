@@ -57,8 +57,9 @@ func (c *Compiler) dispatchableWhy(owner *Class, m *Method) (bool, string) {
 		return c.moduleOverrides(owner, m)
 	}
 	ps, ret := c.sig(m, map[string]Type{})
+	below := c.classesBelow(owner)
 	for _, k := range c.classList {
-		if k.IsModule || k.universal || !k.isSubclassOf(owner) {
+		if !below[k] {
 			continue
 		}
 		if !owner.universal && c.includerCalls(k, m.Name) {
@@ -251,6 +252,26 @@ func (c *Compiler) plainMethod(m *Method) bool {
 }
 
 // sendArms lists the classes below owner whose own resolution of m is not owner's body: the dispatcher's cases.
+// classesBelow is the classes (no module, none universal) that are owner or inherit from or include it, kept while the
+// class list is the same length: dispatchableWhy and sendArms ask per method, and walking every class's ancestry
+// each time was 3% of rubocop's compile.
+func (c *Compiler) classesBelow(owner *Class) map[*Class]bool {
+	if len(c.classList) != c.belowN {
+		c.below, c.belowN = map[*Class]map[*Class]bool{}, len(c.classList)
+	}
+	if set, ok := c.below[owner]; ok {
+		return set
+	}
+	set := map[*Class]bool{}
+	for _, k := range c.classList {
+		if !k.IsModule && !k.universal && k.isSubclassOf(owner) {
+			set[k] = true
+		}
+	}
+	c.below[owner] = set
+	return set
+}
+
 func (c *Compiler) sendArms(owner *Class, m *Method) []*Class {
 	if len(c.classList) != c.sendArmsN { // memoized per call site's (owner, m): brew asked 62 CPU-s of it (decision 240)
 		c.sendArmsMemo, c.sendArmsN = map[[2]any][]*Class{}, len(c.classList)
@@ -261,8 +282,9 @@ func (c *Compiler) sendArms(owner *Class, m *Method) []*Class {
 	}
 	var out []*Class
 	defer func() { c.sendArmsMemo[key] = out }()
+	below := c.classesBelow(owner)
 	for _, k := range c.sortedClasses() {
-		if k == owner || k.IsModule || k.universal || !k.isSubclassOf(owner) {
+		if k == owner || !below[k] {
 			continue
 		}
 		if impl := k.lookup(m.Name); impl != nil && impl.M != m {

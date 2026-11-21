@@ -1,0 +1,11 @@
+--- a/lib/racc/parser.rb	2026-11-21 14:44:15
++++ b/lib/racc/parser.rb	2026-11-21 14:44:16
+@@ -434,7 +434,7 @@
+         #
+         case @racc_error_status
+         when 0
+-          unless arg[21]    # user_yyerror
++          unless @racc_user_yyerror # rugaroo: as cparse.c does; arg[21] is never set (the pure-Ruby runtime reported the token after a yyerror too)
+             nerr += 1
+             on_error @racc_t, @racc_val, @racc_vstack
+           end

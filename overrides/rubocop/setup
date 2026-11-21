@@ -18,5 +18,12 @@ for g in parser-3.3.13.0 regexp_parser-2.13.1 rubocop-ast-1.50.0 rubocop-1.92.1;
   fi
   I="$I -I $W/gems/$g/lib"
 done
+# racc 1.8.1: MRI runs its C core (cparse), rugaroo compiles its Ruby one, which reports the token after a yyerror
+# that the C one does not (gem-patches/racc-1.8.1.patch). A bundled gem, so found by its spec, not under $G.
+if [ ! -d "$W/gems/racc-1.8.1" ]; then
+  R=$(ruby -e 'print Gem::Specification.find_by_name("racc", "1.8.1").gem_dir') || { echo "setup: racc 1.8.1 not installed" >&2; return 1 2>/dev/null || exit 1; }
+  cp -R "$R" "$W/gems/racc-1.8.1" && patch -s -p1 -d "$W/gems/racc-1.8.1" < "$here/gem-patches/racc-1.8.1.patch"
+fi
+I="$I -I $W/gems/racc-1.8.1/lib"
 printf 'x = 1\nputs x\n' > "$W/a.rb"
 export RUBOCOP_LIB=$W/gems/rubocop-1.92.1/lib
