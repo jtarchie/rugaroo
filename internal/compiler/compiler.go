@@ -510,15 +510,18 @@ var errWidenRedo = errors.New("parameters widened")
 const maxWidenRedo = 4
 
 // inferenceRound is decision 146's round after link: ivars refined, returns inferred, and the parameter uses gathered.
-func (c *Compiler) inferenceRound(opts *options) {
+func (c *Compiler) inferenceRound(opts *options, tick func(string)) {
 	_ = catchCompileError(c.refineIvars)
+	tick("r-refine")
 	for _, m := range c.inferredMethods() {
 		m.Ret = nil
 	}
 	for _, m := range c.inferredMethods() {
 		_ = catchCompileError(func() { c.inferRet(m) })
 	}
+	tick("r-rets")
 	c.collectUses()
+	tick("r-uses")
 	if !c.instMissing { // what a template stood in for is not evidence: the restart has the instance (decision 308)
 		c.updateInference(opts.infer)
 	}
@@ -768,10 +771,11 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		cls.shapeFixed = true
 	}
 	c.discoverIvars()
+	tick("ivars")
 	c.ivarsDiscovered = true
 	if c.round {
-		c.inferenceRound(opts)
-		tick("round")
+		c.inferenceRound(opts, tick)
+		tick("r-update")
 		return nil, errInferRound
 	}
 	c.refineIvars()
