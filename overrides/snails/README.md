@@ -26,6 +26,7 @@ Snails' runtime is copied unchanged except for what is listed under "Upstream ca
 
 1. **`private_constant` is not enforced.** `Form::FIELDS`, from inside or outside the class, resolves in
    Spinel; MRI raises `NameError: private constant Form::FIELDS referenced`. This hid finding 1 below.
+   Reported as [matz/spinel#12343](https://github.com/matz/spinel/issues/12343) (#6910 fixed only `self::Name`).
 
 ### Upstream candidates (Snails)
 
