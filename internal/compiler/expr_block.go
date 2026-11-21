@@ -842,15 +842,29 @@ func (f *fctx) genIterCall(n *parser.CallNode, t tail) bool {
 	case isOptRecv:
 		recv = f.nilGuard(n, recv, n.Name)
 	}
+	f.genIterCallLoop(n, e, recv, t, safe)
+	return true
+}
+
+// genIterCallLoop emits genIterCall's loop and its value; safe closes the `&.` guard opened around it.
+func (f *fctx) genIterCallLoop(n *parser.CallNode, e *entry, recv expr, t tail, safe bool) {
+	closeSafe := func() {
+		if safe {
+			f.indent--
+			f.emit("}")
+		}
+	}
+	if f.iterBreakValue { // a gem's own iterator as a value: the break's value, nil when it runs to its end (decision 475)
+		f.iterBreakValue = false
+		f.genBrokenIterLoop(n, e, recv, t, false)
+		closeSafe()
+		return
+	}
 	valued := f.kernelLoopValue(n, t)
 	f.iterValue = valued
 	f.genIterLoop(n, e, recv)
-	if safe {
-		f.indent--
-		f.emit("}")
-	}
+	closeSafe()
 	f.iterEmptyTail(n, t, valued)
-	return true
 }
 
 // genSelfValueIter is an iterator call whose value is its receiver, as MRI's each returns it (decision 172).
@@ -860,7 +874,7 @@ func (f *fctx) genSelfValueIter(n *parser.CallNode, e *entry, recv expr, t tail)
 	recv.code = tmp
 	if b, ok := n.Block.(*parser.BlockNode); f.lenient() && (f.iterBreakValue || ok && b.Body != nil && t.kind != tailNone && blockBreaksValue(b.Body)) {
 		f.iterBreakValue = false
-		f.genBrokenIterLoop(n, e, recv, t)
+		f.genBrokenIterLoop(n, e, recv, t, true)
 		return
 	}
 	f.genIterLoop(n, e, recv)
@@ -869,14 +883,17 @@ func (f *fctx) genSelfValueIter(n *parser.CallNode, e *entry, recv expr, t tail)
 
 // genBrokenIterLoop is a gem's `r.times do ... break ... end` as a value (prime's miller_rabin_test): the receiver when
 // the loop runs to its end, nil when a break leaves it, as MRI's; the break is a goto past the receiver's assignment.
-func (f *fctx) genBrokenIterLoop(n *parser.CallNode, e *entry, recv expr, t tail) {
+// A gem's own iterator (ended false) has no receiver value: it is nil at its end (decision 475).
+func (f *fctx) genBrokenIterLoop(n *parser.CallNode, e *entry, recv expr, t tail, ended bool) {
 	res := f.newTmp()
 	f.emit("var %s any", res) // above the loop: the goto may not jump over a declaration
 	bt := &brokeTarget{label: "broke" + res, res: res}
 	f.iterBroke = bt
 	f.genIterLoop(n, e, recv)
 	f.iterBroke = nil
-	f.emit("%s = %s", res, f.coerce(n, recv, TAny{}))
+	if ended {
+		f.emit("%s = %s", res, f.coerce(n, recv, TAny{}))
+	}
 	if bt.used {
 		f.emit("%s:", bt.label)
 	}

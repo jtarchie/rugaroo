@@ -960,12 +960,26 @@ func (f *fctx) iterCallValue(n *parser.CallNode, recv expr) (expr, bool) {
 		// a gem's `n.times do ... break false unless ok ... end && rest` (rubocop-ast's generated matchers): the receiver
 		// when the loop ends, the break's value when one leaves it (decisions 417, 444)
 		return f.brokenIterValue(n, recv), true
+	case !coreEach(e.M) && f.lenient() && e.M.File != nil && !e.M.File.isPrelude() && !eachReturnsSelf[n.Name] && blockBreaksValue(b.Body) && !endsInEach(e.M):
+		// a gem's own iterator: `@path = @config.traverse_directories_upwards(dir) do |d| ... break x if ... end`
+		// (rubocop's gemspec_filepath) is the break's value, nil when the method runs to its end (decision 475)
+		return f.brokenIterValue(n, recv), true
 	case !coreEach(e.M):
 		return f.iteratorValue(n), true
 	case f.lenient() && (blockBreaks(b.Body) || blockBreaksValue(b.Body)):
 		return f.brokenIterValue(n, recv), true
 	}
 	return expr{}, false
+}
+
+// endsInEach is a method whose last statement is an each-like call with a block: its value on MRI is that call's
+// receiver, which an iterator's value cannot give (decision 475).
+func endsInEach(m *Method) bool {
+	if m.Node == nil {
+		return true
+	}
+	c, ok := lastStmt(m.Node.Body).(*parser.CallNode)
+	return ok && c.Block != nil && eachReturnsSelf[c.Name]
 }
 
 // brokenIterValue is a gem's `return false if r.times do ... break if x == m ... end` (decision 417): the receiver, or
