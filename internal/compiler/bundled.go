@@ -169,7 +169,7 @@ func (c *Compiler) bundledAutoloads(ctx context.Context, booted map[string][]str
 				if err != nil {
 					return false
 				}
-				uf, err := parseFile(ctx, c.parser, path, src, originSource)
+				uf, err := c.parseSource(ctx, path, src)
 				if err != nil {
 					panic(compileError{msg: err.Error()})
 				}

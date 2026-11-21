@@ -23,6 +23,8 @@ type envConfig struct {
 	InferUnknown  bool   // RUGAROO_INFER_UNKNOWN: inference rounds with an explicit not-known-yet type (docs/research/inference-2026-11.md), until its gates pass
 	InferUses     string // RUGAROO_INFER_USES: print each round's recorded uses of the parameters whose key holds this text (file:line:col:Class#name)
 	NoAnyUse      bool   // RUGAROO_NO_ANY_USE: keep a gem parameter typed when a gem call also passes it an untyped value (A/B for decision 444's settled-round rule)
+	TreeCheck     bool   // RUGAROO_TREE_CHECK: report each def whose syntax tree a pass rewrote in place (decision 478)
+	NoFileReuse   bool   // RUGAROO_NO_FILE_REUSE: parse the sources again in every round and pass (A/B for decision 479)
 	NoEarlyRounds bool   // RUGAROO_NO_EARLY_ROUNDS: run inference rounds to the cap even once they have settled (A/B for decision 444)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
@@ -61,6 +63,8 @@ func loadEnv() envConfig {
 		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
 		InferUses:     os.Getenv("RUGAROO_INFER_USES"),
 		NoAnyUse:      os.Getenv("RUGAROO_NO_ANY_USE") != "",
+		NoFileReuse:   os.Getenv("RUGAROO_NO_FILE_REUSE") != "",
+		TreeCheck:     os.Getenv("RUGAROO_TREE_CHECK") != "",
 		NoEarlyRounds: os.Getenv("RUGAROO_NO_EARLY_ROUNDS") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",
 		GopoisonDump:  os.Getenv("RUGAROO_GOPOISON_DUMP"),

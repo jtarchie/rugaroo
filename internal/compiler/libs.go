@@ -191,7 +191,7 @@ func (c *Compiler) scanRequires(ctx context.Context, sources []Source) (libs []s
 			continue
 		}
 		sc.seen[path] = true
-		uf, perr := parseFile(ctx, c.parser, src.Name, src.Src, originSource)
+		uf, perr := c.parseSource(ctx, src.Name, src.Src)
 		if perr != nil {
 			return nil, nil, perr
 		}
@@ -324,7 +324,7 @@ func (sc *requireScan) require(f *File, call *parser.CallNode, top bool) {
 	if err != nil {
 		return // the collect pass reports it where it stands
 	}
-	uf, err := parseFile(sc.ctx, sc.c.parser, path, src, originSource)
+	uf, err := sc.c.parseSource(sc.ctx, path, src)
 	if err != nil {
 		panic(compileError{msg: err.Error()})
 	}

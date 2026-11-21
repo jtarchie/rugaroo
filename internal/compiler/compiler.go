@@ -202,6 +202,8 @@ type memoState struct {
 	privateInN          int
 	objFreezeMemo       int                     // objFreeze: 0 unasked, 1 no, 2 yes
 	recMemo             map[pendingKey]recShape // paramShape's answers, this compile
+	srcCache            *fileCache              // the compile's parsed source files, kept across its passes (decision 479)
+	filesUsed           []fileKey               // those this pass took or put
 	blockWrites         map[blockWriteKey]bool  // blockWritesLocal's answers, this compile: a pure walk of a body, asked per call in it
 	discovering         bool                    // discoverIvars is walking the classes (unknownNow)
 	pendingSigs         int                     // signatures rendered while their return was still being inferred: memos taken across one are provisional
@@ -389,6 +391,7 @@ type Source struct {
 
 // options are a compile's settings beyond its sources.
 type options struct {
+	files        *fileCache    // parsed source files, for the compile's next rounds and passes (decision 479)
 	noNilDefer   bool          // decision 440 off: the recompile after a nil error its dry runs did not see
 	nilDeferred  bool          // out: the last compile kept a typing decision 440's run-time checks allowed
 	purego       bool          // Fiddle's default backend whatever RUGAROO_CGO says: PreludeWhole type-checks without cgo (decision 426)
@@ -696,11 +699,13 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.genCount, c.genLimit = opts.genCount, opts.genLimit
 	c.noNilDefer, c.nilDeferUsed, opts.nilDeferred = opts.noNilDefer, &opts.nilDeferred, false
 	c.loadPreludeGo()
+	c.srcCache = opts.fileCache()
 	libs, parsed, perr := c.scanRequires(ctx, sources)
 	if perr != nil {
 		return nil, perr
 	}
 	c.parsed = parsed
+	defer c.passTrees()()
 	c.lazyAutoloads, c.droppedLazy = opts.lazyAutoloads(), opts.droppedLazy
 	c.autoloaded = c.neededAutoloads(ctx, c.bundledAutoloads(ctx, opts.autoloaded))
 	var dms []boot.MethodInfo
@@ -1271,7 +1276,7 @@ func (c *Compiler) loadUserFile(ctx context.Context, target string, src []byte) 
 	uf := c.parsed[path] // scanRequires parsed it
 	if uf == nil {
 		var err error
-		uf, err = parseFile(ctx, c.parser, path, src, originSource)
+		uf, err = c.parseSource(ctx, path, src)
 		if err != nil {
 			panic(compileError{msg: err.Error()})
 		}
