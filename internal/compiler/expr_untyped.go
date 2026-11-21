@@ -1362,6 +1362,10 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 		if len(args) > len(m.Params) && rest < 0 {
 			continue
 		}
+		if m.postCount() != 0 { // `def evaluate_to(*args, block)`: the last arguments are the post parameters'
+			f.noteDynPostUses(m, args, typeOf)
+			continue
+		}
 		for i, a := range args {
 			// a trailing `*args` takes every argument from its place on (rubocop-ast's `ProcessedSource#[](*args)`, an
 			// Integer from its typed callers and a Range from an untyped one; decision 444)

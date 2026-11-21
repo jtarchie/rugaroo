@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -91,6 +92,45 @@ func (f *fctx) noteDynUse(p Param, a parser.Node, t Type, j int, inRest bool) {
 	if f.c.env.InferUnknown && inRest {
 		k := restPosKey(p.Pending, j)
 		f.c.uses[k] = append(f.c.uses[k], u)
+	}
+}
+
+// noteDynPostUses is noteDynUses for a method with parameters after its rest (`def m(a, *mid, z)`): the leading
+// arguments are the leading parameters', the last ones the post parameters', what is between the rest's. Matched
+// left to right, a call's first argument typed the post parameter (an Integer for `evaluate_to(*args, block)`'s
+// block, which then raised on the Proc it is passed).
+func (f *fctx) noteDynPostUses(m *Method, args []parser.Node, typeOf func(int) Type) {
+	var lead, posts []Param
+	var rest *Param
+	for i := range m.Params {
+		switch p := m.Params[i]; {
+		case p.Keyword || p.KwRest:
+			return
+		case p.Rest:
+			rest = &m.Params[i]
+		case p.Post:
+			posts = append(posts, p)
+		default:
+			lead = append(lead, p)
+		}
+	}
+	if len(args) < len(posts) || slices.ContainsFunc(args, func(a parser.Node) bool { _, kw := a.(*parser.KeywordHashNode); return kw }) {
+		return
+	}
+	firstPost := len(args) - len(posts)
+	for i, a := range args {
+		switch {
+		case i >= firstPost:
+			if p := posts[i-firstPost]; p.Pending != "" {
+				f.noteDynUse(p, a, typeOf(i), 0, false)
+			}
+		case i < len(lead):
+			if p := lead[i]; p.Pending != "" {
+				f.noteDynUse(p, a, typeOf(i), 0, false)
+			}
+		case rest != nil && rest.Pending != "":
+			f.noteDynUse(*rest, a, typeOf(i), i-len(lead), true)
+		}
 	}
 }
 
