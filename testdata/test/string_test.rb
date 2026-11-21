@@ -1695,6 +1695,15 @@ continued"
       got = "/p/a1?t=x /p/a2?t=y".scan(%r{/#{suf}(a\d\?t=([^ ]+))}).to_h { |v, t| [t.to_s, v] }
       assert_equal({ "x" => "a1?t=x", "y" => "a2?t=y" }, got)
     end
+
+    # the block form of a pattern with groups yields each match's groups (it asked for a blockless __scan_groups)
+    def test_scan_groups_block
+      firsts = [] #: Array[String?]
+      back = "a {{x}} {{y}}".scan(/\{\{(.*?)\}\}/) { |g| firsts << g.first }
+      whole = [] #: Array[String]
+      "a1 b2".scan(/[a-z]\d/) { |m| whole << m.to_s }
+      assert_equal [%w[x y], "a {{x}} {{y}}", %w[a1 b2]], [firsts, back, whole]
+    end
   end
 
   # String#[] of a Regexp (its match, or a capture group) or a String, typed and untyped (decision 254)

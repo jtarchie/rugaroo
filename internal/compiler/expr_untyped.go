@@ -558,7 +558,7 @@ func (f *fctx) genRespondTo(n parser.Node, recv expr, args []parser.Node) (expr,
 func (f *fctx) genDynCall(n parser.Node, recv expr, name string, args []parser.Node) expr {
 	// a receiver not known yet in this round (docs/research/inference-2026-11.md): the call says nothing yet, so it is
 	// no dynamic use, no warning, and its result is not known either
-	unk := f.c.round && f.c.env.InferUnknown && isUnknown(recv.typ)
+	unk := f.c.unknownNow() && isUnknown(recv.typ)
 	if e, ok := f.gemDynShortcut(n, recv, name, args); ok && !unk {
 		return e
 	}

@@ -411,7 +411,7 @@ func (f *fctx) ivar(n parser.Node, name string, assigned Type) *Ivar {
 			iv.joins = !f.lenient()
 			return iv
 		}
-		if f.c.round && f.c.env.InferUnknown {
+		if f.c.unknownNow() {
 			// every write so far stored a value not known yet: the ivar is not known yet either, not an error. It is
 			// not declared, so the round that types a write declares it (docs/research/inference-2026-11.md)
 			return &Ivar{Name: name, Type: TAny{Unknown: true}, Owner: f.owner}

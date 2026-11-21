@@ -61,6 +61,14 @@ type inference struct {
 	from    map[pendingKey]string // the first call each type came from, file:line, for a mismatch's message
 	hardAny map[pendingKey]bool   // a method (by its first pending parameter) that returned untyped with every parameter typed: its result is never provisional again (decision 466)
 	changed bool
+	// resolved: the rounds reached their fixed point with not-known-yet values (RUGAROO_INFER_UNKNOWN); what is still
+	// not known is untyped from here on, and the rounds go on so a typed parameter such a value reaches is untyped too
+	resolved bool
+}
+
+// unknownNow reports a round in which a value no call has typed is "not known yet" instead of untyped.
+func (c *Compiler) unknownNow() bool {
+	return c.round && c.env.InferUnknown && (c.infer == nil || !c.infer.resolved)
 }
 
 // pendingParam is a parameter whose type comes from use: its key across compiles, and its name for messages.
@@ -209,7 +217,7 @@ func (c *Compiler) resolvePending(m *Method, prm *Param, pp pendingParam) {
 			prm.Type = TAny{}
 		}
 	case how != pendNone: // learned from this round's calls, or only a dynamic call can reach it (decision 169)
-		prm.Type = TAny{Unknown: how == pendRound && c.env.InferUnknown}
+		prm.Type = TAny{Unknown: how == pendRound && c.unknownNow()}
 	case m.attrWriter, m.Owner != nil && m.Owner.isTemplate(): // a template's body is never compiled: its instances' are (decision 308)
 		prm.Type = TAny{}                 // an attr writer no call types: only a dynamic call can reach it (decision 179)
 		prm.UncalledWriter = m.attrWriter // until discovery gives it its ivar's type (decision 445)
@@ -849,7 +857,8 @@ func (c *Compiler) updateInference(inf *inference) {
 		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
 			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 		}
-		if slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
+		dynTyped := c.env.InferUnknown && dynUsesAgree(uses)
+		if slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) && !dynTyped {
 			// dynamic calls by its name (maybe meant for another class's method) widen a parameter but never type it alone:
 			// untyped until a static call carries a type (decision 331). ProcessedSource's `parser.parse(@buffer)` reaches
 			// every `parse` with a Buffer; rubocop-ast's NodePattern::Parser#parse(source) takes a String from
@@ -889,7 +898,7 @@ func (c *Compiler) updateInference(inf *inference) {
 				}
 			case !typeEq(old, t):
 				if j, ok := join(old, t); ok {
-					next[k] = j
+					next[k] = mergeSameClass(j)
 				} else {
 					next[k] = TAny{}
 				}
@@ -1122,4 +1131,70 @@ func (c *Compiler) gemMethodsNamed(name string) []*Method {
 		}
 	}
 	return c.gemByName[name]
+}
+
+// dynUsesAgree reports dynamic calls that all pass one class and nothing untyped: with the not-known-yet rounds they
+// type a parameter no static call reaches (liquid's Tag#render(context), called on a node of the untyped nodelist);
+// a later use of another class joins in, since the state only goes up (docs/research/inference-2026-11.md).
+func dynUsesAgree(uses []paramUse) bool {
+	var t Type
+	for _, u := range uses {
+		if u.deflt {
+			continue
+		}
+		if !realType(u.typ) || holdsAny(u.typ) {
+			return false
+		}
+		if t == nil {
+			t = u.typ
+			continue
+		}
+		j, ok := join(t, u.typ)
+		if !ok || isAny(j) || holdsUnion(j) && !holdsUnion(t) {
+			return false
+		}
+		t = j
+	}
+	return t != nil
+}
+
+// mergeSameClass folds a union's members of one generic class into one: two instantiations are one Go type, so no union
+// holds both (decision 150). Their arguments join; untyped where they do not.
+func mergeSameClass(t Type) Type {
+	u, ok := stripOpt(t).(TUnion)
+	if !ok {
+		return t
+	}
+	var ms []Type
+	merged := false
+	for _, m := range u.Members {
+		mc, ok := m.(TClass)
+		i := -1
+		if ok && len(mc.Args) > 0 {
+			i = slices.IndexFunc(ms, func(o Type) bool { oc, ok := o.(TClass); return ok && oc.C == mc.C })
+		}
+		if i < 0 {
+			ms = append(ms, m)
+			continue
+		}
+		oc := ms[i].(TClass)
+		args := make([]Type, len(oc.Args))
+		for a := range args {
+			args[a] = TAny{}
+			if a < len(mc.Args) {
+				if j, ok := join(oc.Args[a], mc.Args[a]); ok {
+					args[a] = j
+				}
+			}
+		}
+		ms[i], merged = TClass{C: oc.C, Args: args}, true
+	}
+	if !merged {
+		return t
+	}
+	out := unionOf(ms...)
+	if isOpt(t) {
+		return optOf(out)
+	}
+	return out
 }

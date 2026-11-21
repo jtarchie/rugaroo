@@ -577,7 +577,11 @@ func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 
 // inferRounds runs decision 146's rounds until nothing changes; the error is one that stopped them.
 func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) (roundErr error) {
-	for range maxInferRounds {
+	rounds := maxInferRounds
+	if opts.env.InferUnknown {
+		rounds *= 3 // the state only goes up, so the rounds end by themselves; a type travels one call level per round
+	}
+	for range rounds {
 		opts.round = true
 		_, err := compileWith(ctx, preludeFS, sources, opts, false)
 		opts.round = false
@@ -590,6 +594,11 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 			if opts.env.InferDebug {
 				fmt.Fprintln(os.Stderr, "rugaroo: infer round failed:", err)
 			}
+		}
+		done := !errors.Is(err, errInferRound) || !opts.infer.changed || opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds
+		if done && opts.env.InferUnknown && opts.infer != nil && !opts.infer.resolved && (err == nil || errors.Is(err, errInferRound)) {
+			opts.infer.resolved, opts.infer.settled = true, 0
+			continue
 		}
 		if !errors.Is(err, errInferRound) || !opts.infer.changed {
 			break

@@ -841,6 +841,7 @@ func (f *fctx) stringLiteralOverload(m *Method, owner *Class, args []parser.Node
 	case "scan":
 		g, ok := f.literalGroups(arg)
 		switch {
+		case f.curBlock != nil: // the block form yields groups or matches itself (__scan_block)
 		case ok && g > 0:
 			return owner.lookup("__scan_groups")
 		case !ok && f.lenient(): // a gem's pattern known only at run time: rows or strings, as MRI decides (decision 334)
@@ -1039,6 +1040,9 @@ func (f *fctx) blockArg(n parser.Node, m *Method, env map[string]Type, block par
 func (f *fctx) noteWideningUse(m *Method, p Param, an parser.Node, t Type) {
 	if _, untyped := t.(TAny); !untyped || !f.lenient() || p.Pending == "" || f.c.uses == nil || m.File == nil || !f.c.gemFile(m.File) || m.Owner == nil {
 		return
+	}
+	if f.c.env.InferUnknown && isUnknown(t) {
+		return // not known yet (an override handing its own parameter to super): no evidence either way
 	}
 	if m.Name == "initialize" || m.Owner.descendantDefines(m.Name, true) || m.Owner.includerDefines(m.Name, map[*Class]bool{}) {
 		f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: TAny{}, file: f.f, off: an.GetLocation().StartOffset, widen: true})
