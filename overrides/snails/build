@@ -29,9 +29,9 @@ cp -R "$W/snails/runtime" "$A/snails-core"
 for p in "$here"/patches/*.patch; do patch -s -d "$A/snails-core" -p2 < "$p"; done
 ruby "$here/to_ffi_gem.rb" "$A/snails-core/database/sqlite.rb" "$A/snails-core/database/postgresql.rb"
 
-# Ours: tep's socket layer on Socket, the driver, and .rbs corrections.
+# Ours: Tep::APP on WEBrick, the sp_net stand-in, the driver, and .rbs corrections.
 mkdir -p "$A/shim" "$A/sig"
-cp "$here/lib/tep_net.rb" "$A/shim/"
+cp "$here/lib/"*.rb "$A/shim/"
 cp "$here/sig/"*.rbs "$A/sig/"
 cp "$here/main.rb" "$A/rugaroo_main.rb"
 

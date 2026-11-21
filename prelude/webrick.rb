@@ -72,12 +72,12 @@ module WEBrick
       return Ref(String(strings.Join(values, ", ")))
     }
 
-    #: () -> Hash[String, String]
-    def header = %x{ rbHTTPHeaderHash(self.r.Header) }
+    #: () -> Hash[String, Array[String]]
+    def header = %x{ rbHTTPHeaderFields(self.r.Header) }
 
     #: () { (String, String) -> void } -> void
     def each
-      header.each { |k, v| yield k, v }
+      header.each { |k, v| yield k, v.join(", ") }
     end
 
     #: () -> Array[Cookie]

@@ -1,7 +1,6 @@
 # rbs_inline: enabled
 
-# Stands in for snails-core/tep/net.rb: its sp_net calls live in Spinel's runtime, so here they are Socket/Process.
-require "socket"
+# Stands in for snails-core/tep/net.rb (sp_net lives in Spinel's runtime): tep_webrick.rb serves, so only the clock and crypto are real.
 require "openssl"
 require "digest"
 require "base64"
@@ -9,122 +8,90 @@ require "securerandom"
 
 module Tep
   module Sock
-    @servers = {} #: Hash[Integer, TCPServer]
-    @ios = {} #: Hash[Integer, BasicSocket]
-    @stop = false #: bool
-
-    #: (BasicSocket) -> Integer
-    def self.track(io)
-      @ios[io.fileno] = io
-      io.fileno
-    end
-
-    #: (Integer, Integer) -> Integer
-    def self.sphttp_listen(port, _reuse)
-      s = TCPServer.new("0.0.0.0", port)
-      @servers[s.fileno] = s
-      s.fileno
-    rescue SystemCallError
-      -1
-    end
-
-    #: (Integer) -> Integer
-    def self.sphttp_accept(sfd) = track(@servers.fetch(sfd).accept)
-
-    #: (Integer) -> Integer
-    def self.sphttp_accept_nb(sfd)
-      track(@servers.fetch(sfd).accept_nonblock)
-    rescue IO::WaitReadable
-      -1
-    end
-
-    #: (Integer) -> Integer
-    def self.sphttp_set_nonblock(_fd) = 0
-
-    #: (Integer) -> Integer
-    def self.sphttp_close(fd)
-      @ios.delete(fd)&.close
-      @servers.delete(fd)&.close
-      0
-    end
-
-    #: (Integer, String) -> Integer
-    def self.sphttp_write_str(fd, s)
-      @ios[fd]&.write(s) || -1 # Spinel type seeding writes to fd 0 at load
-    end
-
-    #: (Integer, String, Integer) -> Integer
-    def self.sphttp_write_bytes(fd, data, n) = @ios[fd]&.write(data.byteslice(0, n).to_s) || -1
-
-    #: (Integer, Integer) -> String
-    def self.sphttp_recv_some(fd, n)
-      @ios[fd]&.read_nonblock(n) || "" # "" is EOF to every caller
-    rescue IO::WaitReadable, EOFError
-      ""
-    end
-
-    #: (Integer, Integer) -> String
-    def self.sphttp_recv_all(fd, n) = @ios[fd]&.read(n) || ""
-
-    #: (String, Integer) -> Integer
-    def self.sphttp_connect(host, port) = track(TCPSocket.new(host, port))
-
-    # ponytail: Snails 1.0 clamps workers to 1, so no prefork; Go cannot fork.
-    #: () -> Integer
-    def self.sphttp_fork = -1
-
-    #: (Integer) -> void
-    def self.sphttp_exit(status)
-      $stdout.flush
-      exit!(status)
-    end
-
-    #: () -> Integer
-    def self.sphttp_getpid = Process.pid
-
-    #: () -> Integer
-    def self.sphttp_wait_any = -1
-
-    #: () -> Integer
-    def self.sphttp_install_term_handlers
-      trap("TERM") { @stop = true }
-      trap("INT") { @stop = true }
-      0
-    end
-
-    #: () -> Integer
-    def self.sphttp_shutdown_requested = @stop ? 1 : 0
-
-    # ponytail: no poll_* (only the fiber server uses them, unreachable from Snails::Main).
-
-    #: (String, Integer) -> String
-    def self.sphttp_shell_capture(cmd, n) = IO.popen(cmd, &:read).to_s.byteslice(0, n).to_s
-
     #: () -> Integer
     def self.sphttp_now_us = (Process.clock_gettime(Process::CLOCK_MONOTONIC) * 1_000_000.0).to_i
 
     #: (String) -> Integer
     def self.sphttp_filesize(path) = File.exist?(path) ? File.size(path) : -1
 
-    #: (Integer, String) -> void
-    def self.sphttp_sendfile(fd, path)
-      return unless File.exist?(path)
-
-      data = File.binread(path)
-      sphttp_write_bytes(fd, data, data.bytesize)
+    #: (Integer, String) -> Integer
+    def self.sphttp_write_str(_fd, _s)
+      -1 # Spinel's type seeding writes to fd 0 at load; with no fds here every write fails, as write(2) on a bad fd does
     end
 
+    #: (Integer, String, Integer) -> Integer
+    def self.sphttp_write_bytes(_fd, _data, _n) = -1
+
     #: (Integer, String) -> void
-    def self.sphttp_write_chunk(fd, s)
-      sphttp_write_str(fd, "#{s.bytesize.to_s(16)}\r\n")
-      sphttp_write_bytes(fd, s, s.bytesize)
-      sphttp_write_str(fd, "\r\n")
-    end
+    def self.sphttp_write_chunk(_fd, _s) = nil
 
     #: (Integer) -> void
-    def self.sphttp_write_chunk_end(fd)
-      sphttp_write_str(fd, "0\r\n\r\n")
+    def self.sphttp_write_chunk_end(_fd) = nil
+
+    #: (Integer, String) -> void
+    def self.sphttp_sendfile(_fd, _path) = nil
+
+    #: () -> Integer
+    def self.sphttp_getpid = Process.pid
+
+    #: () -> Integer
+    def self.sphttp_shutdown_requested = 0
+
+    #: () -> Integer
+    def self.unused
+      raise NotImplementedError, "tep's fd-level server is replaced by Tep::WEBrickServer" # its servers stay loaded, never run
     end
+
+    #: (Integer, Integer) -> Integer
+    def self.sphttp_listen(_a1, _a2) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_accept(_a1) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_accept_nb(_a1) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_set_nonblock(_a1) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_close(_a1) = unused
+
+    #: (Integer, Integer) -> String
+    def self.sphttp_recv_some(_a1, _a2) = unused.to_s
+
+    #: (Integer, Integer) -> String
+    def self.sphttp_recv_all(_a1, _a2) = unused.to_s
+
+    #: (String, Integer) -> Integer
+    def self.sphttp_connect(_a1, _a2) = unused
+
+    #: () -> Integer
+    def self.sphttp_fork = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_exit(_a1) = unused
+
+    #: () -> Integer
+    def self.sphttp_wait_any = unused
+
+    #: () -> Integer
+    def self.sphttp_install_term_handlers = unused
+
+    #: () -> Integer
+    def self.sphttp_poll_reset = unused
+
+    #: (Integer, Integer) -> Integer
+    def self.sphttp_poll_add(_a1, _a2) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_poll_run(_a1) = unused
+
+    #: (Integer) -> Integer
+    def self.sphttp_poll_ready(_a1) = unused
+
+    #: (String, Integer) -> String
+    def self.sphttp_shell_capture(_a1, _a2) = unused.to_s
   end
 
   module Crypto

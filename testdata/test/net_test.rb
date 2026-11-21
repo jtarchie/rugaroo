@@ -351,6 +351,23 @@ module NetTests
       server.shutdown
       thread.join
     end
+
+    # A repeated header keeps its values apart in `header`; `each` and `[]` join them, as MRI's WEBrick does.
+    def test_repeated_header_fields
+      got = Queue.new #: Queue[String]
+      server = WEBrick::HTTPServer.new(Port: 0, BindAddress: "127.0.0.1")
+      server.mount_proc("/") do |req, res|
+        pairs = [] #: Array[String]
+        req.each { |k, v| pairs << "#{k}=#{v}" if k == "x-a" }
+        got << "#{req.header["x-a"].inspect} #{pairs.join} #{req["x-a"]}"
+        res.body = "ok"
+      end
+      thread = Thread.new { server.start }
+      assert_equal "200", net_status(server.config[:Port], "GET / HTTP/1.1\r\nHost: x\r\nX-A: 1\r\nX-A: 2\r\nConnection: close\r\n\r\n")
+      assert_equal '["1", "2"] x-a=1, 2 1, 2', got.pop
+      server.shutdown
+      thread.join
+    end
   end
 
   # Net::HTTP against a raw TCPServer: the bytes on the wire, which WEBrick hides.
