@@ -968,7 +968,7 @@ func (c *Compiler) unknownRule(inf *inference, key pendingKey, uses []paramUse) 
 	if isRestPosKey(key) && slices.ContainsFunc(uses, func(u paramUse) bool { return isAny(u.typ) }) {
 		return TAny{} // one call passed that position something untyped: nothing is forwarded for it
 	}
-	if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
+	if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(stripOpt(u.typ)) && c.gemFile(u.file) }) {
 		// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
 		// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
 		return TAny{}

@@ -13,6 +13,7 @@ require "ragel_gem"
 require "lexen_gem"
 require "fwd_gem"
 require "env_gem"
+require "ver_gem"
 
 puts CycLexer.new.advance(30_000)
 
@@ -37,3 +38,5 @@ puts stack.jump(7)
 puts stack.top.kind
 
 puts EnvParser.new("hello world").run
+
+puts VerRuby33.new.lexer.new_syntax?

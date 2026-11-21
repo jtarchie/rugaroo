@@ -71,3 +71,98 @@ name in a variable). That is the second phase, and it needs its own measurement 
 5. rubocop `check` SAME on the session's inputs; transpile time and `TestCompileCost` no worse.
 
 The algorithm sits behind an environment switch until gate 5, and the inference cache's key carries its version.
+
+## What was built, and the gates (2026-11-21)
+
+Branch `infer-unknown-resolve`. Everything here is behind `RUGAROO_INFER_UNKNOWN=1` unless it says default lane.
+The default-lane part is decision 474.
+
+**The schedule is three phases, not one resolution step.** Each runs to its own fixed point; the state only goes up.
+
+1. *Types only.* A round's untyped result for a slot is dropped, and so is a container of untyped
+   (`Hash[untyped, untyped]`): it may be a value whose type arrives a round later (an ivar discovered late, a Hash
+   whose values are typed in round 2), and kept it would untype for good everything it reaches. This is what the plan
+   above did not have. With "the state only goes up" alone, one early untyped value in the parser lexer
+   (`@source_pts` in rounds 1 and 2, before `source_buffer=`'s parameter was typed) made `pe`, then `p`, then every
+   position passed on, untyped for the rest of the compile.
+2. *Settling.* Untyped results are kept; values may still be not known yet. A parameter that really is untyped now
+   makes its calls dynamic, and those calls' arguments type what only they reach (liquid's `Tag#render(context)`,
+   reached through `node.render(context)` on an element of the untyped nodelist).
+3. *Resolved.* Nothing is "not known yet"; what was is untyped. An untyped gem argument, static or through a dynamic
+   call by name, untypes the parameter it may reach for good. Without this a parameter typed in phase 1 from one
+   early call kept its type and raised at run time (parser's `loc(token)`, typed Integer, handed an Array).
+
+**What "not known yet" covers now**, beyond the plan's parameters and returns: a lambda's parameters; an ivar that is
+only ever nil or has no typed write yet; the parts of a destructured value; any call on a receiver not known yet
+(an intrinsic such as `class` answered a plain untyped value); what ivar discovery reads from a class it has not
+walked yet, in every compile and not only in a round (three walks instead of two).
+
+**New evidence rules.**
+
+- Dynamic calls that all pass one class type a parameter no static call reaches (`dynUsesAgree`).
+- Lambdas one slot holds (`@xfrm = flag ? @plain : @skip`, or two writes of one ivar) share their parameter keys
+  during the rounds, so the slot is one Go func type and not a union only a dynamic call can call (`procAlias`).
+- A `*args` forwarder passes positional types on (`infer_rest.go`): each call records its rest arguments by
+  position, and `Literal.new(self, *args)` hands position j's type to the parameter it lands in, when the body only
+  ever splats `args` and no call splatted into it or passed that position something untyped.
+- `self` passed from a method generic over Self is a use of its class (`LexerStrings.new(self, @version)`).
+- The per-shape exemptions of decisions 358, 383 and 466 are off under the switch (`RUGAROO_INFER_SPECIAL=1` keeps
+  them, for an A/B).
+
+**Gate 1: passes.** `testdata/run/gem_inference` (now with `lexen_gem` and `fwd_gem`): 19 dynamic calls by default,
+0 with the switch, output equal to MRI in both lanes.
+
+**Gate 2: passes.** The parser gem on 20 files (`~/.cache/rugaroo-parser`), the `Lexer` and `LexerStrings` parts of
+`sig/gems/parser/parser.rbs` removed:
+
+| | dynamic-call warnings | instructions |
+|---|---:|---:|
+| MRI | | 2,001M |
+| main, with the sig | 2,374 | 1,269M |
+| switch on, without the lexer sig | 2,237 | 1,233M (measured one change before the last; see the note below) |
+
+The lexer's own dynamic calls go 953 → 117 without the sig, its untyped fields 23 → 5 (`@version`, `@_lex_actions`,
+`@force_utf32`, `@cond`, `@cmdarg`). Both compiled programs print 5,651 nodes and 11,332 tokens; MRI prints 5,750
+and 11,533 on the same files, on main too, which is not this work's and is not explained yet.
+
+**Gate 3: run; two things for the user.** `scripts/gen-compare` over 345 inputs (examples, testdata, benchmarks,
+spinel's suite). Default lane, main against the branch: only this work's own fixture and test differ. Switch off
+against switch on: 14 inputs differ, none newly compiles and none newly fails. The gem programs change as meant
+(liquid 469 → 392 dynamic calls, kramdown 1,165 → 1,112, pairing_heap's one dispatcher gone). Of the strict
+programs, `bm_micro_lisp` and `bm_tree_walker_frames` fail on both with a different message, and two others
+(`bm_stark_field`, `bm_jekyll_lite`) had gained three dispatchers each before phase 1 also deferred containers of
+untyped; that is fixed, and the comparison was rerun.
+
+**Gates 4 and 5 (rubocop): not run.**
+
+**Known costs.** Rounds: the parser program takes 16, liquid 21, where the default lane stops at 8 or earlier. The
+cap is 48. Rubocop's rounds are about 16 s each, so incremental rounds (plan step 6) come before the switch can be
+the default there.
+
+## Techniques other tools use, checked against this design (2026-11-21)
+
+A read of TypeProf (v1 and v2), pyrefly, pytype, `dmypy suggest`, Shed Skin and Crystal for what they do where
+rugaroo still answers untyped. Sources were read through a summarising fetch, so constants are worth a direct look.
+
+- **Heterogeneous containers** (kramdown's `Element#children`, parser stacks of `[node, src, flags]`). TypeProf v2's
+  Array type carries one slot per literal index beside a unified element type, and its Record type one slot per
+  Symbol key; a write at a non-literal index or a push goes to the unified type. As TypeProf does it this is not
+  sound for a compiler (a literal-index read still sees only the slot): the rule here would be to demote the tuple
+  to its unified type on any non-literal write, push or escape. This is issue #122's tuple stacks.
+- **Dispatch by computed name.** TypeProf v2 gives a Symbol literal a singleton type and lets it flow into
+  `send`; an interpolated name is a plain Symbol and resolves nothing. No tool narrows the argument per target
+  method, so rubocop's `public_send(callback, node)` correlation is not solved anywhere that was read. Decision
+  353's prefix match already goes further than TypeProf.
+- **Cycles.** TypeProf v2 is a monotone graph with a worklist, "not known yet" being an empty vertex. It reaches the
+  same fixed point as rounds and only reschedules less; termination still needs a finite lattice. Pyrefly and pytype
+  collapse a recursive lookup to Any, so neither helps. The worklist is the route to incremental rounds.
+- **Context sensitivity.** Shed Skin's Cartesian Product Algorithm clones a function per tuple of argument classes,
+  with a hard limit and a merge by signature. It would type a helper called with different classes from different
+  sites; its cost is code size, which the Go build is already bound by.
+- **`*args` and stored procs.** TypeProf v2 keeps a rest parameter as a tuple of the call's argument vertices and
+  reads `elems[i]` at a splat: the same idea as `infer_rest.go`.
+- **Not borrowable:** `dmypy suggest` (guess and check), pyrefly's first-use pinning of an empty container (a
+  checker's heuristic; a compiler needs every use).
+
+In order of what it would buy here: tuple and record slots with demote-on-escape; Symbol-literal types flowing into
+`send`; a worklist for incremental rounds; per-argument-tuple clones with a limit.

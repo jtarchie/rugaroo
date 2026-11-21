@@ -728,7 +728,7 @@ func (f *fctx) undefinedCall(n parser.Node, t TClass, recv expr, name string, ar
 	// struct-typed value may be a subclass defining the method:
 	// either way the method is found at run time
 	if (t.C.RubyName == "Module" || t.C.RubyName == "Class" || (t.C.isStruct() && t.C.descendantDefines(name, false))) && block == nil {
-		return f.genDynCall(n, recv, name, args)
+		return f.descendantCall(n, t.C, recv, name, args)
 	}
 	if f.lenient() && block != nil && t.C.isStruct() && t.C.descendantDefines(name, false) {
 		// with a block too (rubocop-ast's `child.visit_all_descendants(&block)` on a child narrowed to ::AST::Node,
@@ -930,7 +930,7 @@ func (f *fctx) selfCall(n parser.Node, recv expr, name string, args []parser.Nod
 		return f.delegateCall(n, recv, name, args, block)
 	}
 	if f.owner.isStruct() && f.owner.descendantDefines(name, false) && block == nil {
-		return f.genDynCall(n, recv, name, args)
+		return f.descendantCall(n, f.owner, recv, name, args)
 	}
 	if e := f.c.classes["Object"].lookup(name); e != nil {
 		return f.callEntry(n, e, recv, args, block)

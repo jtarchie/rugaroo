@@ -160,3 +160,68 @@ func (c *Class) descendantDefines(name string, private bool) bool {
 	}
 	return false
 }
+
+// descendantCall is a call of a method cls does not define and its subclasses do (a template method: parser's
+// `Base#initialize` calling `version`): found at run time, and typed as what one of them answers.
+func (f *fctx) descendantCall(n parser.Node, cls *Class, recv expr, name string, args []parser.Node) expr {
+	e := f.genDynCall(n, recv, name, args)
+	if rt := f.descendantRet(cls, name); rt != nil && isAny(e.typ) {
+		return expr{code: f.coerce(n, e, rt), typ: rt}
+	}
+	return e
+}
+
+// descendantRet is what a call of name on a cls value answers when cls does not define it and its subclasses do: the
+// join of every definition a descendant has, its own or an included module's. nil when one of them is untyped or not
+// known yet, when they do not join, or when a descendant could answer through method_missing.
+func (f *fctx) descendantRet(cls *Class, name string) Type {
+	if !f.c.env.InferUnknown || !f.lenient() || !cls.isStruct() || cls.RubyName == "Module" || cls.RubyName == "Class" {
+		return nil
+	}
+	var out Type
+	ok := true
+	add := func(m *Method) {
+		if m.File == nil || m.File.isPrelude() {
+			return
+		}
+		if err := catchCompileError(func() { f.c.resolveMethod(m); f.c.inferRet(m) }); err != nil || m.Ret == nil || holdsAny(m.Ret) || isVoid(m.Ret) || mentionsVar(m.Ret) {
+			ok = false
+			return
+		}
+		if out == nil {
+			out = m.Ret
+		} else if j, joined := join(out, m.Ret); joined && !holdsAny(j) {
+			out = j
+		} else {
+			ok = false
+		}
+	}
+	var walk func(k *Class)
+	walk = func(k *Class) {
+		for _, sub := range k.Subclasses {
+			if sub.metaOf != nil && k.metaOf == nil {
+				continue
+			}
+			if mm := sub.Methods["method_missing"]; mm != nil {
+				ok = false
+			}
+			if m := sub.Methods[name]; m != nil {
+				add(m)
+			}
+			for _, inc := range sub.Includes {
+				if inc.Mod == nil || inc.Mod.universal {
+					continue
+				}
+				if e := inc.Mod.lookup(name); e != nil && e.M.Owner != nil && !e.M.Owner.universal {
+					add(e.M)
+				}
+			}
+			walk(sub)
+		}
+	}
+	walk(cls)
+	if !ok {
+		return nil
+	}
+	return out
+}

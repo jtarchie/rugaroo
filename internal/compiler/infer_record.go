@@ -231,6 +231,9 @@ func (f *fctx) recOfLocal(name string) recShape {
 	}
 	for i, w := range writes {
 		s := f.recOfNode(w.Value)
+		if f.f.trailingAnnotation(w) != "" {
+			s = nil // `h = {...} #: Hash[Symbol, untyped]`: the annotation is what the local is
+		}
 		if s == nil {
 			f.recLocals[name] = nil
 			return nil
