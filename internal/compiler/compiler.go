@@ -202,6 +202,7 @@ type memoState struct {
 	privateInN          int
 	objFreezeMemo       int                     // objFreeze: 0 unasked, 1 no, 2 yes
 	recMemo             map[pendingKey]recShape // paramShape's answers, this compile
+	blockWrites         map[blockWriteKey]bool  // blockWritesLocal's answers, this compile: a pure walk of a body, asked per call in it
 	discovering         bool                    // discoverIvars is walking the classes (unknownNow)
 	pendingSigs         int                     // signatures rendered while their return was still being inferred: memos taken across one are provisional
 	goCalledNames       map[string]bool         // memo of goCalled

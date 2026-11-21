@@ -159,7 +159,7 @@ func (f *fctx) callNarrowing(n parser.Node) []narrowInfo {
 			}
 			seen[lv.Name] = true
 			v := f.narrowLocal(lv.Name)
-			if v == nil || v.base != nil || !isOpt(v.typ) || isAny(stripOpt(v.typ)) || assignsLocal(n, lv.Name) || body != nil && blockWritesLocal(body, lv.Name, f.isParam(lv.Name)) {
+			if v == nil || v.base != nil || !isOpt(v.typ) || isAny(stripOpt(v.typ)) || assignsLocal(n, lv.Name) || body != nil && f.c.blockWritesLocal(body, lv.Name, f.isParam(lv.Name)) {
 				return
 			}
 			ns = append(ns, narrowInfo{local: v, typ: stripOpt(v.typ)})

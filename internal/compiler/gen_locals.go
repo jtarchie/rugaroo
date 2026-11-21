@@ -217,7 +217,7 @@ func (f *fctx) reassignView(n parser.Node, name string, info *localInfo, view *l
 // narrowLeafAssign: a leaf class's C? local (a nil-able *C, decision 360) given a C is not nil until its next write, so
 // calls on it need no NoMethodError guard (decision 371). Not when a block writes it, as for narrowAssign.
 func (f *fctx) narrowLeafAssign(v *local, val expr, narrowed bool) (expr, bool) {
-	if narrowed || !leafOpt(v.typ) || !typeEq(stripOpt(v.typ), val.typ) || f.m == nil || f.m.Node == nil || blockWritesLocal(f.m.Node.Body, v.name, f.isParam(v.name)) {
+	if narrowed || !leafOpt(v.typ) || !typeEq(stripOpt(v.typ), val.typ) || f.m == nil || f.m.Node == nil || f.c.blockWritesLocal(f.m.Node.Body, v.name, f.isParam(v.name)) {
 		return expr{}, false
 	}
 	f.applyNarrow([]narrowInfo{{local: v, typ: val.typ}})
@@ -245,6 +245,25 @@ func (f *fctx) narrowAssign(v *local, val expr) (expr, bool) {
 
 // blockWritesLocal is writtenInBlock for the scope's own local name: a block before name's first assignment outside
 // blocks (or its parameter) writes a block-local of its own, by Ruby's scoping, so only later blocks count.
+func (c *Compiler) blockWritesLocal(body parser.Node, name string, param bool) bool {
+	k := blockWriteKey{body, name, param}
+	if r, ok := c.blockWrites[k]; ok {
+		return r
+	}
+	if c.blockWrites == nil {
+		c.blockWrites = map[blockWriteKey]bool{}
+	}
+	r := blockWritesLocal(body, name, param)
+	c.blockWrites[k] = r // the Ragel lexer's one method asked once per call in it: 30% of the parser gem's compile
+	return r
+}
+
+type blockWriteKey struct {
+	body  parser.Node
+	name  string
+	param bool
+}
+
 func blockWritesLocal(body parser.Node, name string, param bool) bool {
 	first := -1
 	if param {
