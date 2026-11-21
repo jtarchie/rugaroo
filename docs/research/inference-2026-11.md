@@ -162,6 +162,10 @@ parser gem reported as their largest untyped roots.
 - **A fix the switch needed.** A dynamic call's arguments were matched to a method's parameters left to right, so
   for `def evaluate_to(*args, block)` the first argument was recorded as `block`'s; with dynamic calls now able to
   type a parameter, `block` became Integer and raised on its Proc. The last arguments are the post parameters'.
+- **Two more the suite and the parser gem found.** A record shape that was turned off must stay off: a later round
+  may not record the use that was no record, the counts then agree, and the parameter became
+  `Hash[Symbol, untyped]` for a Hash with nil keys (parser's `check_duplicate_arg(this_arg, map = {})`). And after
+  resolution an `untyped?` argument (a Hash read) untypes its parameter as an untyped one does.
 
 `testdata/run/gem_inference` holds one small gem per shape (`env_gem`, `ver_gem` beside the earlier four): 32
 dynamic calls by default, 1 with the switch.
@@ -172,7 +176,10 @@ dynamic calls by default, 1 with the switch.
 |---|---:|---:|
 | kramdown (example 123) | 1,112 | 1,108 |
 | liquid (example 124) | 392 | 392 |
-| parser gem, 20 files, no lexer sig | 2,237 | 2,197 |
+| parser gem, 20 files, no lexer sig | 2,237 | 2,084 |
+
+The parser program still prints what main prints and runs 1,233M instructions (main with the sig 1,269M, MRI
+2,001M): the calls that went static are not on this program's hot path.
 
 - kramdown: `reset_env` is static and `@stack` is typed in the rounds, but `@tree` ends untyped. `parse_blocks(el)`
   is handed `@tree.children.last`, and `Element#children`'s elements are untyped by decision 333, because
