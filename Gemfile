@@ -52,6 +52,7 @@ gem "json", "2.21.1" # newer than Ruby 4.0.9's default 2.18.0: json_test and rxj
 gem "minitest", "6.1.0"
 gem "observer", "0.1.2"
 gem "ostruct", "0.6.3"
+gem "racc", "1.8.1" # TestTraceRacc runs a racc-generated parser
 
 # Bundled gems ruby/spec's library/ directories exercise (decision 409): pinned to what Ruby 4.0.9 (.mri-version, decision 413) bundles, so the spec
 # numbers in docs/support.md name one version. rugaroo compiles them unmodified, as installed gems.
