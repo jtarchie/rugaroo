@@ -16,6 +16,33 @@ stays loaded but never runs. The request goes through tep's own `Parser.parse` a
 query, cookie and body handling stay Snails' code. Not served yet (they answer 501): streaming, WebSocket
 upgrades, `Set-Cookie`.
 
+## Benchmark
+
+`bench/setup workdir spinel-checkout` builds [snails-benchmark](https://github.com/snails-rb/snails-benchmark)'s
+scenario app (`GET /up`, and `GET /items/:id` as a primary-key read over 10,000 SQLite rows) with Spinel (tep's own
+server, as `snails build-binary` makes it) and with rugaroo (`Tep::APP` on WEBrick/`net/http`), both on Snails main
+91b921e5. `bench/run workdir` drives them with k6 the way its `bin/bench` does: constant connections, an 8-connection
+warmup, the contenders' order rotating each round, logging off.
+
+2026-11-21, Apple M4 (10 cores), macOS. 15 s × 3 rounds, median RPS (p95 ms):
+
+| route | connections | Spinel | rugaroo | rugaroo / Spinel |
+|---|---|---|---|---|
+| `/up` | 8 | 18,234 (0.96) | 24,744 (0.59) | 1.36× |
+| `/up` | 32 | 18,878 (4.78) | 29,639 (2.64) | 1.57× |
+| `/up` | 128 | 17,173 (22.60) | 28,413 (14.67) | 1.65× |
+| `/items/:id` | 8 | 12,463 (1.29) | 16,452 (0.88) | 1.32× |
+| `/items/:id` | 32 | 12,408 (7.31) | 18,318 (4.79) | 1.48× |
+| `/items/:id` | 128 | 12,404 (32.97) | 17,506 (26.54) | 1.41× |
+
+Peak RSS: Spinel 51 MiB, rugaroo 164 MiB. No request failed. MRI (WEBrick) was about 200 RPS in a 3 s trial.
+
+Read with care. This compares two stacks, not only two compilers: tep's server against Go's `net/http`. The host
+was shared (load average about 15 from other work), k6 ran on the same cores (the published method pins it apart
+with taskset on Linux), and Spinel's build had no jemalloc, which its default `spin.toml` asks for. The published
+Linux numbers for Spinel are higher (50,865 and 35,610 RPS at 32 connections), so only the ratio here means
+anything, and it should be re-measured on Linux.
+
 ## Layout
 
 - `build`: the whole loop, from a pinned Snails commit.
@@ -65,7 +92,10 @@ upgrades, `Set-Cookie`.
 3. `Net::HTTP` reported a refused connection as `Net::OpenTimeout`; MRI raises `Errno::ECONNREFUSED`.
 4. `WEBrick::HTTPRequest#header` joined a repeated header's values; MRI's keeps them apart
    (`{"x-a" => ["1", "2"]}`).
-5. `IO#wait_readable` was missing. It now answers at once, as `BasicSocket`'s already did, and the read after it
+5. A WEBrick request ran on the main Thread, so concurrent requests shared `Thread.current` locals. Snails keeps
+   its SQLite lease there, so two requests used one connection and `sqlite3_step` segfaulted. Each request now
+   runs in a Thread of its own (per request; MRI keeps one per connection).
+6. `IO#wait_readable` was missing. It now answers at once, as `BasicSocket`'s already did, and the read after it
    blocks (ponytail: poll(2) with the timeout). The WEBrick path no longer needs it.
 
 ### rugaroo, open
