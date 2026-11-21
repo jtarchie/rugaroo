@@ -1153,7 +1153,9 @@ func isASCII(s string) bool {
 }
 
 // provisional reports a round's untyped result of m, untyped only until its parameters are typed (decision 358).
-func (c *Compiler) provisional(m *Method, t Type) bool { return c.round && m.roundRet && isAny(t) }
+func (c *Compiler) provisional(m *Method, t Type) bool {
+	return c.round && m.roundRet && isAny(t) && !c.plainRounds()
+}
 
 // leafSelf is a generic body's Self value (self, a `self`-typed parameter) where leaf class cls's *C is wanted: one
 // assertion, as Self is always *C there (decision 359).

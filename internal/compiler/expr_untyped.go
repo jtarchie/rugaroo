@@ -1378,7 +1378,8 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 			if _, kw := a.(*parser.KeywordHashNode); kw {
 				break
 			}
-			if t := typeOf(i); t != nil && !isAny(t) {
+			resolved := f.c.infer != nil && f.c.infer.resolved // an untyped argument is one for good: it untypes what it may reach
+			if t := typeOf(i); t != nil && (!isAny(t) || resolved && !isUnknown(t)) {
 				f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true})
 			}
 		}

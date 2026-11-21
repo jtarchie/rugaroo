@@ -111,6 +111,7 @@ func (f *fctx) joinAllFrom(n parser.Node, types []Type, lits []bool) Type {
 			out, outLit = t, lit
 			continue
 		}
+		f.aliasProcs(out, t)
 		j, ok := join(out, t)
 		if !ok && f.lenient() { // a gem's `dir.directory? ? dir.children : []`: the literal's untyped elements take the other's
 			if k, ok2 := untypedContainerJoin(out, t, outLit, lit); ok2 {

@@ -64,6 +64,57 @@ type inference struct {
 	// resolved: the rounds reached their fixed point with not-known-yet values (RUGAROO_INFER_UNKNOWN); what is still
 	// not known is untyped from here on, and the rounds go on so a typed parameter such a value reaches is untyped too
 	resolved bool
+	// procAlias: lambda literals one slot holds (`@xfrm = flag ? @plain : @skip`), each mapped to the first of them in
+	// source order. During the not-known-yet rounds they share that one's parameter keys, so every call types them
+	// alike and the slot holds one Go func type, not a union of two that only a dynamic call can call
+	procAlias map[lambdaSrc]lambdaSrc
+}
+
+// procSrc is the lambda whose parameter keys src's lambda reads and its calls write, in a not-known-yet round.
+func (c *Compiler) procSrc(src lambdaSrc) lambdaSrc {
+	if c.infer == nil || !c.round || !c.env.InferUnknown {
+		return src
+	}
+	for {
+		to, ok := c.infer.procAlias[src]
+		if !ok {
+			return src
+		}
+		src = to
+	}
+}
+
+// aliasProcs notes two lambda literals of one arity joined into one value (procAlias).
+func (f *fctx) aliasProcs(a, b Type) {
+	if a == nil || b == nil {
+		return
+	}
+	fa, ok1 := stripOpt(a).(TFunc)
+	fb, ok2 := stripOpt(b).(TFunc)
+	c := f.c
+	if !ok1 || !ok2 || c.infer == nil || !c.round || !c.env.InferUnknown || len(fa.Params) != len(fb.Params) || fa.Rest != fb.Rest {
+		return
+	}
+	if fa.Src == "" || fb.Src == "" || fa.Src.storedBlock() || fb.Src.storedBlock() {
+		return
+	}
+	x, y := c.procSrc(fa.Src), c.procSrc(fb.Src)
+	if x == y {
+		return
+	}
+	if y < x {
+		x, y = y, x
+	}
+	if c.infer.procAlias == nil {
+		c.infer.procAlias = map[lambdaSrc]lambdaSrc{}
+	}
+	c.infer.procAlias[y], c.infer.changed = x, true
+}
+
+// plainRounds: the not-known-yet rounds need none of the per-shape exemptions of decisions 358, 383 and 466 (gate 1 of
+// docs/research/inference-2026-11.md; RUGAROO_INFER_SPECIAL=1 keeps them, for the A/B).
+func (c *Compiler) plainRounds() bool {
+	return c.env.InferUnknown && os.Getenv("RUGAROO_INFER_SPECIAL") == ""
 }
 
 // unknownNow reports a round in which a value no call has typed is "not known yet" instead of untyped.
@@ -494,7 +545,7 @@ func typesInclude(m *Method) bool {
 // gives it an expected type: the last round's types, untyped during a
 // round, else the error an annotation would have prevented.
 func (f *fctx) lambdaParams(n parser.Node, names blockParams, body parser.Node) ([]Type, lambdaSrc) {
-	src := lambdaSrcAt(f.f, n.GetLocation().StartOffset)
+	src := f.c.procSrc(lambdaSrcAt(f.f, n.GetLocation().StartOffset))
 	ps := make([]Type, len(names))
 	for i := range ps {
 		f.c.notePending(src.arg(i))
@@ -502,8 +553,8 @@ func (f *fctx) lambdaParams(n parser.Node, names blockParams, body parser.Node) 
 		switch {
 		case how == pendTyped:
 			ps[i] = t
-		case how != pendNone: // untyped this round, or a gem's lambda no call types (decision 169)
-			ps[i] = TAny{}
+		case how != pendNone: // untyped this round (not known yet), or a gem's lambda no call types (decision 169)
+			ps[i] = TAny{Unknown: how == pendRound && f.c.unknownNow()}
 		case !readsParam(body, names[i].Name):
 			ps[i] = TAny{} // a parameter the body never reads loses nothing untyped (decision 179)
 		default: // untyped, its calls dynamic, as a gem lambda's (decision 180)
@@ -668,7 +719,7 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 // use: the next round types them from this call, so m's untyped result now says nothing yet (decision 466). Not
 // once m has returned untyped with its parameters typed: the caller would flip between the two every round.
 func (f *fctx) typedThisCall(m *Method) bool {
-	if !f.c.round || f.c.infer == nil || len(f.typedUse) == 0 {
+	if !f.c.round || f.c.infer == nil || len(f.typedUse) == 0 || f.c.plainRounds() {
 		return false
 	}
 	waits := false
@@ -850,6 +901,12 @@ func (c *Compiler) updateInference(inf *inference) {
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
+		if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
+			// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
+			// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
+			next[key] = TAny{}
+			continue
+		}
 		if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
 			next[key], from[key] = pt, at
 			continue
@@ -863,6 +920,9 @@ func (c *Compiler) updateInference(inf *inference) {
 			// untyped until a static call carries a type (decision 331). ProcessedSource's `parser.parse(@buffer)` reaches
 			// every `parse` with a Buffer; rubocop-ast's NodePattern::Parser#parse(source) takes a String from
 			// NodePattern#initialize, which is untyped this round
+			if _, had := inf.types[key]; had && c.env.InferUnknown {
+				next[key] = TAny{} // typed by agreeing dynamic calls until a static call passed something untyped: untyped now, not kept
+			}
 			continue
 		}
 		if inf.anyUse[key] {
@@ -926,6 +986,19 @@ func (c *Compiler) updateInference(inf *inference) {
 			}
 		}
 		fmt.Fprintf(os.Stderr, "rugaroo: round left untyped: %d with a static call, %d with dynamic calls only, %d with no call\n", static, dynOnly, uncalled)
+	}
+	for a := range inf.procAlias { // the final compile reads each lambda's own keys
+		to := a
+		for t, ok := inf.procAlias[to]; ok; t, ok = inf.procAlias[to] {
+			to = t
+		}
+		for i := range maxStoredBlockArgs {
+			if t, ok := next[to.arg(i)]; ok {
+				next[a.arg(i)] = t
+			} else {
+				delete(next, a.arg(i))
+			}
+		}
 	}
 	settled := !inf.changed || diff*50 <= len(next)
 	c.settleRound(inf, settled, bets, next, from)

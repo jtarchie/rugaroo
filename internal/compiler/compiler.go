@@ -595,7 +595,8 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 				fmt.Fprintln(os.Stderr, "rugaroo: infer round failed:", err)
 			}
 		}
-		done := !errors.Is(err, errInferRound) || !opts.infer.changed || opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds
+		early := opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds && !opts.env.InferUnknown // not-known-yet rounds end by themselves
+		done := !errors.Is(err, errInferRound) || !opts.infer.changed || early
 		if done && opts.env.InferUnknown && opts.infer != nil && !opts.infer.resolved && (err == nil || errors.Is(err, errInferRound)) {
 			opts.infer.resolved, opts.infer.settled = true, 0
 			continue
@@ -603,7 +604,7 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		if !errors.Is(err, errInferRound) || !opts.infer.changed {
 			break
 		}
-		if opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds {
+		if early {
 			// a large gem program's rounds never converge: a few parameters flip until the cap, each round a full dry
 			// run. The first settled round untypes what an untyped call reaches and stops decision 383's drops; the
 			// next ones carry that through, and the final pass redoes what is still off (errWidenRedo). decision 444

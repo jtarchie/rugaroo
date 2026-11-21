@@ -46,7 +46,9 @@ func (f *fctx) genIvarWrite(n *parser.InstanceVariableWriteNode) expr {
 	} else if f.discover {
 		exp = f.openType(n.Value) // `@a = Array.new(n, nil)` is open as `@a = []` is
 	}
-	val, decl := f.ivarWriteValue(n, f.genExpr(n.Value, exp), ann)
+	written := f.genExpr(n.Value, exp)
+	f.aliasProcs(exp, written.typ) // `@xfrm = @emit_a`, later `@xfrm = @emit_b`: one slot's lambdas are typed alike
+	val, decl := f.ivarWriteValue(n, written, ann)
 	if decl == nil {
 		return val
 	}
