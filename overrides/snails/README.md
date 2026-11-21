@@ -57,8 +57,8 @@ anything, and it should be re-measured on Linux.
 - `lib/tep_net.rb`: stands in for `tep/net.rb`, whose `sp_net_*` functions live inside Spinel's C runtime: the
   clock, `Tep::Crypto` on OpenSSL, writes that fail (Spinel's load-time type seeding writes to fd 0), and the
   fd-level calls raising `NotImplementedError`.
-- `to_ffi_gem.rb`: rewrites Spinel's `ffi_func`/`ffi_const`/`ffi_buffer`/... into the ffi gem's
-  `attach_function` spelling, which MRI, Spinel and rugaroo all accept.
+- FFI: Snails' `database/*.rb` compile as written; rugaroo reads Spinel's `ffi_*` syntax (decision 375's Snails
+  amendment). MRI gets it from `testdata/run/spinel_ffi_mri/spinel/ffi.rb` on `RUBYLIB`.
 - `patches/`: fixes to Snails' Ruby.
 - `sig/snails_fixes.rbs`: corrections to Snails' `.rbs` sidecars (decision 404's member-by-member override).
 - `nil_default_audit.rb`: finds parameters whose Ruby default is `nil` while the sidecar type rejects nil.
@@ -83,10 +83,6 @@ anything, and it should be re-measured on Linux.
    [snails-rb/snails#104](https://github.com/snails-rb/snails/issues/104).
 4. A server seam: split `Snails::Main.start` into setup and `serve(port, workers)`, so another server (this
    adapter, or a Rack adapter) is one override and prefork stays inside tep's own server.
-5. FFI in the ffi gem's spelling (`to_ffi_gem.rb` output) makes the database adapters run on MRI too. The one
-   semantic gap: Spinel converts an Integer passed to `:ptr` (sqlite's `SQLITE_TRANSIENT`, `-1`) and the gem
-   does not, so `sqlite3_bind_text`'s destructor slot becomes a pointer-sized `:long`. Check first that Spinel
-   keeps direct C calls for the gem spelling when libffi is installed.
 
 ### rugaroo, fixed on this branch
 
@@ -101,11 +97,12 @@ anything, and it should be re-measured on Linux.
    runs in a Thread of its own (per request; MRI keeps one per connection).
 6. `IO#wait_readable` was missing. It now answers at once, as `BasicSocket`'s already did, and the read after it
    blocks (ponytail: poll(2) with the timeout). The WEBrick path no longer needs it.
+7. Spinel's `ffi_*` syntax is read as the ffi gem's (decision 375's Snails amendment), so Snails' database adapters
+   compile unchanged.
 
 ### rugaroo, open
 
 - `accept_nonblock(exception: false)` / `read_nonblock(..., exception: false)`: the keyword is refused. Snails no
   longer needs it.
 - `app/` compiles only leniently (`-gem app -gem gen`) until model types are declared (#104 above).
-- Spinel's `ffi_*` syntax is not compiled natively. The gem-spelling rewrite (or a native mapping onto decision
-  375's `attach_function` path) is the choice to make.
+- Spinel's `ffi_struct` and `ffi_source` (a C fragment) are not read; Snails uses neither.

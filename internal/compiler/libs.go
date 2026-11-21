@@ -85,6 +85,7 @@ var preludeLibs = map[string]string{
 	"fiddle/function":          "prelude/fiddle.rb",
 	"fcntl":                    "prelude/fcntl.rb",
 	"ffi":                      "prelude/ffi.rb",
+	"spinel/ffi":               "prelude/ffi.rb", // MRI's shim for Spinel's ffi_* syntax; here the compiler reads that syntax itself (decision 375)
 	"yaml":                     "prelude/yaml.rb",
 	"psych":                    "prelude/yaml.rb",
 	"prism/prism":              "prelude/prism.rb",
@@ -215,6 +216,9 @@ type requireScan struct {
 func (sc *requireScan) walk(f *File) {
 	if f.data != nil {
 		sc.lib("stringio")
+	}
+	if f.spinelFFI {
+		sc.lib("ffi")
 	}
 	prev := sc.top // a require inside a method that names a file walks it: the caller's position is restored after
 	sc.top = true

@@ -18,7 +18,7 @@ start() { # contender port
   case $1 in
     spinel) "$W/snails-spinel" > "$OUT/$1.log" 2>&1 & ;;
     rugaroo) "$W/snails-rugaroo" > "$OUT/$1.log" 2>&1 & ;;
-    mri) (cd "$W/bench-rugaroo" && exec ruby serve.rb) > "$OUT/$1.log" 2>&1 & ;;
+    mri) (cd "$W/bench-rugaroo" && RUBYLIB="$here/../../../testdata/run/spinel_ffi_mri" exec ruby serve.rb) > "$OUT/$1.log" 2>&1 & ;;
   esac
   pid=$!
   for _ in $(seq 1 100); do curl -fsS "http://127.0.0.1:$2/up" > /dev/null 2>&1 && return; sleep 0.1; done

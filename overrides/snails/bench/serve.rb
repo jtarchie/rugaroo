@@ -1,4 +1,5 @@
 # Serves a Snails app with Tep::APP on WEBrick; without PORT it only loads, which is what rugaroo's build-time boot run sees.
+require "spinel/ffi" # MRI: the ffi_* shim on RUBYLIB; rugaroo reads the syntax itself (decision 375)
 require_relative "shim/tep_net"
 $LOADED_FEATURES << File.expand_path("snails-core/tep/net.rb", __dir__)
 require_relative "shim/tep_webrick"

@@ -1,4 +1,5 @@
 # Runs the Snails scaffold app on MRI and rugaroo: Tep::APP served by WEBrick (Go's net/http under rugaroo), requests over real HTTP.
+require "spinel/ffi" # MRI: the ffi_* shim on RUBYLIB; rugaroo reads the syntax itself (decision 375)
 require_relative "shim/tep_net"
 $LOADED_FEATURES << File.expand_path("snails-core/tep/net.rb", __dir__)
 require "net/http"

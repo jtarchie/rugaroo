@@ -30,6 +30,7 @@ type File struct {
 	rxCompile      string  // its own `# regexp_compile: mode` line, which governs when the Regexp literals written in it compile (decision 471)
 	overflow       string  // its own `# int_overflow: mode` line, which governs the Integer arithmetic written in it (decision 381)
 	nilCheck       string  // its own `# nil_check: mode` line, else its require_relative-ing file's; governs the T? uses written in it (decisions 393, 404)
+	spinelFFI      bool    // it declared C functions in Spinel's ffi_* syntax, read as the ffi gem's (decision 375), so it needs that lib
 
 	// standalone annotation comments by the line they precede (first code line after)
 	leading map[int][]comment
@@ -87,6 +88,20 @@ func parseFile(ctx context.Context, p *parser.Parser, name string, src []byte, o
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	f := &File{Name: name, Src: src, Root: res.Value, origin: origin}
+	if origin != originPrelude && len(res.Errors) == 0 {
+		rewritten, ok, err := spinelFFI(name, res.Value, src)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			res, err = p.Parse(ctx, rewritten)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", name, err)
+			}
+			src = rewritten // the line table below indexes the rewritten bytes
+			f = &File{Name: name, Src: src, Root: res.Value, origin: origin, spinelFFI: true}
+		}
+	}
 	if origin != originPrelude {
 		if m := intOverflowComment.FindSubmatch(src); m != nil {
 			f.overflow = checkOverflowMode(name+": # int_overflow", string(m[1]))

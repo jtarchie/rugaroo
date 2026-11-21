@@ -25,9 +25,9 @@ sed -i.bak 's/__DB_BACKEND__/sqlite/g' "$A/config/database.rb"
 rm -f "$A"/config/*.bak
 cp -R "$W/snails/runtime" "$A/snails-core"
 
-# Upstream candidates: MRI-only bug fixes, and Spinel's ffi_* rewritten to the ffi gem's spelling.
+# Upstream candidates: MRI-only bug fixes.
 for p in "$here"/patches/*.patch; do patch -s -d "$A/snails-core" -p2 < "$p"; done
-ruby "$here/to_ffi_gem.rb" "$A/snails-core/database/sqlite.rb" "$A/snails-core/database/postgresql.rb"
+export RUBYLIB="$here/../../testdata/run/spinel_ffi_mri" # MRI reads ffi_* through the shim; rugaroo reads it itself (decision 375)
 
 # Ours: Tep::APP on WEBrick, the sp_net stand-in, the driver, and .rbs corrections.
 mkdir -p "$A/shim" "$A/sig"

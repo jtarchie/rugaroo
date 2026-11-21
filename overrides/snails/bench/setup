@@ -33,7 +33,7 @@ rm -rf "$R"
 cp -R "$app" "$R"
 cp -R "$W/snails/runtime" "$R/snails-core"
 for p in "$here"/../patches/*.patch; do patch -s -d "$R/snails-core" -p2 < "$p"; done
-ruby "$here/../to_ffi_gem.rb" "$R/snails-core/database/sqlite.rb" "$R/snails-core/database/postgresql.rb"
+export RUBYLIB="$here/../../../testdata/run/spinel_ffi_mri" # MRI reads ffi_* through the shim; rugaroo reads it itself (decision 375)
 mkdir -p "$R/shim" "$R/sig"
 cp "$here/../lib/"*.rb "$R/shim/"
 cp "$here/../sig/"*.rbs "$R/sig/"
