@@ -1040,8 +1040,10 @@ func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[
 		// at first only types accumulate: an untyped result may be a value whose type has not arrived yet
 		// (an ivar discovered a round late, an intrinsic on a waiting receiver), and kept it would untype for good
 		// everything it reaches. Untyped is decided later, when the types that could arrive have
+		// So may a container of untyped be (a Hash whose values are typed a round later: `Hash[untyped, untyped]`, then
+		// `Hash[String, Integer]`, which no join holds both of)
 		for k, t := range next {
-			if isAny(t) {
+			if holdsAny(t) {
 				delete(next, k)
 			}
 		}
