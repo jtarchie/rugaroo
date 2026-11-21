@@ -78,6 +78,30 @@ func (f *fctx) restForwardType(sp *parser.SplatNode, j int) Type {
 	return c.rehome(t)
 }
 
+// noteDynUse records a dynamic call's argument a of type t as a use of p, a method of the call's name: when it has a
+// type, or, once the rounds resolved, when it is untyped (an untyped argument is then one for good, and untypes what
+// it may reach). An argument a rest parameter takes is recorded by its position j too.
+func (f *fctx) noteDynUse(p Param, a parser.Node, t Type, j int, inRest bool) {
+	resolved := f.c.infer != nil && f.c.infer.resolved
+	if t == nil || isAny(t) && (!resolved || isUnknown(t)) {
+		return
+	}
+	u := paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true}
+	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], u)
+	if f.c.env.InferUnknown && inRest {
+		k := restPosKey(p.Pending, j)
+		f.c.uses[k] = append(f.c.uses[k], u)
+	}
+}
+
+// noteRestForward records, for parameter p fed element j of the splat at sp, what every call of the enclosing
+// forwarder passed at that position.
+func (f *fctx) noteRestForward(p Param, n parser.Node, sp *parser.SplatNode, j int) {
+	if t := f.restForwardType(sp, j); t != nil {
+		f.noteUse(p, n, t)
+	}
+}
+
 // onlySplatted reports that body reads local name only as `*name` and never writes it.
 func onlySplatted(body parser.Node, name string) bool {
 	reads, splats := 0, 0

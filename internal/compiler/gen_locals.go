@@ -121,7 +121,7 @@ func (f *fctx) gemVoidValue(val expr) expr {
 }
 
 func (f *fctx) assignLocal(n parser.Node, name string, val expr, annotated Type) expr {
-	val.provisional = val.provisional || isUnknown(val.typ) // not known yet: it widens nothing this round
+	val = notKnownYet(val) // it widens nothing this round
 	val = f.gemVoidValue(val)
 	existing := f.visibleLocal(name)
 	if existing == nil {

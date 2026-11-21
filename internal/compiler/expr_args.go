@@ -118,9 +118,7 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 			continue
 		}
 		if splatTmp != "" {
-			if t := f.restForwardType(splatNode, ai-splatAt); t != nil {
-				f.noteUse(p, n, t) // what every call of this forwarder passed at that position
-			}
+			f.noteRestForward(p, n, splatNode, ai-splatAt)
 			codes = append(codes, f.splatParam(n, m, p, env, splatTmp, ai-splatAt, splatElem))
 			ai++
 			continue

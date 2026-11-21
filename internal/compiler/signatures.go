@@ -210,22 +210,7 @@ func (c *Compiler) resolveMethod(m *Method) {
 	}
 	m.Params = append(m.Params, rest...)
 	if m.sig.Block != nil {
-		bs := &BlockSig{Ret: c.resolveType(m.sig.Block.Return, sc), Optional: m.sig.Block.Optional}
-		if m.sig.Block.Self != nil { // `[self: C]`: a block the method rebinds self for, so it takes self (decision 164)
-			bs.Self = c.resolveType(m.sig.Block.Self, sc)
-		}
-		for i, p := range m.sig.Block.Params {
-			t := c.resolveType(p.Type, sc)
-			if i < len(m.pendingBlock) {
-				prm := Param{Type: t}
-				c.resolvePending(m, &prm, m.pendingBlock[i])
-				t = prm.Type
-				bs.Pending = append(bs.Pending, prm.Pending)
-			}
-			bs.Params = append(bs.Params, t)
-			bs.Rest = bs.Rest || p.Kind == rbs.ParamRest // `{ (*T) -> R }`: a Go variadic, as a lambda's rest (decision 152)
-		}
-		m.Block = bs
+		m.Block = c.resolveBlockSig(m, sc)
 	}
 	m.Ret = c.resolveType(m.sig.Return, sc)
 	m.retUnion = c.retUnionOf(m, sc)
@@ -248,6 +233,26 @@ func (c *Compiler) resolveMethod(m *Method) {
 		m.Iterator = c.isIterator(m, m.Block)
 	}
 	c.bindParamNames(m)
+}
+
+// resolveBlockSig resolves m's block signature, typing from use the parameters that have no annotation.
+func (c *Compiler) resolveBlockSig(m *Method, sc typeScope) *BlockSig {
+	bs := &BlockSig{Ret: c.resolveType(m.sig.Block.Return, sc), Optional: m.sig.Block.Optional}
+	if m.sig.Block.Self != nil { // `[self: C]`: a block the method rebinds self for, so it takes self (decision 164)
+		bs.Self = c.resolveType(m.sig.Block.Self, sc)
+	}
+	for i, p := range m.sig.Block.Params {
+		t := c.resolveType(p.Type, sc)
+		if i < len(m.pendingBlock) {
+			prm := Param{Type: t}
+			c.resolvePending(m, &prm, m.pendingBlock[i])
+			t = prm.Type
+			bs.Pending = append(bs.Pending, prm.Pending)
+		}
+		bs.Params = append(bs.Params, t)
+		bs.Rest = bs.Rest || p.Kind == rbs.ParamRest // `{ (*T) -> R }`: a Go variadic, as a lambda's rest (decision 152)
+	}
+	return bs
 }
 
 // gradualParam returns T for a `T | untyped` parameter type, else nil.
@@ -429,7 +434,7 @@ func (c *Compiler) inferRet(m *Method) {
 	if err != nil {
 		if c.round { // a body its still-untyped parameters break returns untyped this round, so its callers still record what they pass
 			c.dropWarnings(nw)
-			m.Ret, m.retWhy, m.roundRet = TAny{Unknown: c.plainRounds() && c.unknownNow()}, "body fails with its parameters untyped (inference round)", true
+			m.Ret, m.retWhy, m.roundRet = c.awaited(pendRound), "body fails with its parameters untyped (inference round)", true
 			return
 		}
 		panic(*err)

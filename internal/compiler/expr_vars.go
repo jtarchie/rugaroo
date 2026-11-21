@@ -155,7 +155,7 @@ func immediateLit(n parser.Node) bool {
 
 // ivarWriteValue is the value an ivar write stores and the type it declares; a nil type: the write declares nothing.
 func (f *fctx) ivarWriteValue(n *parser.InstanceVariableWriteNode, val expr, ann Type) (expr, Type) {
-	val.provisional = val.provisional || isUnknown(val.typ) // not known yet: it declares nothing this round
+	val = notKnownYet(val) // it declares nothing this round
 	switch {
 	case ann != nil:
 		return f.annotatedIvarValue(n, val, ann)

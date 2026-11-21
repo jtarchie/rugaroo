@@ -226,6 +226,32 @@ func (c *Compiler) discoverIvars() {
 	c.untypedIvars = nil
 	c.declareGemModuleIvars()
 	c.declareComputedIvars()
+	c.walkIvarClasses()
+	for _, d := range c.classBodyLits {
+		if k := d.cls.meta; k != nil && c.findIvar(k, d.name) == nil {
+			c.declareIvar(k, d.name, c.resolveType(d.rbs, typeScope{class: d.cls, lex: d.scope, srcPos: srcPos{d.cls.File, d.line}}), d.cls.File, d.line)
+		}
+	}
+	for _, k := range slices.SortedFunc(maps.Keys(c.untypedIvars), func(a, b ivarKey) int {
+		return cmp.Or(cmp.Compare(a.cls.Name, b.cls.Name), cmp.Compare(a.name, b.name))
+	}) {
+		if p := c.untypedIvars[k]; c.findIvar(k.cls, k.name) == nil { // no typed write: untyped, as its first write declared it before (decision 392)
+			c.declareIvar(k.cls, k.name, TAny{Unknown: c.unknownNow()}, p.File, p.Line) // in a round, maybe only waiting for a parameter's type
+		}
+	}
+	c.untypedIvars = nil
+	c.typeUncalledWriters()
+	for _, g := range c.gemNilIvars { // only ever nil in what is compiled (a gem's pruned writes, decision 169; a user's nil-only ivar, 183)
+		if c.findIvar(g.cls, g.name) == nil {
+			c.warnAt(g.srcPos, "instance variable %s is only ever nil, so it is untyped (`# @rbs %s: T` for static calls; decision 183)", g.name, g.name)
+			c.declareIvar(g.cls, g.name, TAny{Unknown: c.unknownNow()}, g.File, g.Line)
+		}
+	}
+	c.declareGemClassIvars()
+}
+
+// walkIvarClasses dry-runs every class's methods that name an ivar, so each write declares its ivar.
+func (c *Compiler) walkIvarClasses() {
 	walks := 2
 	if c.env.InferUnknown {
 		walks = 3 // a type crosses one class per walk: Lexer reads LexerStrings' ivars through its methods' results
@@ -268,27 +294,6 @@ func (c *Compiler) discoverIvars() {
 		}
 	}
 	c.discovering = false
-	for _, d := range c.classBodyLits {
-		if k := d.cls.meta; k != nil && c.findIvar(k, d.name) == nil {
-			c.declareIvar(k, d.name, c.resolveType(d.rbs, typeScope{class: d.cls, lex: d.scope, srcPos: srcPos{d.cls.File, d.line}}), d.cls.File, d.line)
-		}
-	}
-	for _, k := range slices.SortedFunc(maps.Keys(c.untypedIvars), func(a, b ivarKey) int {
-		return cmp.Or(cmp.Compare(a.cls.Name, b.cls.Name), cmp.Compare(a.name, b.name))
-	}) {
-		if p := c.untypedIvars[k]; c.findIvar(k.cls, k.name) == nil { // no typed write: untyped, as its first write declared it before (decision 392)
-			c.declareIvar(k.cls, k.name, TAny{Unknown: c.unknownNow()}, p.File, p.Line) // in a round, maybe only waiting for a parameter's type
-		}
-	}
-	c.untypedIvars = nil
-	c.typeUncalledWriters()
-	for _, g := range c.gemNilIvars { // only ever nil in what is compiled (a gem's pruned writes, decision 169; a user's nil-only ivar, 183)
-		if c.findIvar(g.cls, g.name) == nil {
-			c.warnAt(g.srcPos, "instance variable %s is only ever nil, so it is untyped (`# @rbs %s: T` for static calls; decision 183)", g.name, g.name)
-			c.declareIvar(g.cls, g.name, TAny{Unknown: c.unknownNow()}, g.File, g.Line)
-		}
-	}
-	c.declareGemClassIvars()
 }
 
 // typeUncalledWriters gives each attr writer no call types its ivar's type from the ivar's other writes; with none,

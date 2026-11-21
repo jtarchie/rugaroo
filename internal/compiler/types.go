@@ -146,6 +146,7 @@ func holdsUnknown(t Type) bool {
 		return slices.ContainsFunc(t.Elems, holdsUnknown)
 	case TUnion:
 		return slices.ContainsFunc(t.Members, holdsUnknown)
+	case TFunc, TNil, TVar, TVoid: // a proc's parameters are not what it is
 	}
 	return false
 }

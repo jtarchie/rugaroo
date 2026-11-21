@@ -75,6 +75,17 @@ type inference struct {
 	procAlias map[lambdaSrc]lambdaSrc
 }
 
+// awaited is the type of a slot no call has typed: not known yet while a round may still type it, else untyped.
+func (c *Compiler) awaited(how pendingOutcome) TAny {
+	return TAny{Unknown: how == pendRound && c.unknownNow()}
+}
+
+// notKnownYet marks a value of a not-known-yet type provisional: it widens and declares nothing this round.
+func notKnownYet(val expr) expr {
+	val.provisional = val.provisional || isUnknown(val.typ)
+	return val
+}
+
 // procSrc is the lambda whose parameter keys src's lambda reads and its calls write, in a not-known-yet round.
 func (c *Compiler) procSrc(src lambdaSrc) lambdaSrc {
 	if c.infer == nil || !c.round || !c.env.InferUnknown {
@@ -275,7 +286,7 @@ func (c *Compiler) resolvePending(m *Method, prm *Param, pp pendingParam) {
 			prm.Type = TAny{}
 		}
 	case how != pendNone: // learned from this round's calls, or only a dynamic call can reach it (decision 169)
-		prm.Type = TAny{Unknown: how == pendRound && c.unknownNow()}
+		prm.Type = c.awaited(how)
 	case m.attrWriter, m.Owner != nil && m.Owner.isTemplate(): // a template's body is never compiled: its instances' are (decision 308)
 		prm.Type = TAny{}                 // an attr writer no call types: only a dynamic call can reach it (decision 179)
 		prm.UncalledWriter = m.attrWriter // until discovery gives it its ivar's type (decision 445)
@@ -561,7 +572,7 @@ func (f *fctx) lambdaParams(n parser.Node, names blockParams, body parser.Node) 
 		case how == pendTyped:
 			ps[i] = t
 		case how != pendNone: // untyped this round (not known yet), or a gem's lambda no call types (decision 169)
-			ps[i] = TAny{Unknown: how == pendRound && f.c.unknownNow()}
+			ps[i] = f.c.awaited(how)
 		case !readsParam(body, names[i].Name):
 			ps[i] = TAny{} // a parameter the body never reads loses nothing untyped (decision 179)
 		default: // untyped, its calls dynamic, as a gem lambda's (decision 180)
@@ -916,119 +927,20 @@ func (c *Compiler) updateInference(inf *inference) {
 				fmt.Fprintf(os.Stderr, "rugaroo: use %s <- %v (dynamic %v, default %v, widening %v) at %s\n", key, u.typ, u.dyn, u.deflt, u.widen, u.at())
 			}
 		}
-		if isRestPosKey(key) && slices.ContainsFunc(uses, func(u paramUse) bool { return isAny(u.typ) }) {
-			next[key] = TAny{} // one call passed that position something untyped: nothing is forwarded for it
-			continue
-		}
-		if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
-			// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
-			// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
-			next[key] = TAny{}
-			continue
-		}
-		if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
-			next[key], from[key] = pt, at
-			continue
-		}
-		if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
-			continue // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
-		}
-		dynTyped := c.env.InferUnknown && dynUsesAgree(uses)
-		if slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) && !dynTyped {
-			// dynamic calls by its name (maybe meant for another class's method) widen a parameter but never type it alone:
-			// untyped until a static call carries a type (decision 331). ProcessedSource's `parser.parse(@buffer)` reaches
-			// every `parse` with a Buffer; rubocop-ast's NodePattern::Parser#parse(source) takes a String from
-			// NodePattern#initialize, which is untyped this round
-			if _, had := inf.types[key]; had && c.env.InferUnknown {
-				next[key] = TAny{} // typed by agreeing dynamic calls until a static call passed something untyped: untyped now, not kept
-			}
-			continue
-		}
-		if inf.anyUse[key] {
-			next[key] = TAny{}
-			continue
-		}
-		if c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
+		if c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) && c.betOn(inf, key, uses) {
 			bets = append(bets, key)
 		}
-		if t, at, ok := c.gemUseType(key, uses); ok {
-			next[key], from[key] = t, at
-			continue
-		}
-		if t, at := joinUses(uses, inf.noUnion[key]); t != nil {
-			if c.gemUsesDisagree(uses, t, c.gemParams[key]) { // a gem's calls passing kinds no type joins: untyped, not the first kind (decision 244)
-				t = TAny{}
-			}
-			if c.anyGemUseWidens(t, uses) {
-				t = TAny{}
-			}
-			next[key], from[key] = t, at
-		}
-	}
-	if c.env.InferUnknown && !inf.resolved && !inf.settling {
-		// at first only types accumulate: an untyped result may be a value whose type has not arrived yet
-		// (an ivar discovered a round late, an intrinsic on a waiting receiver), and kept it would untype for good
-		// everything it reaches. Untyped is decided after resolution, when nothing is "not known yet" any more
-		for k, t := range next {
-			if isAny(t) {
-				delete(next, k)
+		if t, at := c.useType(inf, key, uses); t != nil {
+			next[key] = t
+			if at != "" {
+				from[key] = at
 			}
 		}
 	}
-	if c.env.InferUnknown { // the state only goes up: a type a round could not re-derive is kept, one it derived otherwise joins in
-		for k, old := range inf.types {
-			old = c.rehome(old) // the previous round's classes are another compile's
-			t, ok := next[k]
-			switch {
-			case !ok:
-				next[k] = old
-				if at, ok := inf.from[k]; ok {
-					from[k] = at
-				}
-			case !typeEq(old, t):
-				if j, ok := join(old, t); ok {
-					next[k] = mergeSameClass(j)
-				} else {
-					next[k] = TAny{}
-				}
-			}
-		}
-	}
+	c.growState(inf, next, from)
 	diff := c.roundDiff(inf, next)
-	if c.env.Timing {
-		fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, len(bets))
-		// what inference can reach: a parameter no call types has a static call that passed something untyped
-		// (typeable once that value is), only dynamic calls by its name (send, an untyped receiver), or no call at all
-		var static, dynOnly, uncalled int
-		for k := range c.pendingSeen {
-			if t, ok := next[k]; ok && !isAny(t) {
-				continue
-			}
-			uses := c.uses[k]
-			switch {
-			case slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt }):
-				static++
-			case len(uses) > 0:
-				dynOnly++
-			default:
-				uncalled++
-			}
-		}
-		fmt.Fprintf(os.Stderr, "rugaroo: round left untyped: %d with a static call, %d with dynamic calls only, %d with no call\n", static, dynOnly, uncalled)
-	}
-	for a := range inf.procAlias { // the final compile reads each lambda's own keys
-		to := a
-		for t, ok := inf.procAlias[to]; ok; t, ok = inf.procAlias[to] {
-			to = t
-		}
-		for i := range maxStoredBlockArgs {
-			if t, ok := next[to.arg(i)]; ok {
-				next[a.arg(i)] = t
-			} else {
-				delete(next, a.arg(i))
-			}
-		}
-	}
+	c.roundTiming(next, diff, len(bets))
+	inf.copyAliases(next)
 	settled := !inf.changed || diff*50 <= len(next)
 	c.settleRound(inf, settled, bets, next, from)
 	inf.types, inf.from = next, from
@@ -1042,6 +954,156 @@ func (c *Compiler) updateInference(inf *inference) {
 	if c.env.InferDebug {
 		for _, k := range slices.Sorted(maps.Keys(next)) {
 			fmt.Fprintf(os.Stderr, "rugaroo: inferred %s: %s\n", k, next[k])
+		}
+	}
+}
+
+// unknownRule is what the not-known-yet rounds decide about key before the common rules: untyped, or nothing (nil).
+func (c *Compiler) unknownRule(inf *inference, key pendingKey, uses []paramUse) Type {
+	if isRestPosKey(key) && slices.ContainsFunc(uses, func(u paramUse) bool { return isAny(u.typ) }) {
+		return TAny{} // one call passed that position something untyped: nothing is forwarded for it
+	}
+	if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(u.typ) && c.gemFile(u.file) }) {
+		// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
+		// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
+		return TAny{}
+	}
+	return nil
+}
+
+// dynOnly reports a parameter only dynamic calls by its name give a type (maybe meant for another class's method):
+// they widen a parameter but never type it alone, so it is untyped until a static call carries a type (decision 331).
+// ProcessedSource's `parser.parse(@buffer)` reaches every `parse` with a Buffer; rubocop-ast's
+// NodePattern::Parser#parse(source) takes a String from NodePattern#initialize, which is untyped this round. The
+// not-known-yet rounds let them type it when they all pass one class (dynUsesAgree).
+func (c *Compiler) dynOnly(uses []paramUse) bool {
+	if !slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) || slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
+		return false
+	}
+	return !c.env.InferUnknown || !dynUsesAgree(uses)
+}
+
+// betOn reports that key reaches the rules a settled round's untyping applies to (settleRound).
+func (c *Compiler) betOn(inf *inference, key pendingKey, uses []paramUse) bool {
+	if c.unknownRule(inf, key, uses) != nil || inf.anyUse[key] || c.dynOnly(uses) {
+		return false
+	}
+	if pt, _ := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+		return false
+	}
+	return slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) })
+}
+
+// useType is the type this round's uses give key and where it came from; nil: none.
+func (c *Compiler) useType(inf *inference, key pendingKey, uses []paramUse) (Type, string) {
+	if t := c.unknownRule(inf, key, uses); t != nil {
+		return t, ""
+	}
+	if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+		return pt, at
+	}
+	if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
+		return nil, "" // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
+	}
+	if c.dynOnly(uses) {
+		if _, had := inf.types[key]; had && c.env.InferUnknown {
+			return TAny{}, "" // typed by agreeing dynamic calls until a static call passed something untyped: untyped now, not kept
+		}
+		return nil, ""
+	}
+	if inf.anyUse[key] {
+		return TAny{}, ""
+	}
+	if t, at, ok := c.gemUseType(key, uses); ok {
+		return t, at
+	}
+	t, at := joinUses(uses, inf.noUnion[key])
+	if t == nil {
+		return nil, ""
+	}
+	if c.gemUsesDisagree(uses, t, c.gemParams[key]) { // a gem's calls passing kinds no type joins: untyped, not the first kind (decision 244)
+		t = TAny{}
+	}
+	if c.anyGemUseWidens(t, uses) {
+		t = TAny{}
+	}
+	return t, at
+}
+
+// growState makes next the not-known-yet rounds' state after this round: it only goes up. A type a round could not
+// re-derive is kept, and one it derived otherwise joins in.
+func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[pendingKey]string) {
+	if !c.env.InferUnknown {
+		return
+	}
+	if !inf.resolved && !inf.settling {
+		// at first only types accumulate: an untyped result may be a value whose type has not arrived yet
+		// (an ivar discovered a round late, an intrinsic on a waiting receiver), and kept it would untype for good
+		// everything it reaches. Untyped is decided later, when the types that could arrive have
+		for k, t := range next {
+			if isAny(t) {
+				delete(next, k)
+			}
+		}
+	}
+	for k, old := range inf.types {
+		old = c.rehome(old) // the previous round's classes are another compile's
+		t, ok := next[k]
+		switch {
+		case !ok:
+			next[k] = old
+			if at, ok := inf.from[k]; ok {
+				from[k] = at
+			}
+		case !typeEq(old, t):
+			if j, ok := join(old, t); ok {
+				next[k] = mergeSameClass(j)
+			} else {
+				next[k] = TAny{}
+			}
+		}
+	}
+}
+
+// roundTiming prints, under RUGAROO_TIMING, what the round typed and what inference can still reach: a parameter no
+// call types has a static call that passed something untyped (typeable once that value is), only dynamic calls by its
+// name (send, an untyped receiver), or no call at all.
+func (c *Compiler) roundTiming(next map[pendingKey]Type, diff, bets int) {
+	if !c.env.Timing {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "rugaroo: round typed %d parameters, %d changed, %d with an untyped gem argument\n", len(next), diff, bets)
+	var static, dynOnly, uncalled int
+	for k := range c.pendingSeen {
+		if t, ok := next[k]; ok && !isAny(t) {
+			continue
+		}
+		uses := c.uses[k]
+		switch {
+		case slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && !u.deflt }):
+			static++
+		case len(uses) > 0:
+			dynOnly++
+		default:
+			uncalled++
+		}
+	}
+	fmt.Fprintf(os.Stderr, "rugaroo: round left untyped: %d with a static call, %d with dynamic calls only, %d with no call\n", static, dynOnly, uncalled)
+}
+
+// copyAliases gives each aliased lambda its target's parameter types under its own keys, which the final compile reads.
+func (inf *inference) copyAliases(next map[pendingKey]Type) {
+	for a := range inf.procAlias {
+		to := a
+		for t, ok := inf.procAlias[to]; ok; t, ok = inf.procAlias[to] {
+			to = t
+		}
+		for i := range maxStoredBlockArgs {
+			if t, ok := next[to.arg(i)]; ok {
+				next[a.arg(i)] = t
+			} else {
+				delete(next, a.arg(i))
+			}
 		}
 	}
 }
