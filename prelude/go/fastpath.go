@@ -68,13 +68,20 @@ type rbStrFact struct {
 	ascii bool
 	valid bool // valid UTF-8
 	chars int  // its length in characters: bytes unless valid and not ASCII
+	// idx is the byte offset of every rbIdxStride-th character of a valid, non-ASCII String (level rbFactIndex): a
+	// character index is then a short walk from the nearest one, not one from the start (decision 483).
+	idx []uint32
 }
 
 const (
 	rbFactASCII = iota
 	rbFactValid
 	rbFactChars
+	rbFactIndex
 )
+
+// rbIdxStride is how many characters lie between two entries of rbStrFact.idx.
+const rbIdxStride = 64
 
 // rbStrFactMin is the length from which a String's facts are cached; a shorter one costs less to scan than to look up.
 const rbStrFactMin = 256
@@ -119,12 +126,56 @@ func rbStrFactOf(s string, level int) *rbStrFact {
 		if level == rbFactChars && e.valid {
 			e.chars = utf8.RuneCountInString(s)
 		}
+		if level == rbFactIndex && e.valid && len(s) <= math.MaxUint32 {
+			e.idx, e.chars = rbCharIndex(s)
+		}
 		e.level = level
 	}
 	if !rbStrMutable.Load() {
 		slot.Store(e)
 	}
 	return e
+}
+
+// rbCharIndex is the byte offset of every rbIdxStride-th character of the valid UTF-8 s (the last entry is len(s)
+// when its length is a multiple), and its length in characters.
+func rbCharIndex(s string) ([]uint32, int) {
+	idx := make([]uint32, 0, len(s)/rbIdxStride+1)
+	chars := 0
+	for i := 0; i < len(s); chars++ {
+		if chars%rbIdxStride == 0 {
+			idx = append(idx, uint32(i)) //nolint:gosec // len(s) fits, checked by the caller
+		}
+		if s[i] < utf8.RuneSelf {
+			i++
+			continue
+		}
+		_, n := utf8.DecodeRuneInString(s[i:])
+		i += n
+	}
+	if chars%rbIdxStride == 0 {
+		idx = append(idx, uint32(len(s))) //nolint:gosec // as above
+	}
+	return idx, chars
+}
+
+// rbRuneOffsetLong is rbRuneOffset for a character far into a long String: through the String's cached index, so a
+// lexer slicing one non-ASCII source at every token walks a stride each time, not the source from its start (the
+// parser gem keeps a UTF-32 copy for this; MRI indexes that in constant time). Decision 483.
+func rbRuneOffsetLong(s string, k int) (int, bool) {
+	if len(s) < 4*rbStrFactMin || k < 2*rbIdxStride || rbStrMutable.Load() {
+		return rbRuneOffset(s, k)
+	}
+	f := rbStrFactOf(s, rbFactIndex)
+	if f.idx == nil || f.ascii {
+		return rbRuneOffset(s, k)
+	}
+	if k > f.chars {
+		return len(s), false
+	}
+	b := int(f.idx[k/rbIdxStride])
+	off, ok := rbRuneOffset(s[b:], k%rbIdxStride)
+	return b + off, ok
 }
 
 // rbValidUTF8 is utf8.ValidString with MRI's cached coderange for the large subject a loop matches again and again.
@@ -141,7 +192,7 @@ func rbCharOffset(s string, k int) (int, bool) {
 	if k <= len(s) && rbASCIIFact(s) {
 		return k, true
 	}
-	return rbRuneOffset(s, k)
+	return rbRuneOffsetLong(s, k)
 }
 
 // rbCharCount is how many characters s[:b] holds, b a character boundary of the valid UTF-8 s.

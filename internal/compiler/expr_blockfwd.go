@@ -157,7 +157,29 @@ func (f *fctx) forwardClosureCode(n parser.Node, sig *BlockSig, env map[string]T
 		return f.selfBlockAdapter(sig, env)
 	}
 	unify(sig.Ret, f.blockSig.Ret, env)
+	if f.lenient() && sig.Self == nil && f.blockSig.Self == nil && !sig.Rest && f.paramTypesDiffer(sig, env) {
+		// the callee yields another type than this block takes (rubocop's `each_ancestor(&block)` handing its block,
+		// typed by its callers, to `scan_ancestors`, which yields an untyped local): Go func types are invariant, so each
+		// value is converted as an argument is (decision 484)
+		params := make([]string, len(sig.Params))
+		args := make([]string, len(sig.Params))
+		for i, p := range sig.Params {
+			params[i] = fmt.Sprintf("p%d %s", i, f.c.goType(subst(p, env)))
+			args[i] = f.coerce(n, expr{code: fmt.Sprintf("p%d", i), typ: subst(p, env)}, f.blockSig.Params[i])
+		}
+		return f.adapterFunc(params, "blk("+strings.Join(args, ", ")+")", subst(sig.Ret, env), f.blockSig.Ret)
+	}
 	return "blk"
+}
+
+// paramTypesDiffer reports a callee block (sig) one of whose values is another Go type than the forwarded block takes.
+func (f *fctx) paramTypesDiffer(sig *BlockSig, env map[string]Type) bool {
+	for i, p := range sig.Params {
+		if f.c.goType(subst(p, env)) != f.c.goType(f.blockSig.Params[i]) {
+			return true
+		}
+	}
+	return false
 }
 
 // selfBlockAdapter passes this method's bound block (`T.proc.bind(Resource::Patch)`) on to a callee whose block binds

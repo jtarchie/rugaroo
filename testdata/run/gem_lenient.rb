@@ -25,6 +25,7 @@ require "prepish"
 require "shapish"
 require "walkish"
 require "treeish"
+require "fwdblk"
 require "redish"
 require "nodish"
 require "srcish"
@@ -208,3 +209,8 @@ tree_group = Treeish.new(:group)
 tree_group.children << Treeish.new(:a) << Treeish.new(:b)
 tree_root.children << Treeish.new(:x) << tree_group << Treeish.new(:drop)
 p tree_root.flatten_groups, tree_root.flatten_groups
+# a forwarded block converts what the callee yields (decision 484)
+fwd_root = Fwdblk::Cn.new(nil, :z)
+fwd_mid = Fwdblk::Cn.new(fwd_root, :a)
+fwd_leaf = Fwdblk::Cn.new(fwd_mid, :b)
+p Fwdblk.of(fwd_leaf).excl(Fwdblk.of(fwd_mid)), Fwdblk.of(fwd_leaf).excl(Fwdblk.of(fwd_leaf))

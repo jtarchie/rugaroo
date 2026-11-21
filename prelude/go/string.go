@@ -1039,7 +1039,7 @@ func rbStrSub(s String, start, count Integer) (String, bool) {
 			return "", false
 		}
 	}
-	b, ok := rbRuneOffset(string(s), int(start))
+	b, ok := rbRuneOffsetLong(string(s), int(start))
 	if !ok {
 		return "", false
 	}

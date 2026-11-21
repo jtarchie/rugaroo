@@ -1697,6 +1697,22 @@ continued"
     end
 
     # the block form of a pattern with groups yields each match's groups (it asked for a blockless __scan_groups)
+    # a character far into a long non-ASCII String, through its cached index (decision 483)
+    def test_slice_long_non_ascii
+      [4096, 4100, 4159].each do |len|
+        s = (0...len).map { |i| (i % 7).zero? ? "é" : ((i % 26) + 97).chr }.join
+        chars = s.chars
+        [0, 1, 63, 64, 65, 127, 128, 129, 1000, 4031, 4032, 4095, len - 1, len, len + 1].each do |k|
+          want = chars[k, 5]
+          assert_equal [k, want && want.join], [k, s[k, 5]]
+        end
+        assert_equal chars[-3, 3].join, s[-3, 3]
+        assert_equal chars[2000..2010].join, s[2000..2010]
+        assert_equal chars[3000], s[3000]
+        assert_equal len, s.length
+      end
+    end
+
     def test_scan_groups_block
       firsts = [] #: Array[String?]
       back = "a {{x}} {{y}}".scan(/\{\{(.*?)\}\}/) { |g| firsts << g.first }
