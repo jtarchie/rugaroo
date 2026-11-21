@@ -131,13 +131,62 @@ against switch on: 14 inputs differ, none newly compiles and none newly fails. T
 (liquid 469 → 392 dynamic calls, kramdown 1,165 → 1,112, pairing_heap's one dispatcher gone). Of the strict
 programs, `bm_micro_lisp` and `bm_tree_walker_frames` fail on both with a different message, and two others
 (`bm_stark_field`, `bm_jekyll_lite`) had gained three dispatchers each before phase 1 also deferred containers of
-untyped; that is fixed, and the comparison was rerun.
+untyped; that is fixed, and the rerun has 12 inputs differing, those two no longer among them.
 
 **Gates 4 and 5 (rubocop): not run.**
 
-**Known costs.** Rounds: the parser program takes 16, liquid 21, where the default lane stops at 8 or earlier. The
-cap is 48. Rubocop's rounds are about 16 s each, so incremental rounds (plan step 6) come before the switch can be
+**Known costs.** Rounds: the parser program takes 15 or 16, liquid 21, where the default lane stops at 8 or
+earlier. The cap is 48. Rubocop's rounds are about 16 s each, so incremental rounds (plan step 6) come before the switch can be
 the default there.
+
+## Records, tuple stacks and template methods (2026-11-21)
+
+Built after the gates above, behind the same switch, from what two read-only investigations of kramdown and the
+parser gem reported as their largest untyped roots.
+
+- **Record shapes** (`infer_record.go`). A shape is each Symbol key's type, kept as side information and never in a
+  type: of a Hash literal with Symbol-literal keys, of `a.merge(b)` when both have one, of a local every write of
+  which has one, and of a parameter every call passes such a literal (a dynamic call by name, a variable or a
+  non-empty default turns it off). It is trusted only for a local the def's body reads as a Hash and nothing else,
+  so a store or handing the Hash on falls back to the untyped read, and never over the local's own annotation.
+  `opts[:key]` is then the field's type, converted where the untyped value is read; a key no source has is nil,
+  after a check that the Hash indeed lacks it; and the parameter is `Hash[Symbol, untyped]`, so the reads are Hash
+  reads and not dynamic calls. kramdown's `reset_env(opts = {})` compiles with no dynamic call.
+- **A stack born in a record.** An ivar assigned a record's `[]` field once, in the def's own body, is the open
+  Array `@stack = []` declares, and is refined from what is pushed.
+- **Stacks of several shapes.** An open Array's elements may be a union of one tuple per length, or of tuples and a
+  class, up to four members (kramdown's `[tree, src, ial]` and `[tree, text_type]`).
+- **Template methods.** A call of a method the class does not define and its subclasses do is still found at run
+  time, and typed as the join of the descendants' definitions (parser's `Base#initialize` passing `version` to the
+  lexer, whose `@version >= 31` comparisons were all dynamic).
+- **A fix the switch needed.** A dynamic call's arguments were matched to a method's parameters left to right, so
+  for `def evaluate_to(*args, block)` the first argument was recorded as `block`'s; with dynamic calls now able to
+  type a parameter, `block` became Integer and raised on its Proc. The last arguments are the post parameters'.
+
+`testdata/run/gem_inference` holds one small gem per shape (`env_gem`, `ver_gem` beside the earlier four): 32
+dynamic calls by default, 1 with the switch.
+
+**What it bought on the real gems is small**, and why:
+
+| dynamic-call warnings, switch on | before | after |
+|---|---:|---:|
+| kramdown (example 123) | 1,112 | 1,108 |
+| liquid (example 124) | 392 | 392 |
+| parser gem, 20 files, no lexer sig | 2,237 | 2,197 |
+
+- kramdown: `reset_env` is static and `@stack` is typed in the rounds, but `@tree` ends untyped. `parse_blocks(el)`
+  is handed `@tree.children.last`, and `Element#children`'s elements are untyped by decision 333, because
+  `update_tree` maps children to Arrays and then flattens them. About 195 of kramdown's 268 ivar-rooted dynamic
+  calls hang off `@tree`. No inference rule fixes a container the gem itself fills with two things.
+- parser gem: of the 2,237, about 860 are in the racc-generated grammar, whose actions are reached only through
+  `__send__(method_id, tmp_v, vstack, tmp_v[0])` with the name read from a table and one value stack holding every
+  grammar symbol's value, and about 450 more are the builder methods those actions pass `val[i]` to. What each
+  `val[i]` is depends on the grammar position, which no rule reads off the Ruby. The lexer, which is where the
+  time goes for this program, is at 83.
+- Other roots the investigations named, not built: a parameter that is a Range from one caller and an Integer from
+  another, tested with `is_a?` (`Buffer#slice`, about 80 calls); a module's methods reading ivars their includers
+  type differently (kramdown's `Html::Parser`, 41); a class method's `new` reached through `const_get`
+  (kramdown's converters, about 45).
 
 ## Techniques other tools use, checked against this design (2026-11-21)
 

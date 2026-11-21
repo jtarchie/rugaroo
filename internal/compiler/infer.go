@@ -941,7 +941,7 @@ func (c *Compiler) updateInference(inf *inference) {
 			}
 		}
 	}
-	c.inferRecords(next, order)
+	c.inferRecords(inf, next, order)
 	c.growState(inf, next, from)
 	diff := c.roundDiff(inf, next)
 	c.roundTiming(next, diff, len(bets))

@@ -378,7 +378,7 @@ func (f *fctx) noteRecUse(p Param, an parser.Node, t Type) {
 // inferRecords settles each parameter's shape after a round: off unless every recorded use of the parameter was a
 // record (a dynamic call by name, a variable, a non-empty default are not), a field untyped when one call passed
 // it something untyped, and optional when a call left it out.
-func (c *Compiler) inferRecords(next map[pendingKey]Type, order map[*File]int) {
+func (c *Compiler) inferRecords(inf *inference, next map[pendingKey]Type, order map[*File]int) {
 	boolean := TClass{C: c.classes["Boolean"]}
 	for _, mk := range slices.Sorted(maps.Keys(c.uses)) {
 		p, ok := strings.CutSuffix(string(mk), "%")
@@ -387,7 +387,11 @@ func (c *Compiler) inferRecords(next map[pendingKey]Type, order map[*File]int) {
 		}
 		key := pendingKey(p)
 		marks := len(c.lastPassUses(mk, order))
-		if marks != len(c.lastPassUses(key, order)) {
+		_, flagged := next[recBadKey(key)]
+		_, was := inf.types[recBadKey(key)]
+		if flagged || was || marks != len(c.lastPassUses(key, order)) {
+			// off for good: a use that was no record (parser's `check_duplicate_arg(this_arg, map)` handing on its own
+			// `map = {}`) may not be recorded in a later round, and the counts would then agree
 			next[recBadKey(key)] = boolean
 			continue
 		}
