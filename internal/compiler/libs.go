@@ -200,7 +200,45 @@ func (c *Compiler) scanRequires(ctx context.Context, sources []Source) (libs []s
 		sc.parsed[path] = uf
 		sc.walk(uf)
 	}
+	err = sc.spinelFFI()
+	if err != nil {
+		return nil, nil, err
+	}
 	return sc.libs, sc.parsed, nil
+}
+
+// spinelFFI reads Spinel ffi_* forms as the gem's (decision 375) unless the program defines an ffi_* method MRI would call.
+func (sc *requireScan) spinelFFI() error {
+	paths := slices.Sorted(maps.Keys(sc.parsed))
+	for _, path := range paths {
+		if walkNode(sc.parsed[path].Root, func(n parser.Node) (bool, bool) {
+			d, ok := n.(*parser.DefNode)
+			return ok && strings.HasPrefix(d.Name, "ffi_"), true
+		}) {
+			return nil
+		}
+	}
+	for _, path := range paths {
+		uf := sc.parsed[path]
+		src, ok, err := spinelFFI(uf.Name, uf.Root, uf.Src)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		nf, err := parseFile(sc.ctx, sc.c.parser, uf.Name, src, uf.origin)
+		if err != nil {
+			return err
+		}
+		nf.path = uf.path
+		if nf.nilCheck == "" {
+			nf.nilCheck = uf.nilCheck // inherited from its require_relative-ing file (decision 404)
+		}
+		sc.parsed[path] = nf
+		sc.lib("ffi")
+	}
+	return nil
 }
 
 // requireScan is scanRequires' state: the files parsed so far by real path, and the lib names found in order.
@@ -216,9 +254,6 @@ type requireScan struct {
 func (sc *requireScan) walk(f *File) {
 	if f.data != nil {
 		sc.lib("stringio")
-	}
-	if f.spinelFFI {
-		sc.lib("ffi")
 	}
 	prev := sc.top // a require inside a method that names a file walks it: the caller's position is restored after
 	sc.top = true
