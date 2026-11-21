@@ -184,7 +184,8 @@ func (f *fctx) descendantRet(cls *Class, name string) Type {
 		if m.File == nil || m.File.isPrelude() {
 			return
 		}
-		if err := catchCompileError(func() { f.c.resolveMethod(m); f.c.inferRet(m) }); err != nil || m.Ret == nil || holdsAny(m.Ret) || isVoid(m.Ret) || mentionsVar(m.Ret) {
+		err := catchCompileError(func() { f.c.resolveMethod(m); f.c.inferRet(m) })
+		if err != nil || m.Ret == nil || holdsAny(m.Ret) || isVoid(m.Ret) || mentionsVar(m.Ret) {
 			ok = false
 			return
 		}
