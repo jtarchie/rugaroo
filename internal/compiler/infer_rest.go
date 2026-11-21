@@ -87,7 +87,7 @@ func (f *fctx) noteDynUse(p Param, a parser.Node, t Type, j int, inRest bool) {
 	if t == nil || isAny(t) && (!resolved || isUnknown(t)) {
 		return
 	}
-	u := paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true, why: f.useWhy(a, t)}
+	u := paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true, setter: f.dynSetter, why: f.useWhy(a, t)}
 	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], u)
 	if f.c.env.InferUnknown && inRest {
 		k := restPosKey(p.Pending, j)
@@ -169,4 +169,31 @@ func onlySplatted(body parser.Node, name string) bool {
 		return false, true
 	})
 	return !bad && reads == splats && splats > 0
+}
+
+// noteDynSplat records a dynamic call whose arguments hold a splat at place si (the parser gem's `@builder.loop(:while,
+// val[0], *val[1], val[2], val[3])`): nobody can count what the splat puts where, so once the rounds resolve every
+// parameter from si on has an untyped use, and the calls without a splat do not type it by agreeing (`loop`'s do_t was
+// a token pair, and took the body's Array).
+func (f *fctx) noteDynSplat(name string, splat parser.Node, si int) {
+	if !f.c.env.InferUnknown || f.c.infer == nil || !f.c.infer.resolved {
+		return
+	}
+	u := paramUse{typ: TAny{}, file: f.f, off: splat.GetLocation().StartOffset, dyn: true}
+	for _, m := range f.c.gemMethodsNamed(name) {
+		for i := si; i < len(m.Params); i++ {
+			if p := m.Params[i]; p.Pending != "" && !p.Keyword && !p.KwRest {
+				f.c.uses[p.Pending] = append(f.c.uses[p.Pending], u)
+			}
+		}
+	}
+}
+
+// noteSplatUse records element j of a static call's splat as parameter p's argument: a forwarded rest's place, and
+// the element's type as a use like any other argument's (decision 477).
+func (f *fctx) noteSplatUse(p Param, n parser.Node, sp *parser.SplatNode, j int, elem Type) {
+	f.noteRestForward(p, n, sp, j)
+	if sp != nil {
+		f.noteUse(p, sp, elem)
+	}
 }

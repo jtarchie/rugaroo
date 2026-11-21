@@ -1345,9 +1345,15 @@ func namePattern(n parser.Node) (pre, suf string, ok bool) {
 // name the call may reach: liquid's `context.handle_error(e, line)` on an untyped context passes the StandardError a
 // rescue caught, where the one typed call passes a MemoryError (decision 331). An untyped argument adds nothing.
 func (f *fctx) noteDynUses(name string, args []parser.Node) {
-	if f.c.uses == nil || !f.lenient() || slices.ContainsFunc(args, isSplat) {
+	if f.c.uses == nil || !f.lenient() {
 		return
 	}
+	if si := slices.IndexFunc(args, isSplat); si >= 0 {
+		f.noteDynSplat(name, args[si], si)
+		return
+	}
+	f.dynSetter = strings.HasSuffix(name, "=") && name != "==" && name != "[]=" && name != "<=" && name != ">=" && name != "!=" && name != "==="
+	defer func() { f.dynSetter = false }()
 	if k := len(args) - 1; k >= 0 {
 		if en, ok := args[k].(*exprNode); ok && en.blockArg { // the block goes to the method's &block, not a parameter (rubocop-ast's `emit ss.matched, &:to_sym`)
 			args = args[:k]

@@ -10,6 +10,7 @@
 require "cyc_gem"
 require "buf_gem"
 require "ragel_gem"
+require "splat_gem"
 require "lexen_gem"
 require "fwd_gem"
 require "env_gem"
@@ -40,3 +41,5 @@ puts stack.top.kind
 puts EnvParser.new("hello world").run
 
 puts VerRuby33.new.lexer.new_syntax?
+
+puts SplatHost.run

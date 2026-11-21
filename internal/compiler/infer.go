@@ -153,6 +153,7 @@ type paramUse struct {
 	file    *File
 	off     int
 	anyRest bool   // a gem's untyped value into a rest parameter: its elements are anything (decision 253)
+	setter  bool   // a dynamic `x.name = v`: the parameter is an ivar's value, which agreeing calls do not type (decision 477)
 	widen   bool   // a gem's untyped value into an overridden method: the parameter is untyped (decision 324)
 	dyn     bool   // a gem's dynamic call by this name, which may reach another class's method of that name (decision 331)
 	deflt   bool   // the parameter's own default, not a call's argument
@@ -1359,7 +1360,7 @@ func dynUsesAgree(uses []paramUse) bool {
 		if u.deflt {
 			continue
 		}
-		if !realType(u.typ) || holdsAny(u.typ) {
+		if !realType(u.typ) || holdsAny(u.typ) || u.setter {
 			return false
 		}
 		if t == nil {

@@ -119,7 +119,7 @@ func (f *fctx) genArgs(n parser.Node, m *Method, env map[string]Type, args []par
 			continue
 		}
 		if splatTmp != "" {
-			f.noteRestForward(p, n, splatNode, ai-splatAt)
+			f.noteSplatUse(p, n, splatNode, ai-splatAt, splatElem)
 			codes = append(codes, f.splatParam(n, m, p, env, splatTmp, ai-splatAt, splatElem))
 			ai++
 			continue
