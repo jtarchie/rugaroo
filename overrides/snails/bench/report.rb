@@ -16,7 +16,7 @@ puts "|---|---|---|---|---|---|"
 rows.keys.sort_by { |r, v, c| [r, v, c] }.each do |key|
   route, vus, c = key
   runs = rows[key]
-  puts format("| %s | %d | %s | %d | %.2f | %.4f |", route, vus, c, median.(runs.map(&:first)), median.(runs.map { _1[1] }), runs.map(&:last).max)
+  puts format("| %s | %d | %s | %d | %.2f | %.4f |", route, vus, c, median.call(runs.map(&:first)), median.call(runs.map { _1[1] }), runs.map(&:last).max)
 end
 puts
 rss.each { |c, kb| puts "peak RSS #{c}: #{kb / 1024} MiB" }
