@@ -1,0 +1,43 @@
+#!/bin/bash
+# usage: ./build [workdir]   Assembles Snails' scaffold app (posts + comments, SQLite) in workdir, runs it on MRI, compiles it with this checkout's rugaroo, runs that, and diffs the two.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+W=${1:-${TMPDIR:-/tmp}/rugaroo-snails}
+REV=91b921e5408bbb1b3bdd75e41ea039a6d9b69d66 # snails main, 2026-11-21
+mkdir -p "$W"
+if [ ! -d "$W/snails" ]; then
+  git clone -q https://github.com/snails-rb/snails "$W/snails"
+fi
+git -C "$W/snails" fetch -q --depth 1 origin "$REV" 2>/dev/null || true
+git -C "$W/snails" checkout -q "$REV"
+
+# What `snails new demo --scaffold` lays down, without its CLI (it fetches the Spinel toolchain).
+A=$W/demo
+rm -rf "$A"
+mkdir -p "$A/storage"
+S=$W/snails/scaffold
+cp -R "$S/new/config" "$A/"
+cp "$S/seed/config/boot.rb" "$S/seed/config/codegen.rb" "$A/config/"
+cp -R "$S/seed/gen" "$A/"
+cp -R "$S/full/." "$A/"
+sed -i.bak 's/__APP_NAME__/demo/g' "$A/config/application.rb"
+sed -i.bak 's/__DB_BACKEND__/sqlite/g' "$A/config/database.rb"
+rm -f "$A"/config/*.bak
+cp -R "$W/snails/runtime" "$A/snails-core"
+
+# Upstream candidates: MRI-only bug fixes, and Spinel's ffi_* rewritten to the ffi gem's spelling.
+for p in "$here"/patches/*.patch; do patch -s -d "$A/snails-core" -p2 < "$p"; done
+ruby "$here/to_ffi_gem.rb" "$A/snails-core/database/sqlite.rb" "$A/snails-core/database/postgresql.rb"
+
+# Ours: tep's socket layer on Socket, the driver, and .rbs corrections.
+mkdir -p "$A/shim" "$A/sig"
+cp "$here/lib/tep_net.rb" "$A/shim/"
+cp "$here/sig/"*.rbs "$A/sig/"
+cp "$here/main.rb" "$A/rugaroo_main.rb"
+
+go build -o "$W/rugaroo" "$here/../../cmd/rugaroo"
+cd "$A"
+ruby rugaroo_main.rb 2>/dev/null | grep -v '^demo (ruby)\|one green' > mri.out
+"$W/rugaroo" build -gem snails-core -gem app -gem gen -o demo-bin rugaroo_main.rb
+./demo-bin 2>/dev/null | grep -v '^demo (ruby)\|one green' > rugaroo.out
+diff mri.out rugaroo.out && echo "compiled == MRI ($(wc -l < mri.out) lines)"

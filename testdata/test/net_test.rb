@@ -407,6 +407,20 @@ module NetTests
       end
     end
 
+    # A refused connection is MRI's Errno::ECONNREFUSED with its message, not Net::OpenTimeout.
+    def test_refused_is_errno
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      server.close
+      got = begin
+        Net::HTTP.new("127.0.0.1", port).get("/")
+        "no error"
+      rescue SystemCallError, Timeout::Error => e
+        "#{e.class}: #{e.message.gsub(port.to_s, "PORT")}"
+      end
+      assert_equal "Errno::ECONNREFUSED: Failed to open TCP connection to 127.0.0.1:PORT (Connection refused - connect(2) for \"127.0.0.1\" port PORT)", got
+    end
+
     # A request must not leave its keep-alive connection idle (an fd and two goroutines each): the server sees every one close.
     def test_connection_closed_after_request
       closed = Queue.new #: Queue[Integer]

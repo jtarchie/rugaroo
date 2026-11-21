@@ -7,14 +7,17 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -44,7 +47,10 @@ func rbHTTPHeaderFields(h http.Header) *Hash[String, *Array[String]] {
 }
 
 // rbHTTPOpenErr tags a dial-phase failure so rbHTTPRequest can tell Net::OpenTimeout from Net::ReadTimeout.
-type rbHTTPOpenErr struct{ error }
+type rbHTTPOpenErr struct {
+	error
+	addr string
+}
 
 func (e *rbHTTPOpenErr) Unwrap() error { return e.error }
 
@@ -57,7 +63,7 @@ func rbHTTPClientFor(h *Net_HTTP) *http.Client {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			conn, err := dialer.DialContext(ctx, network, addr)
 			if err != nil {
-				return nil, &rbHTTPOpenErr{err}
+				return nil, &rbHTTPOpenErr{err, addr}
 			}
 			return conn, nil
 		},
@@ -77,12 +83,26 @@ func rbHTTPFailure(err error) any {
 	var openErr *rbHTTPOpenErr
 	switch {
 	case errors.As(err, &openErr):
-		return NewNet_OpenTimeout(Ref(String("execution expired")))
+		return rbHTTPOpenFailure(openErr)
 	case errors.Is(err, context.DeadlineExceeded):
 		return NewNet_ReadTimeout(Ref(String("execution expired")))
 	default:
 		return NewIOError(Ref(String(err.Error())))
 	}
+}
+
+// rbHTTPOpenFailure is MRI's Errno for a refused or unreachable dial (Net::HTTP#connect's wording), OpenTimeout for a timeout.
+func rbHTTPOpenFailure(e *rbHTTPOpenErr) any {
+	var errno syscall.Errno
+	if errors.As(e.error, &errno) && !errors.Is(e.error, os.ErrDeadlineExceeded) {
+		if f, ok := rbSockErrnos[errno]; ok {
+			host, port, _ := net.SplitHostPort(e.addr)
+			s := errno.Error()
+			s = strings.ToUpper(s[:1]) + s[1:]
+			return f(Ref(String(fmt.Sprintf("Failed to open TCP connection to %s (%s - connect(2) for %q port %s)", e.addr, s, host, port))))
+		}
+	}
+	return NewNet_OpenTimeout(Ref(String("execution expired")))
 }
 
 func rbHTTPRequest(h *Net_HTTP, method, path string, body *String, headers *Hash[String, String]) Net_HTTPResponseI {
