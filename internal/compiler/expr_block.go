@@ -358,9 +358,9 @@ func (f *fctx) bindArraySplat(n parser.Node, names blockParams, elem Type, untyp
 // bindBlockParams declares block params for the yielded types, returning
 // the Go loop/closure parameter names and a destructuring prologue.
 func (f *fctx) bindBlockParams(n parser.Node, names blockParams, yields []Type) (goParams []string, prologue func()) {
-	if f.c.env.UntypedWhy {
+	if f.c.env.why() {
 		f.blockWhy = f.blockParamWhy(n)
-		defer func() { f.blockWhy = "" }()
+		defer func() { f.blockWhy = why{} }()
 	}
 	if names.hasRest() {
 		return f.bindRestParams(n, names, yields)
@@ -1358,7 +1358,7 @@ func (f *fctx) blockParam(name string, typ Type) *local {
 		info = &localInfo{}
 		f.locals[key] = info
 	}
-	if isAny(typ) && f.blockWhy != "" {
+	if isAny(typ) && f.blockWhy.text != "" {
 		f.setAnyOrigin(name, f.blockWhy)
 	}
 	info.noHoist = true

@@ -186,10 +186,11 @@ type Method struct {
 	srcPos
 	Scope       []*Class // lexical scope (Module.nesting), innermost last
 	sigText     string
-	declared    bool   // a `#:` or Sorbet sig typed it: its param types are the author's, not guessed (decision 241)
-	retWhy      string // RUGAROO_UNTYPED_WHY: why inferRet left the return untyped
-	roundRet    bool   // untyped only this inference round, its parameters typed from use not known yet: no local widens to it (decision 358)
-	retUnion    Type   // a gem sig's `U | String` return, untyped as declared (decision 172): a call that leaves U unbound gets String (decision 321)
+	declared    bool        // a `#:` or Sorbet sig typed it: its param types are the author's, not guessed (decision 241)
+	retWhy      string      // RUGAROO_UNTYPED_WHY: why inferRet left the return untyped
+	retRoot     untypedRoot // RUGAROO_UNTYPED_REPORT: the root of the untyped value the body returns, when it has one
+	roundRet    bool        // untyped only this inference round, its parameters typed from use not known yet: no local widens to it (decision 358)
+	retUnion    Type        // a gem sig's `U | String` return, untyped as declared (decision 172): a call that leaves U unbound gets String (decision 321)
 	sig         *rbs.MethodType
 	arms        []*rbs.MethodType // a `.rbs` sig's overloads; sig is their merge, the call site picks one (decision 12)
 	TypeParams  []string

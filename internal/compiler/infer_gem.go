@@ -146,11 +146,14 @@ func typeTested(body parser.Node, name string) bool {
 func (c *Compiler) gemUseType(key pendingKey, uses []paramUse) (Type, string, bool) {
 	if i := slices.IndexFunc(uses, func(u paramUse) bool { return u.widen || u.anyRest }); i >= 0 {
 		// concurrent-ruby's new_blocked_by1(self, executor, executor, args): a rest parameter collecting any values
+		c.noteWhy(key, uses, "a gem's untyped value into an overridden method or a rest parameter, at "+uses[i].at().String()+" (decisions 253, 324)")
 		return TAny{}, uses[i].at().String(), true
 	}
 	if u, ok, mixed := c.untypedGemUse(uses); mixed { // and other calls pass other classes: anything (decision 330)
+		c.noteWhy(key, uses, "two uses disagree: a gem passes "+typeString(u.typ)+" at "+u.at().String()+" and another call passes another class (decision 330)")
 		return TAny{}, u.at().String(), true
 	} else if ok { // a gem passing an untyped container: its elements are anything (decision 244)
+		c.noteWhy(key, uses, "a gem passes the untyped container "+typeString(u.typ)+" at "+u.at().String()+", which the parameter takes over narrower uses (decision 244)")
 		t := u.typ
 		if slices.ContainsFunc(uses, func(x paramUse) bool { return isNil(x.typ) }) { // `default = nil` too (bindata's parent_attribute): nilable
 			t = optOf(t)
@@ -159,6 +162,7 @@ func (c *Compiler) gemUseType(key pendingKey, uses []paramUse) (Type, string, bo
 	}
 	if i := slices.IndexFunc(uses, func(u paramUse) bool { return isAny(u.typ) && c.gemFile(u.file) }); i >= 0 && c.interpOnly[key] {
 		// kramdown's format_as_span_html(name, ...) gets "code" from some calls and el.type, a Symbol, from others
+		c.noteWhy(key, uses, "untyped gem argument at "+uses[i].at().String()+" into a parameter its body only interpolates or type-tests (decisions 330, 331)")
 		return TAny{}, uses[i].at().String(), true
 	}
 	return nil, "", false

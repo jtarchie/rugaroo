@@ -88,6 +88,7 @@ For the compiler:
 | `RUGAROO_RBS_COLLECTION=dir` | An `rbs collection install` directory to read gem signatures from, besides a `.gem_rbs_collection/` next to the program ([decision 457](decisions/457.md)). |
 | `RUGAROO_GEM_WARNINGS=1` | Also print warnings from gem files (hidden by default, since they are not yours to fix). |
 | `RUGAROO_UNTYPED_WHY=1` | Each dynamic-call warning also names where the untyped value came from. |
+| `RUGAROO_UNTYPED_REPORT=1` | Print one report of where untyped values start: each root (a parameter, a return value, an instance variable, a signature) ranked by how many dynamic calls it is behind, with what left it untyped. `=path` writes the report to a file instead of stderr. |
 | `RUGAROO_INFER_DEBUG=1` | Show what each round of parameter inference typed and what it could not compile. |
 | `RUGAROO_NO_INFER_CACHE=1` | Do not use the inference cache. By default `gen`, `build` and `run` keep the parameter types they inferred in the user cache directory (`rugaroo/infer/`), so the next compile of an unchanged program skips the inference rounds; any changed input file compiles from scratch. The output is the same either way. |
 

@@ -381,6 +381,12 @@ func (f *fctx) widenParam(name string, info *localInfo, existing *local, val exp
 		f.paramWiden = map[string]Type{}
 	}
 	f.paramWiden[name] = w
+	if f.c.env.UntypedReport != "" {
+		if f.paramWidenWhy == nil {
+			f.paramWidenWhy = map[string]string{}
+		}
+		f.paramWidenWhy[name] = "was " + typeString(existing.typ) + ", reassigned " + typeString(val.typ)
+	}
 	info.typ, existing.typ = w, w
 }
 
@@ -400,7 +406,7 @@ func (f *fctx) noteReassign(n parser.Node, name string, info *localInfo, existin
 			}
 			info.typ = j
 		} else if !isVoid(val.typ) && f.lenient() { // a gem's local holding Array[Formula] and Array[Formula | Keg]: untyped (decision 233)
-			f.setAnyOrigin(name, "mixed: "+typeString(info.typ)+" / "+typeString(val.typ))
+			f.setAnyOrigin(name, f.localWhy(n, name, "mixed: "+typeString(info.typ)+" / "+typeString(val.typ)))
 			info.typ = TAny{}
 		} else if !isVoid(val.typ) {
 			f.errorf(n, "%s is assigned both %s and %s", name, info.typ, val.typ)

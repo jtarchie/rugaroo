@@ -88,6 +88,7 @@ func (c *Compiler) refineIvars() {
 	for i, iv := range cands {
 		accepted[i] = typeEq(iv.Type, typed[iv])
 	}
+	c.noteRefineDrops(cands, typed, accepted)
 	if c.round {
 		c.roundRefine[kind] = &refineRecord{Cands: sig, Accepted: accepted}
 		return
@@ -224,7 +225,9 @@ func (c *Compiler) inferredMethods() []*Method {
 // from assignments.
 func (c *Compiler) discoverIvars() {
 	c.untypedIvars = nil
+	c.ivarDeclWhy = "a gem module's ivar, laid out untyped before any body is generated (decision 147): "
 	c.declareGemModuleIvars()
+	c.ivarDeclWhy = ""
 	c.declareComputedIvars()
 	c.walkIvarClasses()
 	for _, d := range c.classBodyLits {
@@ -236,18 +239,25 @@ func (c *Compiler) discoverIvars() {
 		return cmp.Or(cmp.Compare(a.cls.Name, b.cls.Name), cmp.Compare(a.name, b.name))
 	}) {
 		if p := c.untypedIvars[k]; c.findIvar(k.cls, k.name) == nil { // no typed write: untyped, as its first write declared it before (decision 392)
+			c.ivarDeclWhy = "every write stores a value read back out of untyped storage (an element of an untyped container; decision 392): "
 			c.declareIvar(k.cls, k.name, TAny{Unknown: c.unknownNow()}, p.File, p.Line) // in a round, maybe only waiting for a parameter's type
 		}
 	}
+	c.ivarDeclWhy = ""
 	c.untypedIvars = nil
+	c.ivarDeclWhy = "an attr writer no call types and no other write (decision 445): "
 	c.typeUncalledWriters()
+	c.ivarDeclWhy = ""
 	for _, g := range c.gemNilIvars { // only ever nil in what is compiled (a gem's pruned writes, decision 169; a user's nil-only ivar, 183)
 		if c.findIvar(g.cls, g.name) == nil {
 			c.warnAt(g.srcPos, "instance variable %s is only ever nil, so it is untyped (`# @rbs %s: T` for static calls; decision 183)", g.name, g.name)
+			c.ivarDeclWhy = "only ever assigned nil in what is compiled (decisions 169, 183): "
 			c.declareIvar(g.cls, g.name, TAny{Unknown: c.unknownNow()}, g.File, g.Line)
 		}
 	}
+	c.ivarDeclWhy = "discovery saw no write that types it (the gem's methods only read it, or its writes did not compile; decision 220): "
 	c.declareGemClassIvars()
+	c.ivarDeclWhy = ""
 }
 
 // walkIvarClasses dry-runs every class's methods that name an ivar, so each write declares its ivar.

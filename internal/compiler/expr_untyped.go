@@ -573,8 +573,9 @@ func (f *fctx) genDynCall(n parser.Node, recv expr, name string, args []parser.N
 		f.noteDynUses(name, args)
 	}
 	if !unk && (f.m == nil || !f.m.quietDynamic) && !f.patQuiet && !f.c.isNumericMod(classOf(recv.typ)) { // a Numeric's class is chosen at run time by design (decision 142)
+		f.noteDynSite(n, n, recv.typ, fmt.Sprintf("dynamic call: %s on %s", name, recv.typ))
 		if call, ok := n.(*parser.CallNode); ok && f.c.env.UntypedWhy && isAny(recv.typ) {
-			f.warn(n, "dynamic call: %s on %s [why: %s]", name, recv.typ, f.untypedWhy(call.Receiver, 0))
+			f.warn(n, "dynamic call: %s on %s [why: %s]", name, recv.typ, f.untypedWhy(call.Receiver, 0).text)
 		} else {
 			f.warn(n, "dynamic call: %s on %s", name, recv.typ)
 		}
@@ -816,11 +817,13 @@ func (f *fctx) genSend(n parser.Node, recv expr, name string, args []parser.Node
 		fn = "rbSendOn_" + f.c.noteSendOn(on)
 		f.noteSendUses(on, args[0], args[1:])
 		if f.m == nil || !f.m.quietDynamic {
+			f.noteDynSite(n, nil, recv.typ, fmt.Sprintf("dynamic call: %s with a computed name", name))
 			f.warn(n, "dynamic call: %s with a computed name", name)
 		}
 	} else {
 		f.noteDynAll()
 		if f.m == nil || !f.m.quietDynamic {
+			f.noteDynSite(n, n, recv.typ, fmt.Sprintf("dynamic call: %s with a computed name on %s", name, recv.typ))
 			f.warn(n, "dynamic call: %s with a computed name on %s%s", name, recv.typ, f.everyNameWhy(n, recv))
 		}
 	}
@@ -1127,7 +1130,7 @@ func (f *fctx) everyNameWhy(n parser.Node, recv expr) string {
 	if !ok || !f.c.env.UntypedWhy || !isAny(recv.typ) {
 		return ""
 	}
-	return " [why: " + f.untypedWhy(call.Receiver, 0) + "]"
+	return " [why: " + f.untypedWhy(call.Receiver, 0).text + "]"
 }
 
 // noteSendUses: `send("convert_#{x}", el)` on known classes reaches only their matching methods, so its args type those params like a plain call (decision 353).
@@ -1279,6 +1282,7 @@ func (f *fctx) sendSwitch(n parser.Node, recv expr, on []*Class, args []parser.N
 		f.emit("panic(rbNoMethod(%s, %s, false))", key, f.coerce(n, recv, TAny{}))
 	} else {
 		if f.m == nil || !f.m.quietDynamic {
+			f.noteDynSite(n, n, recv.typ, fmt.Sprintf("dynamic call: send with a computed name (the %s*%s names that are not direct calls)", pre, suf))
 			f.warn(n, "dynamic call: send with a computed name (the %s*%s names that are not direct calls)", pre, suf)
 		}
 		codes := []string{f.coerce(n, recv, TAny{}), key, "rbFCall"}

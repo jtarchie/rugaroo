@@ -378,7 +378,7 @@ func saveInferCache(path string, opts *options) {
 
 // compile retries any error from a cached start cold, so the cache can only save time.
 func compile(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options) ([]byte, error) {
-	if !inferCacheOn.Load() || opts.seed != nil || opts.infer != nil {
+	if !inferCacheOn.Load() || opts.seed != nil || opts.infer != nil || os.Getenv("RUGAROO_UNTYPED_REPORT") != "" { // the report's reasons are the rounds'
 		return compileFresh(ctx, preludeFS, sources, opts)
 	}
 	opts.env = loadEnv()

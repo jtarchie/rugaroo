@@ -71,6 +71,7 @@ func (f *fctx) genIvarWrite1(n *parser.InstanceVariableWriteNode) expr {
 	if !fitsValue(val, iv.Type) && f.discover && f.lenient() && !isVoid(val.typ) && (iv.Owner != f.owner || isClassObj(val.typ) && isClassObj(iv.Type)) || f.discover && f.lenient() && f.untypedParamOver(n.Value, val, iv) {
 		// a gem subclass storing another class in its parent's ivar (liquid's Raw: a String @body over Block's BlockBody,
 		// decision 331), or a class's own of an unrelated class (net-ftp's NullSocket placeholder, then a Socket, decision 416)
+		f.c.noteIvar(iv, f.posOf(n), "two writes disagree: this write stores "+typeString(val.typ)+" in an ivar declared "+typeString(iv.Type)+" (decisions 331, 416, 458)", untypedRoot{})
 		iv.Type = TAny{}
 	}
 	if !fitsValue(val, iv.Type) && f.lenient() && sameButUntyped(val.typ, stripOpt(iv.Type)) { // so does a gem's Array[untyped] (Homebrew's `@deps = graph.tsort_with_cycles { ... } - [@cask]`, decision 374)
@@ -418,6 +419,7 @@ func (f *fctx) ivar(n parser.Node, name string, assigned Type) *Ivar {
 			}
 			iv := f.c.declareIvar(f.owner, name, assigned, f.f, f.f.line(n.GetLocation().StartOffset))
 			iv.joins = !f.lenient()
+			f.noteIvarWrite(iv, n, assigned)
 			return iv
 		}
 		if f.c.unknownNow() {

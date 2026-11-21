@@ -467,10 +467,11 @@ func (c *Compiler) inferRet(m *Method) {
 	}
 	if isAny(ret) && m.retWhy == "" {
 		m.retWhy = "body's value is untyped"
-		if b, ok := m.Node.Body.(*parser.StatementsNode); ok && c.env.UntypedWhy && len(b.Body) > 0 {
-			why := "?"
-			_ = catchCompileError(func() { why = f.untypedWhy(b.Body[len(b.Body)-1], 1) })
-			m.retWhy += ": " + why
+		if b, ok := m.Node.Body.(*parser.StatementsNode); ok && c.env.why() && len(b.Body) > 0 {
+			last := why{text: "?"}
+			_ = catchCompileError(func() { last = f.untypedWhy(b.Body[len(b.Body)-1], 1) })
+			m.retWhy += ": " + last.text
+			m.retRoot = last.root
 		}
 	}
 	if c.overriddenSelfRet(m, ret) {

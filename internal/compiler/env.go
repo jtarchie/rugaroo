@@ -27,6 +27,7 @@ type envConfig struct {
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
 	UntypedWhy    bool   // RUGAROO_UNTYPED_WHY: each dynamic-call warning names where its untyped receiver came from
+	UntypedReport string // RUGAROO_UNTYPED_REPORT: the roots of untyped receivers ranked by dynamic-call sites, to stderr (1) or a file (untypedreport.go)
 	IntOverflow   string // RUGAROO_INT_OVERFLOW: raise (default), wrap or promote; the CLI's --int-overflow sets it (decision 372)
 	RegexpCompile string // RUGAROO_REGEXP_COMPILE: lazy (default) or eager; the CLI's --regexp-compile sets it (decision 471)
 	NilCheck      string // RUGAROO_NIL_CHECK: compile (default) or runtime; the CLI's --nil-check sets it (decision 393)
@@ -34,6 +35,9 @@ type envConfig struct {
 	Compiler      string // RUGAROO_COMPILER: the Go compiler the output is for, gc (default) or tinygo; the CLI's -compiler sets it (decision 443)
 	RBSCollection string // RUGAROO_RBS_COLLECTION: an `rbs collection install` directory to read gem signatures from (decision 457)
 }
+
+// why reports that untyped values' roots are tracked: for the warnings' text or for the report.
+func (e envConfig) why() bool { return e.UntypedWhy || e.UntypedReport != "" }
 
 func loadEnv() envConfig {
 	set := func(name string) bool { return os.Getenv(name) != "" }
@@ -61,6 +65,7 @@ func loadEnv() envConfig {
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",
 		GopoisonDump:  os.Getenv("RUGAROO_GOPOISON_DUMP"),
 		UntypedWhy:    set("RUGAROO_UNTYPED_WHY"),
+		UntypedReport: os.Getenv("RUGAROO_UNTYPED_REPORT"),
 		IntOverflow:   os.Getenv("RUGAROO_INT_OVERFLOW"),
 		RegexpCompile: os.Getenv("RUGAROO_REGEXP_COMPILE"),
 		NilCheck:      os.Getenv("RUGAROO_NIL_CHECK"),

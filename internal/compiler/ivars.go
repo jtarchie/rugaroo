@@ -23,7 +23,9 @@ func (c *Compiler) declareIvarAnnotations() {
 			if iv, ok := strings.CutPrefix(name, "self."); ok {
 				owner, name = cls.meta, iv
 			}
+			c.ivarDeclWhy = "an annotation, or the gem's .rbs signature of the attribute (decision 160; the .rbs file is not recorded), says so: "
 			c.declareIvar(owner, name, t, cls.File, d.line)
+			c.ivarDeclWhy = ""
 		}
 	}
 }
@@ -67,6 +69,9 @@ func (c *Compiler) declareIvar(cls *Class, name string, t Type, f *File, line in
 	iv := &Ivar{Name: name, Type: t, Owner: cls}
 	cls.Ivars[name] = iv
 	cls.IvarList = append(cls.IvarList, iv)
+	if holdsAny(t) {
+		c.noteIvar(iv, srcPos{f, line}, c.ivarDeclWhy+"declared "+typeString(t), untypedRoot{})
+	}
 	return iv
 }
 

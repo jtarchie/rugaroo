@@ -145,6 +145,7 @@ func (c *Compiler) replayRefine(r *refineRecord, cands []*Ivar, typed, orig map[
 			iv.Type = typed[iv]
 		}
 	}
+	c.noteRefineDrops(cands, typed, r.Accepted)
 	maps.Copy(c.boxes, r.Boxes)
 	maps.Copy(c.argBoxes, r.ArgBoxes)
 	for _, k := range r.LeafBoxes {

@@ -60,6 +60,7 @@ type inference struct {
 	anyUse  map[pendingKey]bool   // a gem parameter typed by some calls while a gem call passes an untyped value: untyped once the rounds converged (decision 444)
 	from    map[pendingKey]string // the first call each type came from, file:line, for a mismatch's message
 	hardAny map[pendingKey]bool   // a method (by its first pending parameter) that returned untyped with every parameter typed: its result is never provisional again (decision 466)
+	why     map[pendingKey]string // RUGAROO_UNTYPED_REPORT: the rule that decided each key in the last round, and the uses it read (noteWhy)
 	changed bool
 	// resolved: the rounds reached their fixed point with not-known-yet values (RUGAROO_INFER_UNKNOWN); what is still
 	// not known is untyped from here on, and the rounds go on so a typed parameter such a value reaches is untyped too
@@ -151,10 +152,11 @@ type paramUse struct {
 	typ     Type
 	file    *File
 	off     int
-	anyRest bool // a gem's untyped value into a rest parameter: its elements are anything (decision 253)
-	widen   bool // a gem's untyped value into an overridden method: the parameter is untyped (decision 324)
-	dyn     bool // a gem's dynamic call by this name, which may reach another class's method of that name (decision 331)
-	deflt   bool // the parameter's own default, not a call's argument
+	anyRest bool   // a gem's untyped value into a rest parameter: its elements are anything (decision 253)
+	widen   bool   // a gem's untyped value into an overridden method: the parameter is untyped (decision 324)
+	dyn     bool   // a gem's dynamic call by this name, which may reach another class's method of that name (decision 331)
+	deflt   bool   // the parameter's own default, not a call's argument
+	why     string // RUGAROO_UNTYPED_REPORT: the root of an untyped argument (untypedWhy)
 }
 
 // at is the call the argument came from.
@@ -727,7 +729,7 @@ func (f *fctx) noteUse(p Param, n parser.Node, t Type) {
 	if en, ok := n.(*exprNode); ok && en.use != nil { // one use per source argument, not a member per arm: the param would flip between them (decision 150)
 		t = en.use
 	}
-	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: n.GetLocation().StartOffset})
+	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: t, file: f.f, off: n.GetLocation().StartOffset, why: f.useWhy(n, t)})
 	if f.c.round && realType(t) {
 		if f.typedUse == nil {
 			f.typedUse = map[pendingKey]bool{}
@@ -923,6 +925,11 @@ func (c *Compiler) updateInference(inf *inference) {
 		order[f] = i
 	}
 	next, from := map[pendingKey]Type{}, map[pendingKey]string{}
+	prevWhy := inf.why
+	inf.why = nil
+	if c.env.UntypedReport != "" {
+		inf.why = map[pendingKey]string{}
+	}
 	var bets []pendingKey // typed parameters a gem call also passes an untyped value
 	for _, key := range slices.Sorted(maps.Keys(c.uses)) {
 		uses := c.lastPassUses(key, order)
@@ -942,7 +949,7 @@ func (c *Compiler) updateInference(inf *inference) {
 		}
 	}
 	c.inferRecords(inf, next, order)
-	c.growState(inf, next, from)
+	c.growState(inf, next, from, prevWhy)
 	diff := c.roundDiff(inf, next)
 	c.roundTiming(next, diff, len(bets))
 	inf.copyAliases(next)
@@ -966,11 +973,13 @@ func (c *Compiler) updateInference(inf *inference) {
 // unknownRule is what the not-known-yet rounds decide about key before the common rules: untyped, or nothing (nil).
 func (c *Compiler) unknownRule(inf *inference, key pendingKey, uses []paramUse) Type {
 	if isRestPosKey(key) && slices.ContainsFunc(uses, func(u paramUse) bool { return isAny(u.typ) }) {
+		c.noteWhy(key, uses, "a call passed this forwarded rest position an untyped value")
 		return TAny{} // one call passed that position something untyped: nothing is forwarded for it
 	}
 	if inf.resolved && c.gemParams[key] && slices.ContainsFunc(uses, func(u paramUse) bool { return !u.deflt && isAny(stripOpt(u.typ)) && c.gemFile(u.file) }) {
 		// what was not known is untyped now, so an untyped argument is one for good: the parameter is untyped, whatever
 		// an earlier round typed it (parser's `loc(token)`, Integer from one early call, then an Array at run time)
+		c.noteWhy(key, uses, "untyped gem argument after resolution: what was not known yet is untyped now, so the parameter is")
 		return TAny{}
 	}
 	return nil
@@ -1005,18 +1014,22 @@ func (c *Compiler) useType(inf *inference, key pendingKey, uses []paramUse) (Typ
 		return t, ""
 	}
 	if pt, at := c.partlyTypedUse(uses); pt != nil && !c.gemParams[key] && !lambdaArgKey(key) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !holdsAny(u.typ) }) {
+		c.noteWhy(key, uses, "every use is a container holding untyped: their join, "+typeString(pt)+" (decision 447)")
 		return pt, at
 	}
 	if !slices.ContainsFunc(uses, func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }) {
+		c.noteWhy(key, uses, "no use carries a type: each is untyped, holds untyped or is its nil default (decision 361)")
 		return nil, "" // nothing but its `= nil` default types it: no call does, so it is untyped (decision 361)
 	}
 	if c.dynOnly(uses) {
+		c.noteWhy(key, uses, "only dynamic calls by its name carry a type, which may be meant for another class's method (decision 331)")
 		if _, had := inf.types[key]; had && c.env.InferUnknown {
 			return TAny{}, "" // typed by agreeing dynamic calls until a static call passed something untyped: untyped now, not kept
 		}
 		return nil, ""
 	}
 	if inf.anyUse[key] {
+		c.noteWhy(key, uses, "untyped gem argument: a gem call passed it an untyped value once the rounds had settled (decision 444)")
 		return TAny{}, ""
 	}
 	if t, at, ok := c.gemUseType(key, uses); ok {
@@ -1024,20 +1037,40 @@ func (c *Compiler) useType(inf *inference, key pendingKey, uses []paramUse) (Typ
 	}
 	t, at := joinUses(uses, inf.noUnion[key])
 	if t == nil {
+		c.noteWhy(key, uses, "its uses join to no type (untyped, void or a type variable each)")
 		return nil, ""
 	}
+	joined := t
 	if c.gemUsesDisagree(uses, t, c.gemParams[key]) { // a gem's calls passing kinds no type joins: untyped, not the first kind (decision 244)
 		t = TAny{}
 	}
 	if c.anyGemUseWidens(t, uses) {
 		t = TAny{}
 	}
+	switch {
+	case inf.why == nil:
+	case !isAny(t):
+		c.noteWhy(key, uses, "joined from its uses: "+typeString(t))
+	case isAny(joined):
+		c.noteWhy(key, uses, "its uses join to untyped")
+	case c.gemUsesDisagree(uses, joined, c.gemParams[key]):
+		c.noteWhy(key, uses, "two uses disagree: a gem use does not join "+typeString(joined)+", what the uses before it gave (decision 244)")
+	default:
+		c.noteWhy(key, uses, "untyped gem argument beside uses that join to "+typeString(joined)+", a class object or a union Go holds as any (decision 331)")
+	}
 	return t, at
 }
 
 // growState makes next the not-known-yet rounds' state after this round: it only goes up. A type a round could not
 // re-derive is kept, and one it derived otherwise joins in.
-func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[pendingKey]string) {
+func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[pendingKey]string, prevWhy map[pendingKey]string) {
+	if inf.why != nil {
+		for k := range c.pendingSeen { // decided by no rule: no call recorded a use
+			if _, ok := c.uses[k]; !ok {
+				inf.why[k] = "no uses recorded: no call the rounds compile passes it anything"
+			}
+		}
+	}
 	if !c.env.InferUnknown {
 		return
 	}
@@ -1049,6 +1082,7 @@ func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[
 		// `Hash[String, Integer]`, which no join holds both of)
 		for k, t := range next {
 			if holdsAny(t) {
+				inf.amendWhy(k, "left undecided: "+typeString(t)+" holds untyped, and this phase of the rounds only accumulates types")
 				delete(next, k)
 			}
 		}
@@ -1062,11 +1096,22 @@ func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[
 			if at, ok := inf.from[k]; ok {
 				from[k] = at
 			}
+			if inf.why != nil {
+				kept := "kept from an earlier round (the state only goes up): " + typeString(old)
+				if p := prevWhy[k]; strings.HasPrefix(p, "kept from") {
+					kept = p
+				} else if p != "" {
+					kept += "; that round: " + p
+				}
+				inf.amendWhy(k, kept)
+			}
 		case !typeEq(old, t):
 			if j, ok := join(old, t); ok {
 				next[k] = mergeSameClass(j)
+				inf.amendWhy(k, "joined with an earlier round's "+typeString(old)+": "+typeString(next[k]))
 			} else {
 				next[k] = TAny{}
+				inf.amendWhy(k, "two rounds disagree: an earlier round's "+typeString(old)+" does not join this round's "+typeString(t))
 			}
 		}
 	}
@@ -1170,6 +1215,7 @@ func (c *Compiler) settleRound(inf *inference, settled bool, bets []pendingKey, 
 			if inf.anyUse == nil {
 				inf.anyUse = map[pendingKey]bool{}
 			}
+			inf.amendWhy(key, "untyped gem argument: this settled round untypes a gem parameter a gem call passes an untyped value (decision 444)")
 			inf.anyUse[key], next[key], inf.changed = true, TAny{}, true
 			delete(from, key)
 		}

@@ -64,8 +64,8 @@ func (f *fctx) genOrAssignLocal(n *parser.LocalVariableOrWriteNode) expr {
 	if f.visibleLocal(n.Name) == nil && f.sameScopeLocal(n.Name) == nil { // one assigned in a branch before is not new (`a, b = x if c`, decision 248)
 		// a new local starts out nil, so this is a plain assignment
 		v := f.genExpr(n.Value, nil)
-		if f.c.env.UntypedWhy && isAny(v.typ) {
-			f.setAnyOrigin(n.Name, "||= from: "+f.untypedWhy(n.Value, 1))
+		if f.c.env.why() && isAny(v.typ) {
+			f.setAnyOrigin(n.Name, f.untypedWhy(n.Value, 1).pre("||= from: "))
 		}
 		return f.assignLocal(n, n.Name, v, nil)
 	}
@@ -281,12 +281,16 @@ func (f *fctx) callWriter(n parser.Node, recv expr, name string, val expr) {
 func (f *fctx) genMultiWrite(n *parser.MultiWriteNode) expr {
 	if arr, ok := n.Value.(*parser.ArrayNode); ok && n.Rest == nil && len(n.Rights) == 0 && len(arr.Elements) == len(n.Lefts) && !slices.ContainsFunc(arr.Elements, isSplat) {
 		for i, v := range f.multiLiteral(arr, n.Lefts) {
+			f.noteTargetWhy(arr.Elements[i], v)
 			f.assignTarget(n.Lefts[i], v)
 		}
+		f.targetWhy = why{}
 		return expr{code: "", typ: TVoid{}, stmt: true, done: true}
 	}
 	v := f.genExpr(n.Value, nil)
 	f.noteAnyTargets(n.Value, v, n.Lefts)
+	f.noteTargetWhy(n.Value, v)
+	defer func() { f.targetWhy = why{} }()
 	if isNil(v.typ) { // `q, a = nil`: no value to hold (Go has no `x := nil`)
 		f.destructureInto(n, v, n.Lefts, n.Rest, n.Rights)
 		return expr{code: "", typ: TVoid{}, stmt: true, done: true}

@@ -233,6 +233,7 @@ func (f *fctx) genBoundMethod(n parser.Node, recv expr, name string, public bool
 // genDynMethod is method(:name) on an untyped receiver: called through the dispatcher, its signature unknown.
 func (f *fctx) genDynMethod(n parser.Node, recv expr, name string, public bool) expr {
 	if f.m == nil || !f.m.quietDynamic {
+		f.noteDynSite(n, n, recv.typ, fmt.Sprintf("dynamic call: method(:%s) on %s", name, recv.typ))
 		f.warn(n, "dynamic call: method(:%s) on %s", name, recv.typ)
 	}
 	f.c.noteDyn(name)
@@ -594,6 +595,7 @@ func (f *fctx) methodValueCall(n parser.Node, recv expr, t TClass, name string, 
 			f.errorf(n, "%s needs the method's signature, which a %s lost (decision 141)", op, t)
 		}
 		if f.m == nil || !f.m.quietDynamic {
+			f.noteDynSite(n, n, t, fmt.Sprintf("dynamic call: %s on %s", op, t))
 			f.warn(n, "dynamic call: %s on %s", op, t)
 		}
 		return expr{}, false
@@ -635,6 +637,7 @@ func (f *fctx) methodCallTyped(n parser.Node, recv expr, kind string, ft TFunc, 
 		if kind == "UnboundMethod" {
 			op = "UnboundMethod#bind_call"
 		}
+		f.noteDynSite(n, nil, ft, fmt.Sprintf("dynamic call: %s with more than its %d required arguments", op, len(ft.Params)))
 		f.warn(n, "dynamic call: %s with more than its %d required arguments", op, len(ft.Params))
 	}
 	m := f.methodRecv(recv)

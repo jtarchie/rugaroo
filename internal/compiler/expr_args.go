@@ -1051,7 +1051,7 @@ func (f *fctx) noteWideningUse(m *Method, p Param, an parser.Node, t Type) {
 		return // not known yet (an override handing its own parameter to super): no evidence either way
 	}
 	if m.Name == "initialize" || m.Owner.descendantDefines(m.Name, true) || m.Owner.includerDefines(m.Name, map[*Class]bool{}) {
-		f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: TAny{}, file: f.f, off: an.GetLocation().StartOffset, widen: true})
+		f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: TAny{}, file: f.f, off: an.GetLocation().StartOffset, widen: true, why: f.useWhy(an, TAny{})})
 	}
 }
 
@@ -1059,7 +1059,7 @@ func (f *fctx) noteWideningUse(m *Method, p Param, an parser.Node, t Type) {
 // parse_and_append_field(*args)).
 func (f *fctx) noteAnyRest(p Param, an parser.Node, t Type) {
 	if isAny(t) && f.lenient() && p.Pending != "" && f.c.uses != nil {
-		f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: TAny{}, file: f.f, off: an.GetLocation().StartOffset, anyRest: true})
+		f.c.uses[p.Pending] = append(f.c.uses[p.Pending], paramUse{typ: TAny{}, file: f.f, off: an.GetLocation().StartOffset, anyRest: true, why: f.useWhy(an, TAny{})})
 	}
 }
 

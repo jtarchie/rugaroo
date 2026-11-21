@@ -87,7 +87,7 @@ func (f *fctx) noteDynUse(p Param, a parser.Node, t Type, j int, inRest bool) {
 	if t == nil || isAny(t) && (!resolved || isUnknown(t)) {
 		return
 	}
-	u := paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true}
+	u := paramUse{typ: t, file: f.f, off: a.GetLocation().StartOffset, dyn: true, why: f.useWhy(a, t)}
 	f.c.uses[p.Pending] = append(f.c.uses[p.Pending], u)
 	if f.c.env.InferUnknown && inRest {
 		k := restPosKey(p.Pending, j)

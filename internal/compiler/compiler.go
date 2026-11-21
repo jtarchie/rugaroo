@@ -273,6 +273,10 @@ type refineState struct {
 	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
 	baseFailed          map[*Method]bool         // gem methods that fail in refineIvars' untyped baseline: their failure vetoes nothing
 	widenPending        map[pendingKey]Type      // noteWidenPending's parameters (decision 444)
+	dynSites            map[string]why           // RUGAROO_UNTYPED_REPORT: each dynamic call's root, by its entry in Warnings (noteDynSite)
+	ivarNotes           map[*Ivar]ivarNote       // RUGAROO_UNTYPED_REPORT: why each untyped ivar is (noteIvar)
+	ivarDeclWhy         string                   // RUGAROO_UNTYPED_REPORT: the rule declaring ivars just now, for declareIvar's note
+	refineDrops         map[*Ivar]Type           // RUGAROO_UNTYPED_REPORT: the element typing refineIvars tried for an open ivar and dropped
 	loadedFeatures      bool                     // some gem code reads $LOADED_FEATURES: emit rbLoadedFeatures
 	localSeeds          map[*Method]localSeed    // decision 444
 	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
@@ -417,6 +421,7 @@ type options struct {
 	refineOut    map[string]*refineRecord // out: this compile's, for the cache
 	roundRefine  map[string]*refineRecord // the previous inference round's candidates and kept typings, tried first by the next (decision 444)
 	widenRedo    int                      // final passes rerun by noteWidenPending
+	whyReport    string                   // RUGAROO_UNTYPED_REPORT: the last compile's report (emitUntypedReport)
 	droppedLazy  map[string]bool          // lazy autoload files that did not compile: left out (collectLazy)
 }
 
@@ -462,6 +467,9 @@ func compileFresh(ctx context.Context, preludeFS fs.FS, sources []Source, opts *
 		if !errors.Is(err, errNeedInstances) {
 			if opts.instRestarts > 0 && opts.env.Timing {
 				fmt.Fprintf(os.Stderr, "rugaroo: %d compiles restarted for generic instances (%d instances)\n", opts.instRestarts, len(opts.instances))
+			}
+			if err == nil {
+				emitUntypedReport(opts)
 			}
 			return out, err
 		}
@@ -524,6 +532,7 @@ func (c *Compiler) widenRedo(opts *options) bool {
 	}
 	opts.widenRedo++
 	for k, t := range c.widenPending {
+		opts.infer.amendWhy(k, fmt.Sprintf("the final pass passed it a value that does not fit %s, the rounds' type: %s now (decision 444)", typeString(opts.infer.types[k]), typeString(t)))
 		opts.infer.types[k] = t
 	}
 	if opts.env.Timing {
@@ -793,7 +802,10 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	}
 	formatted, ferr := formatGo(src, lazy, c.emitNext, c.labels, c.noPrune, c.env, c.ffiStubPreamble()+c.cPreamble)
 	tick("format")
-	opts.warnings = c.Warnings // the tail's bodies warn too
+	opts.warnings = c.shownWarnings() // the tail's bodies warn too
+	if c.env.UntypedReport != "" {
+		opts.whyReport = c.untypedReport()
+	}
 	if errors.Is(ferr, errPruneIncomplete) {
 		return nil, ferr
 	}
