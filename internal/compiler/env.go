@@ -20,6 +20,7 @@ type envConfig struct {
 	InferUses     string // RUGAROO_INFER_USES: print each round's recorded uses of the parameters whose key holds this text (file:line:col:Class#name)
 	TreeCheck     bool   // RUGAROO_TREE_CHECK: report each def whose syntax tree a pass rewrote in place (decision 478)
 	NoFileReuse   bool   // RUGAROO_NO_FILE_REUSE: parse the sources again in every round and pass (A/B for decision 479)
+	RoundDump     string // RUGAROO_ROUND_DUMP: a file each inference round appends its state to (parameters, kept ivar typings, returns)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
 	UntypedWhy    bool   // RUGAROO_UNTYPED_WHY: each dynamic-call warning names where its untyped receiver came from
@@ -52,6 +53,7 @@ func loadEnv() envConfig {
 		DispatchDebug: os.Getenv("RUGAROO_DISPATCH_DEBUG"),
 		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
 		InferUses:     os.Getenv("RUGAROO_INFER_USES"),
+		RoundDump:     os.Getenv("RUGAROO_ROUND_DUMP"),
 		NoFileReuse:   os.Getenv("RUGAROO_NO_FILE_REUSE") != "",
 		TreeCheck:     os.Getenv("RUGAROO_TREE_CHECK") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",

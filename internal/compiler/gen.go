@@ -576,6 +576,9 @@ func (f *fctx) genStmtPastFailure(s parser.Node, last bool, t tail) bool {
 		// an inference round reads calls, and ivar discovery assignments, past a statement it cannot compile (decisions 146, 191)
 		err := f.try(func() { f.genStmt(s, tail{}) })
 		f.c.debugInfer(err)
+		if err != nil {
+			f.c.taintRetWalk(f.m) // emission may stop where this walk read on: its uses are not emission's
+		}
 		if err != nil && f.discover {
 			f.discoverNested(s)
 		}

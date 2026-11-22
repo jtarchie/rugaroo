@@ -2,6 +2,10 @@
 
 Read-only plan, written against `main` at ff19ddb1 by a planning agent; nothing here is built. Every claim about today's code cites file:line. Anything worked out rather than read in the code is marked *(inferred)*. Timings are from `RUGAROO_TIMING=1` on an idle machine (decision 478). One thing in them does not add up: if `infer` really costs ~15 s per final pass, rubocop's phases add to about 241 s, not 222 s. So each stage is estimated as savings subtracted from 222 s. Open question 5 settles which reading is right.
 
+## Outcome (2026-11-22)
+
+S0 was built (the `round work` line and `RUGAROO_ROUND_DUMP`, decision 491). It measured s, the share of `collectUses` time in seen classes, at about 7% on rubocop, not the 60% assumed below, so S2 and S3 would save about 1 s a round and were not built. What was built instead is the one-walk part of stage 1 without its semantic change: the return walk records the round's uses and emission runs only where that walk does not count (decision 491; rubocop 227 s -> 200 s, Go identical). S1 and S4 remain open; S4 is the large one (`r-refine` is about 38 s of rubocop's 200 s, most of it the one searching round).
+
 ## Summary and recommendation
 
 **Where a round's time goes.** A round runs `refineIvars`, then resets and re-infers every return, then emits every user method to record call uses (`compiler.go:518-533`). Only the uses feed the next round (`infer.go:923`). Most of that work is done twice:

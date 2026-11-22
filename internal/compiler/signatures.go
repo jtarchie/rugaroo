@@ -399,6 +399,7 @@ func (c *Compiler) inferRet(m *Method) {
 	}
 	if m.inferring && c.pruneGems && c.gemFile(m.File) { // a gem's recursion (bindata's `superclass.dsl_parser`): untyped at the inner call, the outer run types the rest
 		m.Ret, m.retWhy = TAny{}, "recursive"
+		c.taintRetWalks(m)
 		return
 	}
 	if m.inferring {
@@ -407,7 +408,9 @@ func (c *Compiler) inferRet(m *Method) {
 	}
 	m.inferring = true
 	m.recursed = false
-	defer func() { m.inferring = false }()
+	c.retStack = append(c.retStack, m)
+	defer func() { m.inferring = false; c.retStack = c.retStack[:len(c.retStack)-1] }()
+	defer c.bufferRetUses(m)()
 	if c.inheritsRet(m) {
 		c.inferRet(m.inherited)
 		m.Ret = m.inherited.Ret
@@ -480,6 +483,59 @@ func (c *Compiler) inferRet(m *Method) {
 	m.Ret = ret
 	m.roundRet = c.awaitsParams(m, ret)
 	c.noteHardAny(m, ret)
+	c.countRetWalk(m)
+}
+
+// countRetWalk: a walk that passed counts unless it recursed, was tainted, or its body is poisoned (whose emission is a stub that records nothing).
+func (c *Compiler) countRetWalk(m *Method) {
+	if c.retWalked != nil && !m.recursed && !c.retTainted[m] && m.poison == "" {
+		c.retWalked[m] = true
+	}
+}
+
+// bufferRetUses: a failed walk's partial uses would outlive the emission that replaces it (decision 491).
+func (c *Compiler) bufferRetUses(m *Method) func() {
+	if c.retWalked == nil {
+		return func() {}
+	}
+	outer, buf := c.uses, map[pendingKey][]paramUse{}
+	c.uses = buf
+	return func() {
+		c.uses = outer
+		if c.retWalked[m] {
+			for k, us := range buf {
+				c.retUses[k] = append(c.retUses[k], us...)
+			}
+		}
+	}
+}
+
+// taintRetWalk marks m's return walk, when one is under way, as one whose uses collectUses records again by emission.
+func (c *Compiler) taintRetWalk(m *Method) {
+	if c.retWalked == nil || m == nil || len(c.retStack) == 0 || c.retStack[len(c.retStack)-1] != m {
+		return
+	}
+	if c.retTainted == nil {
+		c.retTainted = map[*Method]bool{}
+	}
+	c.retTainted[m] = true
+}
+
+// taintRetWalks marks the return walks under way from m's up: they read m's return while it was the recursion's
+// provisional untyped, so the uses they record are not what a walk with every return known records.
+func (c *Compiler) taintRetWalks(m *Method) {
+	if c.retWalked == nil {
+		return
+	}
+	if c.retTainted == nil {
+		c.retTainted = map[*Method]bool{}
+	}
+	for i := len(c.retStack) - 1; i >= 0; i-- {
+		c.retTainted[c.retStack[i]] = true
+		if c.retStack[i] == m {
+			break
+		}
+	}
 }
 
 // roundBottomReturns leaves a round's untyped returns out of m's join when a typed one remains and m has a parameter not

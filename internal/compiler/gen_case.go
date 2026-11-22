@@ -411,6 +411,7 @@ func (f *fctx) genWhenArm(wn *parser.WhenNode, t tail) {
 	}
 	err := f.tryClean(func() { f.genStmts(wn.Statements, t) })
 	if err != nil {
+		f.c.taintRetWalk(f.m)
 		f.emit("panic(NewNotImplementedError(Ref(String(%q))))", "rugaroo: a when arm does not compile: "+err.Error())
 	}
 }

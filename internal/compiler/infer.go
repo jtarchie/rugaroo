@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
 )
@@ -796,17 +797,21 @@ func (f *fctx) pendingWant(p Param, t Type) Type {
 
 // collectUses dry-runs every user body for the arguments it passes.
 func (c *Compiler) collectUses() {
-	c.uses = map[pendingKey][]paramUse{}
 	c.loadCode = map[*File]string{}
 	for _, m := range c.userMethods() {
+		start := time.Now()
 		err := catchCompileError(func() {
-			c.inferRet(m) // the round's pass typed it already; this retries one that failed there
+			c.inferRet(m)       // the round's pass typed it already; this retries one that failed there
+			if c.retWalked[m] { // its return walk recorded what emission would (decision 491)
+				return
+			}
 			if m.Owner == nil {
 				c.emitTopDef(m)
 			} else {
 				c.emitMethod(m)
 			}
 		})
+		c.rs.used(m, time.Since(start))
 		c.debugInfer(err)
 		if err != nil {
 			c.demoteUnions(m)

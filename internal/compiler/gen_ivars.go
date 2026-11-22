@@ -61,6 +61,7 @@ func (c *Compiler) refineIvars() {
 		for k := range convs {
 			ok = ok && base[k]
 		}
+		c.rs.try(ok)
 		return err, ok
 	}
 	var retry nilRetry
@@ -91,6 +92,7 @@ func (c *Compiler) refineIvars() {
 	c.noteRefineDrops(cands, typed, accepted)
 	if c.round {
 		c.roundRefine[kind] = &refineRecord{Cands: sig, Accepted: accepted}
+		c.rs.accepted(c, sig, accepted)
 		return
 	}
 	if c.refineOut == nil {
@@ -171,6 +173,7 @@ func (c *Compiler) dryRunIvarUsers(ivs []*Ivar) (map[string]bool, *compileError)
 			if !slices.ContainsFunc(ivs, func(iv *Ivar) bool { return cls.isSubclassOf(iv.Owner) }) {
 				continue
 			}
+			c.rs.sees(cls)
 			for _, m := range cls.MethodList {
 				if m.Kind == kindDef {
 					c.inferRet(m)

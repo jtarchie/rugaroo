@@ -274,23 +274,28 @@ type pathCache struct {
 
 // tableState: what emitTables reads (see tableInputs) and the tables' bookkeeping.
 type refineState struct {
-	refineIn, refineOut map[string]*refineRecord // decision 433: the cache's records and this compile's
-	roundRefine         map[string]*refineRecord // options.roundRefine (decision 444)
-	inDryRun            bool                     // inside dryRunIvarUsers
-	dryTry              bool                     // inside a refineIvars try (not its untyped baseline)
-	baseFailed          map[*Method]bool         // gem methods that fail in refineIvars' untyped baseline: their failure vetoes nothing
-	widenPending        map[pendingKey]Type      // noteWidenPending's parameters (decision 444)
-	widenChain          bool                     // this pass runs again if it widens a parameter, so it may widen in place (decision 480)
-	pendingParams       map[pendingKey]*Param    // each inferred parameter by its key, built on first use
-	dynSites            map[string]why           // RUGAROO_UNTYPED_REPORT: each dynamic call's root, by its entry in Warnings (noteDynSite)
-	ivarNotes           map[*Ivar]ivarNote       // RUGAROO_UNTYPED_REPORT: why each untyped ivar is (noteIvar)
-	ivarDeclWhy         string                   // RUGAROO_UNTYPED_REPORT: the rule declaring ivars just now, for declareIvar's note
-	refineDrops         map[*Ivar]Type           // RUGAROO_UNTYPED_REPORT: the element typing refineIvars tried for an open ivar and dropped
-	loadedFeatures      bool                     // some gem code reads $LOADED_FEATURES: emit rbLoadedFeatures
-	localSeeds          map[*Method]localSeed    // decision 444
-	nilDefer            *nilDeferral             // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
-	noNilDefer          bool                     // options.noNilDefer
-	nilDeferUsed        *bool                    // options.nilDeferred: a typing kept by decision 440
+	refineIn, refineOut map[string]*refineRecord  // decision 433: the cache's records and this compile's
+	roundRefine         map[string]*refineRecord  // options.roundRefine (decision 444)
+	inDryRun            bool                      // inside dryRunIvarUsers
+	dryTry              bool                      // inside a refineIvars try (not its untyped baseline)
+	baseFailed          map[*Method]bool          // gem methods that fail in refineIvars' untyped baseline: their failure vetoes nothing
+	widenPending        map[pendingKey]Type       // noteWidenPending's parameters (decision 444)
+	retWalked           map[*Method]bool          // a round's methods whose return walk recorded their uses, so collectUses does not emit them (decision 491)
+	retUses             map[pendingKey][]paramUse // the round's uses: those of the return walks that counted, then collectUses' emissions
+	retStack            []*Method                 // the methods whose returns are being inferred, innermost last
+	retTainted          map[*Method]bool          // return walks whose uses do not count: one read a recursion's provisional return or past a failure
+	rs                  *roundStats               // this inference round's counters, under RUGAROO_TIMING or RUGAROO_ROUND_DUMP
+	widenChain          bool                      // this pass runs again if it widens a parameter, so it may widen in place (decision 480)
+	pendingParams       map[pendingKey]*Param     // each inferred parameter by its key, built on first use
+	dynSites            map[string]why            // RUGAROO_UNTYPED_REPORT: each dynamic call's root, by its entry in Warnings (noteDynSite)
+	ivarNotes           map[*Ivar]ivarNote        // RUGAROO_UNTYPED_REPORT: why each untyped ivar is (noteIvar)
+	ivarDeclWhy         string                    // RUGAROO_UNTYPED_REPORT: the rule declaring ivars just now, for declareIvar's note
+	refineDrops         map[*Ivar]Type            // RUGAROO_UNTYPED_REPORT: the element typing refineIvars tried for an open ivar and dropped
+	loadedFeatures      bool                      // some gem code reads $LOADED_FEATURES: emit rbLoadedFeatures
+	localSeeds          map[*Method]localSeed     // decision 444
+	nilDefer            *nilDeferral              // the nil sites the ivar typings refineIvars kept are checked at (decision 440)
+	noNilDefer          bool                      // options.noNilDefer
+	nilDeferUsed        *bool                     // options.nilDeferred: a typing kept by decision 440
 }
 
 type tableState struct {
@@ -521,20 +526,25 @@ const maxWidenRedo = 4
 
 // inferenceRound is decision 146's round after link: ivars refined, returns inferred, and the parameter uses gathered.
 func (c *Compiler) inferenceRound(opts *options, tick func(string)) {
+	c.rs = c.newRoundStats()
 	_ = catchCompileError(c.refineIvars)
 	tick("r-refine")
 	for _, m := range c.inferredMethods() {
 		m.Ret = nil
 	}
+	c.retUses, c.retWalked = map[pendingKey][]paramUse{}, map[*Method]bool{} // the return walks record the uses (decision 491)
+	c.uses = c.retUses
 	for _, m := range c.inferredMethods() {
 		_ = catchCompileError(func() { c.inferRet(m) })
 	}
+	c.rs.compareRets()
 	tick("r-rets")
 	c.collectUses()
 	tick("r-uses")
 	if !c.instMissing { // what a template stood in for is not evidence: the restart has the instance (decision 308)
 		c.updateInference(opts.infer)
 	}
+	c.rs.report(c, opts.infer)
 }
 
 // widenRedo reports a final pass that widened parameters (noteWidenPending), with the widened types in opts for the
