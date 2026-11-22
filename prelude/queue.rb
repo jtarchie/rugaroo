@@ -50,15 +50,19 @@ class Mutex < Object
   #: () -> bool
   def owned? = %x{ Boolean(self.owner.Load() == rbGoID()) }
 
+  # lock, the block, unlock in a defer: one goroutine-id lookup and no ensure frame (decision 490). Unlocking checks as
+  # #unlock does, so a block that unlocked the mutex itself raises ThreadError here, as MRI's ensure does.
   # @rbs [X] () { () -> X } -> X
-  def synchronize
-    lock
-    begin
-      yield
-    ensure
-      unlock
-    end
-  end
+  def synchronize = %x{
+    id := rbGoID()
+    if self.owner.Load() == id {
+      panic(NewThreadError(Ref(String("deadlock; recursive locking"))))
+    }
+    self.mu.Lock()
+    self.owner.Store(id)
+    defer rbMutexSyncUnlock(self, id)
+    return blk()
+  }
 end
 
 # @go_type struct { cv rbCondVar }

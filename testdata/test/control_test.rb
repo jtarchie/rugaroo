@@ -6255,4 +6255,44 @@ module ControlTests
       assert_equal %i[a b c a], hits
     end
   end
+
+  # Mutex#synchronize's lean body (decision 490): the block's value, recursive locking, a block that unlocks it, a
+  # break and a raise out of the block all leave the mutex as MRI does.
+  class ControlMutexSyncTest < Minitest::Test
+    def test_synchronize_edges
+      m = Mutex.new
+      assert_equal 42, m.synchronize { 41 + 1 }
+      begin
+        m.synchronize { m.synchronize { 1 } }
+        flunk "no error"
+      rescue ThreadError => e
+        assert_equal "deadlock; recursive locking", e.message
+      end
+      refute m.locked?
+      begin
+        m.synchronize { m.unlock }
+        flunk "no error"
+      rescue ThreadError => e
+        assert_equal "Attempt to unlock a mutex which is not locked", e.message
+      end
+      refute m.locked?
+      n = 0
+      [1, 2, 3].each do |i|
+        m.synchronize do
+          n += i
+          break if i == 2
+        end
+      end
+      assert_equal [6, false], [n, m.locked?]
+      begin
+        m.synchronize { raise "boom" }
+      rescue RuntimeError => e
+        assert_equal ["boom", false], [e.message, m.locked?]
+      end
+      counter = 0
+      threads = Array.new(4) { Thread.new { 1000.times { m.synchronize { counter += 1 } } } }
+      threads.each(&:join)
+      assert_equal 4000, counter
+    end
+  end
 end

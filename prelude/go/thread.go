@@ -250,3 +250,15 @@ func rbErrinfo() any {
 	}
 	return nil
 }
+
+// rbMutexSyncUnlock is Mutex#synchronize's unlock: #unlock's checks against the id the lock was taken with (decision 490).
+func rbMutexSyncUnlock(m *Mutex, id int64) {
+	switch owner := m.owner.Load(); {
+	case owner == 0:
+		panic(NewThreadError(Ref(String("Attempt to unlock a mutex which is not locked"))))
+	case owner != id:
+		panic(NewThreadError(Ref(String("Attempt to unlock a mutex which is locked by another thread/fiber"))))
+	}
+	m.owner.Store(0)
+	m.mu.Unlock()
+}
