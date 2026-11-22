@@ -3081,3 +3081,64 @@ module StringTests
     end
   end
 end
+
+module StringTests
+  class Money
+    #: (Integer) -> void
+    def initialize(cents) = @cents = cents
+
+    #: () -> String
+    def to_s = "$#{@cents / 100}.#{format("%02d", @cents % 100)}"
+  end
+
+  # Interpolated Integers are written into one buffer; presized lines/split/codepoints (decision 488).
+  class StringInterpIntTest < Minitest::Test
+    def test_integers
+      i = -42
+      z = 0
+      max = 9_223_372_036_854_775_807
+      min = -max - 1
+      assert_equal "item--42--84", "item-#{i}-#{i * 2}"
+      assert_equal "0", "#{z}"
+      assert_equal "-42", "#{i}"
+      assert_equal "9223372036854775807|-9223372036854775808", "#{max}|#{min}"
+      assert_equal "#{max}#{min}#{max}#{min}#{max}#{min}", [max, min, max, min, max, min].join
+      s = "mid"
+      assert_equal "a-42mid0b", "a#{i}#{s}#{z}b"
+      assert_equal "mid-42", "#{s}#{i}"
+      assert_equal "-42mid", "#{i}#{s}"
+      assert_equal "n[in-42ner]-42", "n[#{"in#{i}ner"}]#{i}"
+      assert_equal "$12.05 x3", "#{Money.new(1205)} x#{3}"
+      assert_equal "3 $0.07", "#{1 + 2} #{Money.new(7)}"
+      out = ""
+      300.times { |k| out = "#{out}#{k}" }
+      assert_equal (0...300).to_a.join, out
+      t = "x#{i}"
+      t << "y"
+      assert_equal ["x-42y", false], [t, t.frozen?]
+      assert_equal "x-42", "x#{i}"
+    end
+
+    def test_binary_interp
+      b = "\xff".b
+      r = "x#{b}#{1}"
+      assert_equal [Encoding::ASCII_8BIT, 3, [120, 255, 49]], [r.encoding, r.bytesize, r.bytes]
+    end
+
+    def test_presized_splits
+      assert_equal [], "".lines
+      assert_equal ["a"], "a".lines
+      assert_equal ["a\n", "b\n", "c"], "a\nb\nc".lines
+      big = (1..2000).map(&:to_s).join("\n")
+      assert_equal 2000, big.lines.size
+      assert_equal 2000, big.split.size
+      assert_equal 2000, big.split("\n").size
+      assert_equal [], "".split
+      assert_equal ["a"], " a ".split
+      assert_equal ["a", "b", "c"], "abc".split("")
+      assert_equal ["a", "b,c"], "a,b,c".split(",", 2)
+      assert_equal [], "".codepoints
+      assert_equal [233, 97], "éa".codepoints
+    end
+  end
+end

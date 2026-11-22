@@ -137,7 +137,14 @@ func (f *fctx) genLiteral(n parser.Node) (expr, bool) {
 
 // genInterp compiles an interpolated string (`"a#{b}"`) to a Go string concatenation of its parts.
 func (f *fctx) genInterp(n *parser.InterpolatedStringNode) expr {
-	parts := f.interpParts(n.Parts, nil)
+	ips := f.interpParts(n.Parts, nil)
+	if f.interpAppend(ips) {
+		return expr{code: "String(" + ips[0].code + ")", typ: f.cls("String")}
+	}
+	parts := make([]string, len(ips))
+	for i, p := range ips {
+		parts[i] = p.code
+	}
 	if len(parts) == 0 {
 		return expr{code: `""`, typ: f.cls("String"), lit: true}
 	}
@@ -170,13 +177,20 @@ func (f *fctx) genInterp(n *parser.InterpolatedStringNode) expr {
 	return expr{code: "(" + strings.Join(parts, " + ") + ")", typ: f.cls("String")}
 }
 
+// interpPart is one piece of an interpolation: its Go String expression, and what interpAppend needs to build it in place.
+type interpPart struct {
+	code string
+	kind byte   // 'l' a literal, 's' a String value, 'i' an Integer with the prelude's to_s, 'o' anything else
+	int  string // kind 'i': the Integer expression, written as digits
+}
+
 // interpParts appends the Go string pieces of an interpolation's parts.
 // Adjacent literals (`"a" "#{b}"`) nest an InterpolatedStringNode as a part.
-func (f *fctx) interpParts(ps []parser.Node, parts []string) []string {
+func (f *fctx) interpParts(ps []parser.Node, parts []interpPart) []interpPart {
 	for _, p := range ps {
 		switch p := p.(type) {
 		case *parser.StringNode:
-			parts = append(parts, strconv.Quote(p.Unescaped.Value))
+			parts = append(parts, interpPart{code: strconv.Quote(p.Unescaped.Value), kind: 'l'})
 		case *parser.InterpolatedStringNode:
 			parts = f.interpParts(p.Parts, parts)
 		case *parser.EmbeddedStatementsNode:
@@ -185,12 +199,68 @@ func (f *fctx) interpParts(ps []parser.Node, parts []string) []string {
 				f.errorf(p, "interpolation must contain a single expression")
 			}
 			e := f.genExpr(st.Body[0], nil)
-			parts = append(parts, f.toS(st.Body[0], e))
+			ip := interpPart{code: f.toS(st.Body[0], e), kind: 'o'}
+			switch {
+			case isClass(e.typ, "String"):
+				ip.kind = 's'
+			case f.plainIntToS(e, ip.code):
+				ip.kind, ip.int = 'i', e.code
+			}
+			parts = append(parts, ip)
 		default:
 			f.c.unsupported(f.f, p)
 		}
 	}
 	return parts
+}
+
+// plainIntToS: e is a 64-bit Integer whose to_s compiled to the prelude's own (no program or gem redefines Integer#to_s),
+// so its digits can be written straight into the interpolation's buffer.
+func (f *fctx) plainIntToS(e expr, code string) bool {
+	if !isClass(e.typ, "Integer") || f.intMode() == "promote" || code != "Integer.ToS("+e.code+")" {
+		return false
+	}
+	cls := f.c.classes["Integer"]
+	if cls == nil {
+		return false
+	}
+	m := cls.lookup("to_s")
+	return m != nil && m.M.File != nil && m.M.File.isPrelude()
+}
+
+// interpAppend builds an interpolation of literals, Strings and Integers in one stack buffer (decision 488): each
+// Integer's digits go in with strconv.AppendInt, where `+ Integer.ToS(i) +` allocated a String per Integer and then
+// the concatenation. It emits the appends as statements, after any the parts emitted, so the parts run in their order
+// (an emitted statement makes an earlier argument a temporary, as any hoisted code does), and leaves the buffer's name
+// in parts[0].code; the String conversion copies it once, a new String as the + chain's is. No helper or closure: no
+// function is added to the program. A leading String value keeps the rbConcat path, which extends a buffer rbStrCat
+// made in place (`s = "#{s}#{i}"` in a loop).
+func (f *fctx) interpAppend(parts []interpPart) bool {
+	ints := 0
+	for _, p := range parts {
+		switch p.kind {
+		case 'i':
+			ints++
+		case 'o':
+			return false
+		}
+	}
+	if ints == 0 || parts[0].kind == 's' {
+		return false
+	}
+	arr, buf := f.newTmp(), f.newTmp()
+	f.emit("var %s [64]byte", arr)
+	f.emit("%s := %s[:0]", buf, arr)
+	for _, p := range parts {
+		switch {
+		case p.kind == 'i':
+			f.emit("%s = strconv.AppendInt(%s, int64(%s), 10)", buf, buf, p.int)
+		case p.code != `""`:
+			f.emit("%s = append(%s, %s...)", buf, buf, p.code)
+		}
+	}
+	parts[0].code = buf
+	return true
 }
 
 func (f *fctx) toS(n parser.Node, e expr) string {
