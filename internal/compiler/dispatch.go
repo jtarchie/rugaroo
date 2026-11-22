@@ -246,9 +246,10 @@ func (c *Compiler) universalDispatch(name string) bool {
 	return e != nil && e.Owner.universal && c.dispatchable(e.Owner, e.M)
 }
 
-// plainMethod: a public def with one Go signature and no adapters.
+// plainMethod: a def with one Go signature and no adapters; a private one too (decision 486), unless
+// RUGAROO_NO_PRIVATE_DISPATCH.
 func (c *Compiler) plainMethod(m *Method) bool {
-	return (m.Kind == kindDef || m.Kind == kindPrimitive) && !m.Private && !m.generic() && m.Name != "initialize" && !m.seqAdapter && len(m.shadowed) == 0 && m.SelfType == nil
+	return (m.Kind == kindDef || m.Kind == kindPrimitive) && (!m.Private || !c.env.NoPrivateDispatch) && !m.generic() && m.Name != "initialize" && !m.seqAdapter && len(m.shadowed) == 0 && m.SelfType == nil
 }
 
 // sendArms lists the classes below owner whose own resolution of m is not owner's body: the dispatcher's cases.

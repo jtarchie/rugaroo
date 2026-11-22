@@ -3441,3 +3441,119 @@ module DynamicTests
     end
   end
 end
+
+module DynamicTests
+  # Private defs, attr accessors and a module's self calls of its includers' methods dispatch by type switch
+  # (decision 486): the override runs, send reaches a private one, a plain call does not, respond_to? sees it with true.
+  module DispMixin
+    def disp_label = "#{disp_name}:#{disp_size}:#{disp_tag}"
+
+    def disp_bump
+      self.disp_count = disp_count + 1
+      disp_count
+    end
+
+    def disp_mixed = "m:#{disp_hidden}"
+
+    private
+
+    def disp_hidden = "mod-hidden"
+  end
+
+  class DispBase
+    include DispMixin
+
+    attr_accessor :disp_count #: Integer
+
+    def initialize
+      @disp_count = 0
+    end
+
+    def disp_name = "base"
+
+    def disp_size = 1
+
+    def disp_tag = "t#{disp_secret}"
+
+    def disp_reveal = disp_secret
+
+    private
+
+    def disp_secret = "base-secret"
+  end
+
+  class DispKid < DispBase
+    def disp_name = "kid"
+
+    private
+
+    def disp_secret = "kid-secret"
+
+    def disp_hidden = "kid-hidden"
+  end
+
+  class DispGrandKid < DispKid
+    def disp_size = 3
+  end
+
+  class DispOther < DispBase
+    attr_reader :disp_extra #: String
+
+    def initialize
+      super
+      @disp_extra = "x"
+    end
+
+    def disp_tag = "other-#{disp_extra}"
+  end
+
+  class DispatchPrivateTest < Minitest::Test
+    def test_module_self_call_runs_the_override
+      assert_equal ["base:1:tbase-secret", "kid:1:tkid-secret", "kid:3:tkid-secret", "base:1:other-x"],
+                   [DispBase.new, DispKid.new, DispGrandKid.new, DispOther.new].map(&:disp_label)
+    end
+
+    def test_private_override_runs_from_the_base_body
+      assert_equal %w[base-secret kid-secret kid-secret], [DispBase.new, DispKid.new, DispGrandKid.new].map(&:disp_reveal)
+      assert_equal %w[m:mod-hidden m:kid-hidden m:kid-hidden], [DispBase.new, DispKid.new, DispGrandKid.new].map(&:disp_mixed)
+    end
+
+    def test_send_reaches_private_and_plain_call_does_not
+      kid = DispGrandKid.new
+      assert_equal "kid-secret", kid.send(:disp_secret)
+      assert_equal "kid-hidden", kid.send(:disp_hidden)
+      assert_equal "mod-hidden", DispBase.new.send(:disp_hidden)
+      [%i[disp_secret], %i[disp_hidden]].each do |(name)|
+        raised = begin
+          dynamic_ident(kid).public_send(name)
+          nil
+        rescue NoMethodError => e
+          e.class
+        end
+        assert_equal NoMethodError, raised
+      end
+      raised = begin
+        dynamic_ident(DispBase.new).disp_secret
+        nil
+      rescue NoMethodError => e
+        e.class
+      end
+      assert_equal NoMethodError, raised
+    end
+
+    def test_respond_to_private
+      kid = DispKid.new
+      assert_equal [false, true, false, true], [kid.respond_to?(:disp_secret), kid.respond_to?(:disp_secret, true),
+                                                kid.respond_to?(:disp_hidden), kid.respond_to?(:disp_hidden, true)]
+      assert_equal [true, true], [kid.respond_to?(:disp_reveal), kid.respond_to?(:disp_count=)]
+    end
+
+    def test_attr_accessor_through_the_module
+      kid = DispKid.new
+      assert_equal [1, 2], [kid.disp_bump, kid.disp_bump]
+      kid.disp_count = 10
+      assert_equal [11, 11], [kid.disp_bump, kid.disp_count]
+      assert_equal "x", DispOther.new.disp_extra
+    end
+  end
+end

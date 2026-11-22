@@ -739,8 +739,8 @@ func (f *fctx) dispatchCall(e *entry, recv expr, argList string) (string, bool) 
 	if code, ok := f.intOpCode(e.M, recv, argList); ok { // not a dispatch, but the same early exit (decision 381)
 		return code, true
 	}
-	if f.staticDef == e.M || f.plainCalls && recv.code == "self" {
-		return "", false
+	if f.staticDef == e.M || f.plainCalls && recv.code == "self" || staticPrivate(e.M) {
+		return "", false // a private method nothing overrides is its free func already, a module's over the caller's Self
 	}
 	owner := f.staticStruct(recv)
 	if owner == nil || !f.c.dispatchable(e.Owner, e.M) {
