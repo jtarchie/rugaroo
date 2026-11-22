@@ -135,11 +135,11 @@ lists them with workarounds.
 ## Performance and conformance
 
 A compiled program does no interpretation. Over the workloads in
-[`benchmarks/`](benchmarks/) rugaroo runs about 3.6x faster than MRI;
+[`benchmarks/`](benchmarks/) rugaroo runs about 3.7x faster than MRI;
 [BENCHMARKS.md](BENCHMARKS.md) has the table, the comparison columns (YJIT,
 spinel, Crystal, hand-written Go) and where rugaroo trails. On spinel's own
 74-program suite it builds 67 of the 73 that end under `--nil-check=runtime`
-(47 of them by default); those 67 last ran 19.2x faster than MRI (spinel: 20.8x on
+(47 of them by default); those 67 last ran 19.7x faster than MRI (spinel: 20.8x on
 the same programs).
 A hot program can go a further 0-15% with a profile of its own run
 (`-profile-out`, then `-pgo`: [docs/cli.md](docs/cli.md#make-a-hot-program-faster)).
