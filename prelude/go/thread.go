@@ -124,6 +124,20 @@ func rbThreadStart(t *Thread, run func() any) *Thread {
 	return t
 }
 
+// rbRunAsThread runs f on this goroutine as a Thread of its own, so Thread.current and its locals are not main's: net/http's handler goroutine for WEBrick, which runs each connection in its own Thread.
+func rbRunAsThread(f func()) {
+	t := &Thread{done: make(chan struct{})}
+	t.group.Store(rbMainThread.group.Load())
+	rbLiveThreads.Store(t, rbThreadSeq.Add(1))
+	id := rbGoID()
+	rbThreadOf.Store(id, t)
+	defer rbThreadOf.Delete(id)
+	defer rbRootFibers.Delete(t)
+	defer close(t.done)
+	defer rbLiveThreads.Delete(t)
+	f()
+}
+
 // rbThreadAbort ends a thread's or ractor's goroutine on a panic: SystemExit exits the program, anything else is reported on stderr as MRI does and returned wrapped, for join to re-raise.
 func rbThreadAbort(r any) any {
 	if e, ok := r.(SystemExitI); ok {

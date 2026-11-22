@@ -107,7 +107,7 @@ func (f *fctx) isA(n parser.Node, recv expr, cls *Class) string {
 	}
 	if v, ok := t.(TVar); ok && v.Name == "Self" && f.owner != nil {
 		t = TClass{C: f.owner}
-		if f.owner.IsModule { // self is some includer: ask it at run time
+		if f.owner.IsModule || f.owner.universal { // self is some includer, or any object in an Object reopening: ask it at run time
 			t = TAny{}
 		}
 	}

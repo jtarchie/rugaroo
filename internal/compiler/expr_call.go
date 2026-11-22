@@ -905,7 +905,16 @@ func (f *fctx) kernelCall(n parser.Node, name string, args []parser.Node) expr {
 
 // selfCall is a call on self typed Self: the owner's method, a top-level def, a Class method answered by the class
 // object a module extends, method_missing, a delegator's object, a subclass's override, else Object's.
+// anySelfIntrinsic: self in an Object reopening is any object, so to_s/inspect/== are its class's, not Kernel's.
+func (f *fctx) anySelfIntrinsic(name string) bool {
+	e := f.owner.lookup(name)
+	return f.owner.universal && untypedIntrinsics[name] && e != nil && e.Owner.universal && e.M.File != nil && e.M.File.isPrelude()
+}
+
 func (f *fctx) selfCall(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) expr {
+	if f.anySelfIntrinsic(name) {
+		return f.universalCall(n, recv, name, args, block)
+	}
 	if e := f.owner.lookup(name); e != nil && !f.c.topOverKernel(e, name) {
 		return f.selfEntryCall(n, e, recv, args, block)
 	}

@@ -353,6 +353,10 @@ class IO < Object
     return Integer(self.fd)
   }
 
+  # ponytail: answers at once, as BasicSocket's does, and the read after it blocks; upgrade: poll(2) the fd with the timeout.
+  #: (?Numeric?) -> self
+  def wait_readable(timeout = nil) = self
+
   #: () -> Integer
   def to_i = fileno
 

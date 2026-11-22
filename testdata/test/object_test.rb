@@ -145,6 +145,13 @@ class NilClass
   def object_test_present? = false
 end
 
+# An Object reopening's self is any object: its own to_s and is_a?, not Object's (snails' Object#blank?).
+class Object
+  def object_test_text = to_s
+  def object_test_listish = is_a?(Array) || is_a?(Hash)
+  def object_test_spaces? = to_s.strip.empty?
+end
+
 # A nil T? receiver's Object method gets nil itself as self (decision 362), as mspec's `x.should == nil`.
 class ObjectNilSelf
   #: (untyped) -> void
@@ -7007,6 +7014,14 @@ module ObjectTests
 
     def test_module_spaceship
       assert_equal([-1, 1, 0, nil, nil], [IOError <=> StandardError, StandardError <=> IOError, IOError <=> IOError, IOError <=> ArgumentError, IOError <=> 1])
+    end
+  end
+
+  class ObjectReopenSelfTest < Minitest::Test
+    def test_self_is_the_receiver
+      assert_equal ["abc", "5", "x", "[1]", ""], ["abc".object_test_text, 5.object_test_text, :x.object_test_text, [1].object_test_text, nil.object_test_text]
+      assert_equal [true, true, false, false], [[].object_test_listish, {}.object_test_listish, "".object_test_listish, 3.object_test_listish]
+      assert_equal [true, false, true], ["  ".object_test_spaces?, "a".object_test_spaces?, nil.object_test_spaces?]
     end
   end
 end

@@ -1,0 +1,43 @@
+#!/bin/bash
+# usage: ./setup workdir spinel-checkout   Builds snails-benchmark's scenario app (GET /up, GET /items/:id over 10,000 SQLite rows) three ways: Spinel, rugaroo, MRI.
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+W=$1
+SPINEL=$2
+SNAILS_REV=91b921e5408bbb1b3bdd75e41ea039a6d9b69d66 # one core for every contender; the benchmark pins v1.0.0-rc.2
+BENCH_REV=1ea5860cabe5be7b36f8eea3d7f844d1bc55e7e6
+mkdir -p "$W"
+[ -d "$W/snails" ] || git clone -q https://github.com/snails-rb/snails "$W/snails"
+git -C "$W/snails" fetch -q --depth 1 origin "$SNAILS_REV" 2>/dev/null || true
+git -C "$W/snails" checkout -q "$SNAILS_REV"
+[ -d "$W/snails-benchmark" ] || git clone -q https://github.com/snails-rb/snails-benchmark "$W/snails-benchmark"
+git -C "$W/snails-benchmark" checkout -q "$BENCH_REV"
+app=$W/snails-benchmark/apps/scenario/snails
+
+# The fixture, as the benchmark's image build makes it.
+rm -f "$W/items.sqlite3"
+cat "$app/db/schema.sql" "$app/db/seed.sql" | sqlite3 -bail "$W/items.sqlite3"
+
+# Spinel: the app and core unchanged, built as `snails build-binary` does (spin build); no jemalloc on this host.
+S=$W/bench-spinel
+rm -rf "$S"
+cp -R "$app" "$S"
+cp -R "$W/snails/runtime" "$S/snails-core"
+printf '[package]\n' > "$S/spin.toml"
+(cd "$S" && PATH="$SPINEL/bin:$PATH" "$SPINEL/bin/spin" build)
+cp "$S/build/bin/snails-scenario" "$W/snails-spinel"
+
+# rugaroo (and MRI): the same app with overrides/snails' upstream candidates and stand-ins.
+R=$W/bench-rugaroo
+rm -rf "$R"
+cp -R "$app" "$R"
+cp -R "$W/snails/runtime" "$R/snails-core"
+for p in "$here"/../patches/*.patch; do patch -s -d "$R/snails-core" -p2 < "$p"; done
+export RUBYLIB="$here/../../../testdata/run/spinel_ffi_mri" # MRI reads ffi_* through the shim; rugaroo reads it itself (decision 375)
+mkdir -p "$R/shim" "$R/sig"
+cp "$here/../lib/"*.rb "$R/shim/"
+cp "$here/../sig/"*.rbs "$R/sig/"
+cp "$here/serve.rb" "$R/serve.rb"
+go build -o "$W/rugaroo" "$here/../../../cmd/rugaroo"
+(cd "$R" && "$W/rugaroo" build -gem snails-core -gem app -gem gen -o "$W/snails-rugaroo" serve.rb)
+ls -la "$W/snails-spinel" "$W/snails-rugaroo"

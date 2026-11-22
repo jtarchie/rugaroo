@@ -72,12 +72,12 @@ module WEBrick
       return Ref(String(strings.Join(values, ", ")))
     }
 
-    #: () -> Hash[String, String]
-    def header = %x{ rbHTTPHeaderHash(self.r.Header) }
+    #: () -> Hash[String, Array[String]]
+    def header = %x{ rbHTTPHeaderFields(self.r.Header) }
 
     #: () { (String, String) -> void } -> void
     def each
-      header.each { |k, v| yield k, v }
+      header.each { |k, v| yield k, v.join(", ") }
     end
 
     #: () -> Array[Cookie]
@@ -193,7 +193,8 @@ module WEBrick
         rbSpawned.Store(true)
         self.srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
           rbTagGoroutine() // net/http's connection goroutine: its own identity, not the server thread's
-          rbWEBrickServe(w, r, blk)
+          // ponytail: a Thread per request; MRI's WEBrick keeps one per connection, so keep-alive requests share its locals
+          rbRunAsThread(func() { rbWEBrickServe(w, r, blk) })
         })
         if err := self.srv.Serve(self.ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
           panic(NewIOError(Ref(String(err.Error()))))

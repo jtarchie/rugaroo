@@ -374,6 +374,47 @@ module NetTests
       server.shutdown
       thread.join
     end
+
+    # A repeated header keeps its values apart in `header`; `each` and `[]` join them, as MRI's WEBrick does.
+    def test_repeated_header_fields
+      got = Queue.new #: Queue[String]
+      server = WEBrick::HTTPServer.new(Port: 0, BindAddress: "127.0.0.1")
+      server.mount_proc("/") do |req, res|
+        pairs = [] #: Array[String]
+        req.each { |k, v| pairs << "#{k}=#{v}" if k == "x-a" }
+        got << "#{req.header["x-a"].inspect} #{pairs.join} #{req["x-a"]}"
+        res.body = "ok"
+      end
+      thread = Thread.new { server.start }
+      assert_equal "200", net_status(server.config[:Port], "GET / HTTP/1.1\r\nHost: x\r\nX-A: 1\r\nX-A: 2\r\nConnection: close\r\n\r\n")
+      assert_equal '["1", "2"] x-a=1, 2 1, 2', got.pop
+      server.shutdown
+      thread.join
+    end
+
+    # Concurrent requests each run in a Thread of their own: one request's thread-locals are not another's (Snails keeps its DB lease there).
+    def test_handler_thread_locals_are_per_request
+      bad = Queue.new #: Queue[String]
+      server = WEBrick::HTTPServer.new(Port: 0, BindAddress: "127.0.0.1")
+      server.mount_proc("/") do |req, res|
+        Thread.current[:net_test_path] = req.path
+        sleep 0.002
+        bad << req.path unless Thread.current[:net_test_path] == req.path && Thread.current != Thread.main
+        res.body = "ok"
+      end
+      thread = Thread.new { server.start }
+      port = server.config[:Port]
+      clients = (1..8).map do |t|
+        Thread.new do
+          http = Net::HTTP.new("127.0.0.1", port)
+          10.times { |i| http.get("/#{t}-#{i}") }
+        end
+      end
+      clients.each(&:join)
+      assert_equal 0, bad.size
+      server.shutdown
+      thread.join
+    end
   end
 
   # Net::HTTP against a raw TCPServer: the bytes on the wire, which WEBrick hides.
@@ -428,6 +469,20 @@ module NetTests
           assert_equal "HTTP request path is empty", e.message
         end
       end
+    end
+
+    # A refused connection is MRI's Errno::ECONNREFUSED with its message, not Net::OpenTimeout.
+    def test_refused_is_errno
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      server.close
+      got = begin
+        Net::HTTP.new("127.0.0.1", port).get("/")
+        "no error"
+      rescue SystemCallError, Timeout::Error => e
+        "#{e.class}: #{e.message.gsub(port.to_s, "PORT")}"
+      end
+      assert_equal "Errno::ECONNREFUSED: Failed to open TCP connection to 127.0.0.1:PORT (Connection refused - connect(2) for \"127.0.0.1\" port PORT)", got
     end
 
     # A request must not leave its keep-alive connection idle (an fd and two goroutines each): the server sees every one close.
