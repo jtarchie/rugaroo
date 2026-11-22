@@ -226,3 +226,69 @@ Stage 3 adds hoisted arguments and multi-statement bodies, reusing `stmtSlots` /
 - /Users/jtarchie/workspace/transpiler/internal/compiler/gen_method.go
 - /Users/jtarchie/workspace/transpiler/internal/compiler/expr_callcode.go
 - /Users/jtarchie/workspace/transpiler/prelude/integer.rb
+
+## Stage 0 results (2026-11-22)
+
+*Measured at d7808001 on macOS arm64, Go 1.27.4, a loaded machine (load 7-20; instruction counts are unaffected, wall times are noisy). Instructions retired with `/usr/bin/time -l`, GOMAXPROCS=1, two runs each.*
+
+**Recommendation: do not build stage 2 (pasting). Replace it with a synthetic-PGO route**: the compiler writes Go's preprocessed profile text naming the hot call edges it chose, and passes it to the main package only (`-gcflags=<module>=-pgoprofile=FILE`). It got the same inlining as a real profile, kept every backtrace frame, needed no run, recompiled nothing but `main`, and used the standard library only. It came within 4% of the hand paste on `bm_inline` (739M against 710M). The one cost is that the flag and the format are the go command's internal contract with the compiler, not a public interface; a `TestInlineCosts`-style test that builds one program and greps `-m` would catch a Go release that changes them.
+
+### E3: PGO instead of pasting
+
+**(a) A real profile inlines both methods.** `bm_inline` built with `-nil-check=runtime`:
+
+| Build | `Vec2#length_sq` / `#dot` inlined? | Instructions (M) |
+|---|---|---|
+| plain | no / no | 1,209, 1,209 |
+| `-profile-out` of the benchmark itself (0.3 s run, 9 samples), then `-pgo` | no / yes | 1,093, 1,089 |
+| `-profile-out` of the same program with `n` 20× (2.2 s, 216 samples), then `-pgo` | yes / yes (and `Counter#increment`) | 739, 740 |
+| hand paste (the design's figure) | pasted | 710 |
+
+A run too short for the 100 Hz sampler misses edges: the 0.3 s profile never sampled `length_sq`'s call site. Line offsets in a profile are relative to the function's first line, so a longer run of the same code gives a profile that fits the real program.
+
+**(b) A `-pgo` build recompiles every dependency for each distinct profile.** `go build -x` on bm_inline's module: with no profile only `main` compiles. A first build with a profile compiles 66 packages (the standard library and the module's dependencies), because the go command passes `-pgoprofile=$WORK/bNNN/pgo.preprofile` to every compile and the profile's content is part of each package's cache key. The same profile again compiles nothing. A different profile compiles all 66 again.
+- Small program (bm_inline, 107 KB main.go): 5.3 s and 5.4 s for two fresh profiles, against 0.25 s cached and about 1 s for `main` alone.
+- liquid (example 124 with `-trace`, 4.7 MB main.go, 132 packages in the build): 24.7 s with a new profile, against 12-19 s for `main` alone (with 66 of the dependencies already compiled under that profile).
+- A 100 MB program (rubocop: its `main` compile is 7-10 minutes): the dependency rebuild is set by the dependency list, not the program's size, so about 5-15 s, under 3% of the build (estimate). What grows with the program is the extra inlining inside `main`, which depends on how many edges are hot; not measured.
+
+Because every program has its own profile, the whole-program route pays the dependency rebuild once per program, and again whenever its profile changes.
+
+**(c) A synthetic profile works, and the main-only route avoids the rebuild.**
+- Go's compiler reads two formats. One is pprof: a gzipped protobuf, which could be written with `compress/gzip` and a hand encoder of about 150 lines. The other is the text format that `go tool preprofile` writes, `GO PREPROFILE V1` followed by records of caller, callee, and `offset weight` (`cmd/internal/pgo/serialize.go`). The compiler takes either (`pgoir/irgraph.go:130`).
+- `go build -pgo=FILE` accepts only pprof (its preprofile step rejects the text form: "unknown wire type: 7").
+- `-gcflags=gen=-pgoprofile=FILE` gives the profile to the `main` package alone: **1.04 s, one package compiled**, the standard library cached as usual.
+- A nine-line text file naming `main.main → main.Vec2_LengthSq` (offset 6), `→ main.Vec2_Dot` (17) and `→ main.Counter_Increment` (26), each with weight 100, inlined all three (`-m`: "inlining call to Vec2_LengthSq"). It ran 739M and 740M instructions, the same as the real profile.
+- Backtraces are kept. An overflow inside the PGO-inlined `length_sq` reports the same three lines as the uninlined build (`'Integer#*'`, `'Vec2#length_sq'`, `'<main>'`), because `runtime.CallersFrames` expands inlined frames.
+
+What a compiler-side version needs:
+- **The edges.** The same eligibility as the paste: proved direct calls to small leaf methods costing 81-320 by the E2 estimate.
+- **Offsets.** The call's line minus the caller's first line, both after `//line`. `main` has no `//line` of its own, so its first line comes from the directive before it; the compiler would emit one.
+- **Cache keys.** The go command keys the cache on the flag string, not the file's contents, so the file name must carry a hash of its contents.
+- **The flag.** `-pgo FILE` (decision 449) stays the route for a real profile; the synthetic file and a user's profile would be merged or one would win.
+
+### E1: `/*line*/` comments around a pasted expression
+
+`main.go` of a `Vec2` program with `length_sq` pasted by hand at `e1.rb:17`, overflowing in `@x * @x` (`e1.rb:10`):
+
+| Form | Backtrace |
+|---|---|
+| MRI frames, today's rugaroo (no paste) | `e1.rb:10:in 'Integer#*'` / `from e1.rb:10:in 'Vec2#length_sq'` / `from e1.rb:17:in '<main>'` |
+| paste, statement `//line` only | `e1.rb:17:in 'Integer#*'` / `from e1.rb:17:in '<main>'` |
+| paste with `/*line e1.rb:10*/ … /*line e1.rb:17*/` | `e1.rb:10:in 'Integer#*'` / `from e1.rb:10:in '<main>'` |
+
+The comments survive `go/printer`: gofmt moves the opening one in front of the preceding comma (`rb_main /*line e1.rb:10*/, Integer.Op_plus(…)`), and it still takes effect. But the callee's line then also becomes the caller's frame line (`e1.rb:10:in '<main>'`), which is wrong in a different way: the frame names `<main>` at a line inside `Vec2#length_sq`. Neither paste form gives MRI's frames, and synthetic PGO does.
+
+### E2: the cost estimator
+
+A scratch estimator: 1 per AST node, 57 per call to a function that is not inlinable or is unknown, a known callee's own estimate when it is 80 or less, and 1 per `panic`. Compared with `go build -gcflags=-m=2` ("can inline F with cost N" / "cost N exceeds budget 80"):
+
+| Program | Functions compared | Same side of 80 | Within ±10 | Real 81-320 also estimated 81-320 |
+|---|---|---|---|---|
+| benchmarks/*.rb (21 that build without a gem) | 289-1,294 each | 95.8%-98.5% | 69%-79% | 73%-93% |
+| examples/124_liquid (`-trace`) | 13,979 | 97.9% | 66.7% | 90.9% (4,161 of 4,577) |
+
+It is right about which side of 80 a function falls in, but about one function in four is more than 10 off. Treating intrinsics (`bits.Mul64`, `len`, ...) as one node did not help (agreement fell by up to 0.8 points). Good enough to choose PGO edges, where a wrong guess costs only some inlining; it would not be good enough to promise a paste.
+
+### E4
+
+Skipped: E3 makes pasting unnecessary. A sweep of the paste cap (200/320/500) would have needed the paste pass, spinel's suite at each cap (instructions and binary size), and rubocop's compile time. With synthetic PGO, the equivalent knob is how many edges to name and Go's hot-site budget (2,000, `-d=pgoinlinebudget`), and the same sweep applies.
