@@ -7,22 +7,31 @@ import (
 )
 
 // subBlockLastMatch is `s.sub(re) { $1 }` / gsub in a frame that reads $~ or $1: MRI sets them to each match while the
-// block runs, so the block runner writes the frame's last match first (decision 241).
+// block runs, so the block runner writes the frame's last match first (decision 241); a String block anywhere skips the untyped to_s (decision 489).
 func (f *fctx) subBlockLastMatch(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
 	b, ok := block.(*parser.BlockNode)
-	if f.lastMatch == "" || !ok || name != "sub" && name != "gsub" || len(args) != 1 || !isClass(recv.typ, "String") {
+	if !ok || name != "sub" && name != "gsub" || len(args) != 1 || !isClass(recv.typ, "String") {
 		return expr{}, false
 	}
 	e := f.c.classes["String"].lookup("__" + name + "_block")
 	if e == nil || e.M.Block == nil {
 		return expr{}, false
 	}
+	str := f.blockGivesString(n, b, e.M.Block, recv.bin)
+	if f.lastMatch == "" && !str {
+		return expr{}, false
+	}
 	r := f.newTmp()
 	f.emit("%s := %s", r, recv.code)
 	pat := f.newTmp()
 	f.emit("%s := rbPattern(%s)", pat, f.coerce(args[0], f.genExpr(args[0], nil), TAny{}))
+	sig, suffix := e.M.Block, ""
+	if str { // a String replacement needs no to_s through an untyped value (decision 489)
+		s := *sig
+		s.Ret, sig, suffix = f.cls("String"), &s, "S"
+	}
 	f.binNext = recv.bin // a binary String's matches and block param are bytes (decision 352)
-	blk := f.genClosure(n, b, e.M.Block, map[string]Type{})
+	blk := f.genClosure(n, b, sig, map[string]Type{})
 	count := "-1"
 	if name == "sub" {
 		count = "1"
@@ -31,8 +40,28 @@ func (f *fctx) subBlockLastMatch(n parser.Node, recv expr, name string, args []p
 	if recv.bin {
 		sub = "rbReSubBin"
 	}
-	code := fmt.Sprintf("String(%s(%s, string(%s), %s, rbReBlockLM(&%s, %s, %s)))", sub, pat, r, count, f.lastMatch, pat, blk)
+	repl := fmt.Sprintf("rbReBlock%s(%s)", suffix, blk)
+	if f.lastMatch != "" {
+		repl = fmt.Sprintf("rbReBlockLM%s(&%s, %s, %s)", suffix, f.lastMatch, pat, blk)
+	}
+	code := fmt.Sprintf("String(%s(%s, string(%s), %s, %s))", sub, pat, r, count, repl)
 	return expr{code: code, typ: f.cls("String"), bin: recv.bin, binDeps: recv.binDeps}, true
+}
+
+// blockGivesString: the block's value is always a String, so MRI's to_s of it is the String itself.
+func (f *fctx) blockGivesString(n parser.Node, b *parser.BlockNode, sig *BlockSig, bin bool) bool {
+	var got Type
+	err := f.try(func() {
+		f.probe(func() {
+			s := *sig
+			s.Ret = TVar{Name: "U"}
+			env := map[string]Type{}
+			f.binNext = bin
+			f.genClosure(n, b, &s, env)
+			got = env["U"]
+		})
+	})
+	return err == nil && isClass(got, "String")
 }
 
 // scanBlockLastMatch is `s.scan(re) { ... Regexp.last_match ... }` with a block of no parameters, in a frame that reads

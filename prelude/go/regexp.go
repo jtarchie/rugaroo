@@ -613,6 +613,13 @@ func rbReBlock(blk func(String) any) func(s string, loc []int, names []string) s
 	}
 }
 
+// rbReBlockS is rbReBlock for a block whose value is always a String (decision 489).
+func rbReBlockS(blk func(String) String) func(s string, loc []int, names []string) string {
+	return func(s string, loc []int, _ []string) string {
+		return string(blk(String(s[loc[0]:loc[1]])))
+	}
+}
+
 // rbReHash replaces a match by its value in h (sub/gsub with a Hash).
 func rbReHash(h *Hash[String, String]) func(s string, loc []int, names []string) string {
 	return func(s string, loc []int, _ []string) string {
@@ -631,6 +638,15 @@ func rbReBlockLM(lm ***MatchData, re *Regexp, blk func(String) any) func(s strin
 	}
 }
 
+// rbReBlockLMS is rbReBlockLM for a block whose value is always a String (decision 489).
+func rbReBlockLMS(lm ***MatchData, re *Regexp, blk func(String) String) func(s string, loc []int, names []string) string {
+	return func(s string, loc []int, _ []string) string {
+		m := rbMatchAt(re, s, loc)
+		*lm = &m
+		return string(blk(String(s[loc[0]:loc[1]])))
+	}
+}
+
 // rbReSub replaces the first n matches of re in s (all when n < 0); rxRegexp's FindAll applies the Onigmo corrections.
 func rbReSub(re *Regexp, s string, n int, repl func(s string, loc []int, names []string) string) string {
 	return rbReplaceLocs(s, rbFindAll(re, s, n), re.rx().SubexpNames(), repl)
@@ -644,6 +660,7 @@ func rbReSubBin(re *Regexp, s string, n int, repl func(s string, loc []int, name
 // rbReplaceLocs is s with each match at locs replaced by repl's text.
 func rbReplaceLocs(s string, locs [][]int, names []string, repl func(s string, loc []int, names []string) string) string {
 	var b strings.Builder
+	b.Grow(len(s))
 	last := 0
 	for _, loc := range locs {
 		b.WriteString(s[last:loc[0]])

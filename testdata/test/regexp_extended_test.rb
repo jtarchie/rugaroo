@@ -343,4 +343,40 @@ module RegexpExtendedTests
     end
   end
 
+  # A gsub/sub block's value replaces each match through its to_s; a String block needs none (decision 489).
+  class GsubBlockTest < Minitest::Test
+    class Tag
+      #: (String) -> void
+      def initialize(s)
+        @s = s
+      end
+
+      #: () -> String
+      def to_s = "<#{@s}>"
+    end
+
+    def test_string_block
+      assert_equal "A-B-c", "a-b-c".gsub(/[ab]/) { |m| m.upcase }
+      assert_equal "A-b-c", "a-b-c".sub(/[ab]/) { |m| m.upcase }
+      assert_equal "xx-xx", "ab-cd".gsub(/\w+/) { "xx" }
+      assert_equal "", "".gsub(/a/) { |m| m * 2 }
+      assert_equal "nothing", "nothing".gsub(/z/) { |m| m + m }
+      assert_equal "ëë-é", "ë-é".sub("ë") { |m| m * 2 }
+      words = %w[one two]
+      assert_equal "one two !", "a b !".gsub(/\w/) { words.shift || "" }
+    end
+
+    def test_other_blocks
+      assert_equal "3-3-c", "aaa-bbb-c".gsub(/[ab]+/) { |m| m.size }
+      assert_equal "--c", "a-b-c".gsub(/[ab]/) { nil }
+      assert_equal "<a>-<b>-c", "a-b-c".gsub(/[ab]/) { |m| Tag.new(m) }
+      assert_equal "1-b", "a-b".sub(/\w/) { |m| m == "a" ? 1 : m }
+      assert_equal "1.5x", "ax".sub("a") { 1.5 }
+    end
+
+    def test_last_match
+      assert_equal "[b]-[d]", "ab-cd".gsub(/\w(\w)/) { "[#{$1}]" }
+      assert_equal "2-cd", "ab-cd".sub(/(\w)(\w)/) { $~.size - 1 }
+    end
+  end
 end
