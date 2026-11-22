@@ -113,3 +113,29 @@ module FiberTests
     end
   end
 end
+
+module FiberTests
+  # The root fiber is made once per thread, then looked up (decision 488).
+  class FiberRootReuseTest < Minitest::Test
+    #: () -> Integer
+    def fiber_sum_many
+      f = Fiber.new do |x|
+        total = 0
+        loop { x = Fiber.yield(total += x) }
+      end
+      last = 0
+      1000.times { |i| last = f.resume(i) }
+      last
+    end
+
+    def test_main_thread
+      assert_equal 499_500, fiber_sum_many
+      assert_equal Fiber.current, Fiber.current
+    end
+
+    def test_threads
+      sums = Array.new(4) { Thread.new { [fiber_sum_many, Fiber.current == Fiber.current] } }.map(&:value)
+      assert_equal [[499_500, true]] * 4, sums
+    end
+  end
+end

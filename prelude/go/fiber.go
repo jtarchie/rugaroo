@@ -31,7 +31,11 @@ func rbCurrentFiber() *Fiber {
 	if t := (*rbGoTag)(rbGetGoTag()); t != nil && t.fiber != nil {
 		return t.fiber
 	}
-	f, _ := rbRootFibers.LoadOrStore(rbCurrentThread(), &Fiber{state: rbFiberResumed})
+	t := rbCurrentThread()
+	if f, ok := rbRootFibers.Load(t); ok { // LoadOrStore's argument would be a new Fiber on every call (decision 488)
+		return f.(*Fiber)
+	}
+	f, _ := rbRootFibers.LoadOrStore(t, &Fiber{state: rbFiberResumed})
 	return f.(*Fiber)
 }
 
