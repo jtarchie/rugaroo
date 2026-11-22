@@ -37,6 +37,9 @@ func (f *fctx) fusePure(n parser.Node) bool {
 		return ok && len(s.Body) == 1 && f.fusePure(s.Body[0])
 	case *parser.CallNode:
 		args := callArgs(n)
+		if n.Name == "[]" {
+			return f.fuseElemRead(n)
+		}
 		if n.Block != nil || n.Receiver == nil || !fuseOps[n.Name] || len(args) != 1 || n.IsSAFE_NAVIGATION() {
 			return false
 		}
@@ -53,6 +56,22 @@ func (f *fctx) fusePure(n parser.Node) bool {
 		return true
 	}
 	return false
+}
+
+// fuseElemRead: `vals[j]` of an Array of Integers or Floats only reads (its nil past the end raises in the op, as unfused; decision 489).
+func (f *fctx) fuseElemRead(n *parser.CallNode) bool {
+	args := callArgs(n)
+	if n.Block != nil || n.IsSAFE_NAVIGATION() || len(args) != 1 || !isHashVarRead(n.Receiver) || !f.fusePure(args[0]) {
+		return false
+	}
+	var rt, it Type
+	f.probe(func() { rt, it = f.genExpr(n.Receiver, nil).typ, f.genExpr(args[0], nil).typ })
+	at, ok := rt.(TClass)
+	if !ok || at.C != f.c.classes["Array"] || len(at.Args) != 1 || !isClass(at.Args[0], "Integer") && !isClass(at.Args[0], "Float") || !isClass(stripOpt(it), "Integer") {
+		return false
+	}
+	e := at.C.lookup("[]")
+	return e != nil && e.M.Owner == at.C && e.M.File != nil && e.M.File.isPrelude()
 }
 
 // fuseResult: `x op value` must be a V again (Integer + Float is a Float, which a V slot cannot hold).

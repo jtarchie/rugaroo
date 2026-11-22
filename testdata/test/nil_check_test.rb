@@ -160,4 +160,54 @@ module NilCheckTests
       assert raised? { base_name(base(0)) }
     end
   end
+
+  # `a[i] op= b[j]`: a nilable element operand still updates in place, and raises MRI's error when it is nil (decision 489).
+  class ElemOpAssignNilableTest < Minitest::Test
+    def test_in_place
+      sums = [0.0, 1.0]
+      vals = [0.5, 2.0]
+      counts = [10, 20]
+      ints = [1, 2]
+      bins = [1, 1, 0]
+      bins.each_with_index do |b, j|
+        sums[b] += vals[j % 2]
+        counts[b] += ints[j % 2]
+      end
+      assert_equal [0.5, 3.5], sums
+      assert_equal [11, 23], counts
+      assert_equal 7.5, (sums[1] += vals[1] * 2)
+      sums[0] -= vals[0]
+      counts[1] *= ints[1]
+      assert_equal [[0.0, 7.5], [11, 46]], [sums, counts]
+    end
+
+    def test_nil_operand
+      sums = [0.0, 1.0]
+      vals = [0.5]
+      counts = [10]
+      ints = [3]
+      k = 5
+      begin
+        sums[1] += vals[k]
+      rescue TypeError => e
+        assert_equal [TypeError, "nil can't be coerced into Float", [0.0, 1.0]], [e.class, e.message, sums]
+      end
+      begin
+        counts[0] += ints[-k]
+      rescue TypeError => e
+        assert_equal [TypeError, "nil can't be coerced into Integer", [10]], [e.class, e.message, counts]
+      end
+      sums.freeze
+      begin
+        sums[0] += vals[k]
+      rescue TypeError => e
+        assert_equal "nil can't be coerced into Float", e.message
+      end
+      begin
+        sums[0] += vals[0]
+      rescue FrozenError => e
+        assert_equal FrozenError, e.class
+      end
+    end
+  end
 end
