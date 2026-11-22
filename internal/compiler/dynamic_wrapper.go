@@ -249,7 +249,7 @@ func (c *Compiler) dynShareable(w dynWrapper, name string) (iface, body string, 
 		// a class object's body already calls the owner's plain func (Module_ConstGet(self, ...)): the same text serves every metaclass
 		iface, rest = e.Owner.objType(), plainCut(rest)
 	}
-	if mod := e.Owner; iface == "" && mod.IsModule && !mod.universal && len(mod.TypeParams) == 0 && (c.dispatchable(mod, e.M) || !c.env.NoModuleArms && !sigMentions(e.M, cls) && !c.constraintNamesSelf(mod)) {
+	if mod := e.Owner; iface == "" && c.moduleArm(cls, e) {
 		// a module method's body over the constraint itself (decision 208), the same for every includer (decision
 		// 234): self asserted to the constraint. Dispatched or not: a private one was a wrapper on each includer, and an
 		// instantiation of the module's body per includer's interface (decision 485)
@@ -273,6 +273,16 @@ func (c *Compiler) dynShareable(w dynWrapper, name string) (iface, body string, 
 		return "", "", false
 	}
 	return iface, body, true
+}
+
+// moduleArm reports a module method whose wrapper body can take the module's constraint as Self, the same for every
+// includer: dispatched (decision 234), or by decision 208's condition (decision 485).
+func (c *Compiler) moduleArm(cls *Class, e *entry) bool {
+	mod := e.Owner
+	if !mod.IsModule || mod.universal || len(mod.TypeParams) > 0 {
+		return false
+	}
+	return c.dispatchable(mod, e.M) || !c.env.NoModuleArms && !sigMentions(e.M, cls) && !c.constraintNamesSelf(mod)
 }
 
 // cutPlainSelf is `\b<lit>\w+\(self\b` removed from s (build) and counted, without the regexp engine: the bodies are scanned once per wrapper.
