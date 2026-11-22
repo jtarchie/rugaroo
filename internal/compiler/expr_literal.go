@@ -180,8 +180,10 @@ func (f *fctx) genInterp(n *parser.InterpolatedStringNode) expr {
 // interpPart is one piece of an interpolation: its Go String expression, and what interpAppend needs to build it in place.
 type interpPart struct {
 	code string
-	kind byte   // 'l' a literal, 's' a String value, 'i' an Integer with the prelude's to_s, 'o' anything else
-	int  string // kind 'i': the Integer expression, written as digits
+	kind byte        // 'l' a literal, 's' a String value, 'i' an Integer with the prelude's to_s, 'o' anything else
+	int  string      // kind 'i': the Integer expression, written as digits
+	node parser.Node // an embedded part's expression; nil for a literal
+	held bool        // already read into a temporary
 }
 
 // interpParts appends the Go string pieces of an interpolation's parts.
@@ -198,20 +200,103 @@ func (f *fctx) interpParts(ps []parser.Node, parts []interpPart) []interpPart {
 			if st == nil || len(st.Body) != 1 {
 				f.errorf(p, "interpolation must contain a single expression")
 			}
+			mark := f.buf.Len()
 			e := f.genExpr(st.Body[0], nil)
-			ip := interpPart{code: f.toS(st.Body[0], e), kind: 'o'}
+			ip := interpPart{code: f.toS(st.Body[0], e), kind: 'o', node: st.Body[0]}
 			switch {
 			case isClass(e.typ, "String"):
 				ip.kind = 's'
 			case f.plainIntToS(e, ip.code):
 				ip.kind, ip.int = 'i', e.code
 			}
+			f.pinInterp(mark, parts, ip)
 			parts = append(parts, ip)
 		default:
 			f.c.unsupported(f.f, p)
 		}
 	}
 	return parts
+}
+
+// pinInterp: MRI reads each part at its turn, Go orders only calls and hoists statements, so earlier parts a later one may change go to temporaries (decision 489).
+func (f *fctx) pinInterp(mark int, parts []interpPart, later interpPart) {
+	emitted := f.emittedSince(mark)
+	if !emitted && later.kind != 'o' && pureRead(later.node) {
+		return
+	}
+	f.insertAt(mark, func() {
+		for i, p := range parts {
+			if p.kind == 'l' || p.held || !emitted && !f.callVisible(p.node) || appendsInPlace(later.node, p.node) || f.localKept(p.node, later.node) {
+				continue
+			}
+			if p.kind == 'i' {
+				if pinnable(p.int) {
+					t := f.newTmp()
+					f.emit("%s := %s", t, p.int)
+					parts[i].int, parts[i].code, parts[i].held = t, "Integer.ToS("+t+")", true // plainIntToS's spelling
+				}
+				continue
+			}
+			if pinnable(p.code) {
+				t := f.newTmp()
+				f.emit("%s := %s", t, p.code)
+				parts[i].code, parts[i].held = t, true
+			}
+		}
+	})
+}
+
+// pureRead: no part read after n can see a change made by evaluating it.
+func pureRead(n parser.Node) bool {
+	switch n.(type) {
+	case *parser.LocalVariableReadNode, *parser.InstanceVariableReadNode, *parser.GlobalVariableReadNode,
+		*parser.ClassVariableReadNode, *parser.ConstantReadNode, *parser.SelfNode:
+		return true
+	}
+	return sideEffectFree(n)
+}
+
+// callVisible: n reads memory a call can change; only a block or lambda can assign a local of the current scope.
+func (f *fctx) callVisible(n parser.Node) bool {
+	switch n := n.(type) {
+	case *parser.InstanceVariableReadNode, *parser.GlobalVariableReadNode, *parser.ClassVariableReadNode:
+		return true
+	case *parser.LocalVariableReadNode:
+		return n.Depth > 0 || f.scopeRoot == nil || writtenInBlock(f.scopeRoot, n.Name, false)
+	}
+	return false
+}
+
+// localKept: earlier reads a local of this scope that neither later nor any block assigns, so later's statements cannot change it.
+func (f *fctx) localKept(earlier, later parser.Node) bool {
+	lv, ok := earlier.(*parser.LocalVariableReadNode)
+	return ok && !f.callVisible(lv) && !anyNode(later, func(x parser.Node) bool { return assignsLocalHere(x, lv.Name) })
+}
+
+// appendsInPlace: later appends to (or setbytes) the local or ivar that earlier reads.
+func appendsInPlace(later, earlier parser.Node) bool {
+	var name string
+	switch e := earlier.(type) {
+	case *parser.LocalVariableReadNode:
+		name = e.Name
+	case *parser.InstanceVariableReadNode:
+		name = e.Name
+	default:
+		return false
+	}
+	return anyNode(later, func(x parser.Node) bool {
+		c, ok := x.(*parser.CallNode)
+		if !ok || !strAppendNames[c.Name] && c.Name != "setbyte" {
+			return false
+		}
+		switch r := c.Receiver.(type) {
+		case *parser.LocalVariableReadNode:
+			return r.Name == name
+		case *parser.InstanceVariableReadNode:
+			return r.Name == name
+		}
+		return false
+	})
 }
 
 // plainIntToS: e is a 64-bit Integer whose to_s compiled to the prelude's own (no program or gem redefines Integer#to_s),

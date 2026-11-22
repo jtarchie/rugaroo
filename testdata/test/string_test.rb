@@ -3141,4 +3141,64 @@ module StringTests
       assert_equal [233, 97], "éa".codepoints
     end
   end
+
+  # Each interpolated part is evaluated, and its value taken, at its turn (decision 489).
+  class InterpOrderTest < Minitest::Test
+    def setup
+      @n = 1
+      @s = "p"
+    end
+
+    #: () -> Integer
+    def bump
+      @n += 1
+    end
+
+    #: () -> String
+    def swap
+      @s = "q"
+    end
+
+    def test_assignments
+      j = 0
+      assert_equal "a1b2c2", "a#{j += 1}b#{j += 1}c#{j}"
+      t = "q"
+      assert_equal "qzz", "#{t}#{t = "z"}#{t}"
+      k = 1
+      assert_equal "12z", "#{k}#{k += 1}#{"#{t}"}"
+      m = 5
+      assert_equal "5-6-x6", "#{m}-#{m += 1}-#{"x#{m}"}"
+      n = 7
+      assert_equal "7-8", "#{n}-#{n += 1}"
+    end
+
+    def test_calls
+      x = [1, 2, 3]
+      assert_equal "1-2", "#{x.shift}-#{x.shift}"
+      assert_equal "1-2|2", "#{@n}-#{bump}|#{@n}"
+      assert_equal "p-q", "#{@s}-#{swap}"
+      w = "a"
+      g = -> { w = "b" }
+      assert_equal "ab", "#{w}#{g.call}"
+      [1].each { |q| assert_equal "bb#{q}", "#{w}#{g.call}#{q}" }
+    end
+
+    def test_mutated_string
+      s = +"a"
+      assert_equal "axax", "#{s}#{s << "x"}"
+      s = +"a"
+      assert_equal "axax", "#{s << "x"}#{s}"
+      s = +"a"
+      assert_equal "aax", "#{s}#{s += "x"}"
+    end
+
+    def test_mixed_and_build
+      i = 0
+      out = ""
+      3.times { out = "#{out}#{i += 1}#{i}" }
+      assert_equal "112233", out
+      lead = "s"
+      assert_equal "s1s2", "#{lead}#{i -= 2}#{lead}#{i += 1}"
+    end
+  end
 end
