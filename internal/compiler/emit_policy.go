@@ -104,8 +104,13 @@ func growsOwnClass(cls *Class, e entry) bool {
 
 // includerCalls: a module method calling name on self needs cls to answer it.
 func (c *Compiler) includerCalls(cls *Class, name string) bool {
+	return c.includerCaller(cls, name) != nil
+}
+
+// includerCaller is the module included by cls (or an ancestor) whose constraint declares name, or nil.
+func (c *Compiler) includerCaller(cls *Class, name string) *Class {
 	if c.universalDispatch(name) {
-		return false // the module body dispatches it (dispatch.go), so its constraint does not declare it
+		return nil // the module body dispatches it (dispatch.go), so its constraint does not declare it
 	}
 	for k := cls; k != nil && !k.universal; k = k.Super {
 		for _, inc := range k.Includes {
@@ -115,8 +120,11 @@ func (c *Compiler) includerCalls(cls *Class, name string) bool {
 			if e := inc.Mod.lookup(name); e != nil && e.Owner.IsModule && c.dispatchable(e.Owner, e.M) {
 				continue // the module body dispatches it by type switch (dispatch.go); its constraint does not declare it
 			}
-			return true
+			if c.notModules(inc.Mod, name) {
+				continue // the module does not answer it: its self call is the includers' owner's (includerRoot) or dynamic, never through its constraint (decision 486)
+			}
+			return inc.Mod
 		}
 	}
-	return false
+	return nil
 }

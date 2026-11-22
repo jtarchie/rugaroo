@@ -912,6 +912,9 @@ func (f *fctx) selfCall(n parser.Node, recv expr, name string, args []parser.Nod
 	if td := f.c.topDefs[name]; td != nil {
 		return f.callEntry(n, &entry{M: td}, recv, args, block)
 	}
+	if x, ok := f.includerRootCall(n, recv, name, args, block); ok {
+		return x
+	}
 	if f.owner.IsModule && (name == "<" || name == "<=" || name == ">" || name == ">=") && len(args) == 1 && block == nil &&
 		!slices.ContainsFunc(f.owner.includers, func(k *Class) bool { return k.metaOf == nil }) {
 		// a module only ever extended onto classes (regexp_parser's Shared::ClassMethods): self is a class object, and
@@ -1058,3 +1061,46 @@ var kernelMethodsMRI = strings.Fields("sleep trap Integer load require require_r
 // nilMethodsMRI is `nil.methods` on the MRI release .mri-version names; regenerate with
 // `ruby -e 'print nil.methods.join(" ")'` on a Ruby upgrade.
 var nilMethodsMRI = strings.Fields("to_h to_c & === =~ inspect rationalize to_a to_s to_i to_f to_r nil? | ^ enum_for singleton_class dup itself methods singleton_methods protected_methods private_methods public_methods instance_variables instance_variable_get instance_variable_set instance_variable_defined? remove_instance_variable instance_of? kind_of? is_a? display class frozen? then yield_self public_send extend clone <=> !~ eql? respond_to? method public_method singleton_method hash freeze object_id define_singleton_method send tap to_enum ! equal? __send__ == != __id__ instance_exec instance_eval")
+
+// includerRootCall is a module's self call of a name it does not answer, which every includer resolves to one class's
+// dispatchable method (includerRoot): that owner's free func or rbSend_ switch on self asserted to the owner's
+// interface, as decision 234 does for a module it includes, instead of a run-time dispatch by name (decision 486). The
+// value stays untyped, as the dynamic call's was, so inference sees the same program; a call the static signature
+// cannot take (an argument of another type) stays dynamic, and so does a void one in user code, where Go would
+// reject its value.
+func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
+	if !f.owner.IsModule || block != nil {
+		return expr{}, false
+	}
+	e := f.c.includerRoot(f.owner, name)
+	if e == nil || e.M.Iterator || !f.c.dispatchable(e.Owner, e.M) {
+		return expr{}, false
+	}
+	if _, ret := f.c.sig(e.M, map[string]Type{}); ret == "" && !f.lenient() {
+		return expr{}, false
+	}
+	self := expr{code: "any(" + recv.code + ").(" + e.Owner.objType() + ")", typ: TClass{C: e.Owner}}
+	call := func() expr {
+		saved := f.implicitCall
+		f.implicitCall = true // a receiver-less call in Ruby: private and protected methods answer it
+		defer func() { f.implicitCall = saved }()
+		return f.callEntry(n, e, self, args, nil)
+	}
+	var x expr
+	if f.probing() { // output is discarded: one attempt, so nested self calls in its arguments stay linear (callEntryAny)
+		err := f.try(func() { x = call() })
+		if err != nil {
+			return expr{}, false
+		}
+	} else {
+		err := f.try(func() { f.probe(func() { call() }) })
+		if err != nil {
+			return expr{}, false
+		}
+		x = call()
+	}
+	if isVoid(x.typ) || isAny(x.typ) {
+		return x, true
+	}
+	return expr{code: f.coerce(n, x, TAny{}), typ: TAny{}}, true
+}

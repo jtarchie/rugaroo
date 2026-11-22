@@ -62,8 +62,10 @@ func (c *Compiler) dispatchableWhy(owner *Class, m *Method) (bool, string) {
 		if !below[k] {
 			continue
 		}
-		if !owner.universal && c.includerCalls(k, m.Name) {
-			return false, "includerCalls" // a module body reaches it through its constraint interface (a universal name leaves the constraint instead)
+		if !owner.universal {
+			if mod := c.includerCaller(k, m.Name); mod != nil {
+				return false, "includerCalls " + mod.Name // a module body reaches it through its constraint interface (a universal name leaves the constraint instead)
+			}
 		}
 		impl := k.lookup(m.Name)
 		if impl == nil || impl.M == m {
@@ -237,6 +239,68 @@ func (c *Compiler) dispatchableOwner(owner *Class, m *Method) string {
 		return "protocol/goCalled"
 	}
 	return ""
+}
+
+// includerRoot is the one class method every includer of mod resolves name to, read from the topmost class of each
+// includer's chain that still defines it, for a name mod does not answer (notModules): mod's self call of name
+// dispatches from that owner (decision 486). nil when an includer resolves it elsewhere (a module, a universal owner,
+// another class's root) or not at all; the call is then dynamic, as before.
+func (c *Compiler) includerRoot(mod *Class, name string) *entry {
+	if !c.notModules(mod, name) || len(mod.TypeParams) > 0 {
+		return nil
+	}
+	if len(c.classList) != c.rootN {
+		c.rootMemo, c.rootN = map[includerKey]*entry{}, len(c.classList)
+	}
+	key := includerKey{mod, name}
+	if e, ok := c.rootMemo[key]; ok {
+		return e
+	}
+	var root *entry
+	for _, k := range c.classList {
+		if k.IsModule || k.universal || !k.isSubclassOf(mod) {
+			continue
+		}
+		r := classRoot(k, name)
+		if r == nil || root != nil && r.M != root.M {
+			root = nil
+			break
+		}
+		root = r
+	}
+	if root != nil && (!root.Owner.isStruct() || len(root.Owner.TypeParams) > 0) {
+		root = nil
+	}
+	c.rootMemo[key] = root
+	return root
+}
+
+// notModules reports a name module mod calls on self but does not answer, nor do its method_missing, a top-level def
+// or Object: its constraint does not declare it (emitModuleInterface), and the call is includerRoot's or dynamic, so
+// the includers need no Go method for it. Not `class`, which no lookup answers but the constraint declares as
+// `_ClassObj`. Always false with RUGAROO_NO_INCLUDER_DISPATCH.
+func (c *Compiler) notModules(mod *Class, name string) bool {
+	return !c.env.NoIncluderDispatch && name != "class" && mod.IsModule && !mod.universal && mod.lookup(name) == nil &&
+		mod.lookup("method_missing") == nil && c.topDefs[name] == nil && c.classes["Object"].lookup(name) == nil
+}
+
+type includerKey struct {
+	mod  *Class
+	name string
+}
+
+// classRoot is name's definition in the topmost class of k's superclass chain that defines it, below any module or
+// universal owner's; nil when k itself resolves it to a module or universal method, or not at all.
+func classRoot(k *Class, name string) *entry {
+	var root *entry
+	for s := k; s != nil; s = s.Super {
+		e := s.lookup(name)
+		if e == nil || e.Owner.universal || e.Owner.IsModule {
+			break
+		}
+		root = e
+	}
+	return root
 }
 
 // universalDispatch reports whether name resolves on every object to a universal owner's dispatchable method, so no

@@ -200,6 +200,8 @@ type memoState struct {
 	sendArmsN           int
 	below               map[*Class]map[*Class]bool // classesBelow's answers, valid while classList has belowN classes
 	belowN              int
+	rootMemo            map[includerKey]*entry // includerRoot's answers, valid while classList has rootN classes
+	rootN               int
 	privateInMemo       map[string][]*Class // memo of privateIn, valid while classList has privateInN classes
 	privateInN          int
 	objFreezeMemo       int                           // objFreeze: 0 unasked, 1 no, 2 yes

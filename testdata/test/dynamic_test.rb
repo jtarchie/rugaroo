@@ -3445,9 +3445,12 @@ end
 module DynamicTests
   # Private defs, attr accessors and a module's self calls of its includers' methods dispatch by type switch
   # (decision 486): the override runs, send reaches a private one, a plain call does not, respond_to? sees it with true.
+  # Its methods are annotated, so they stay the module's rather than copies in each includer (decision 307).
   module DispMixin
+    #: () -> String
     def disp_label = "#{disp_name}:#{disp_size}:#{disp_tag}"
 
+    #: () -> Integer
     def disp_bump
       self.disp_count = disp_count + 1
       disp_count
@@ -3461,8 +3464,6 @@ module DynamicTests
   end
 
   class DispBase
-    include DispMixin
-
     attr_accessor :disp_count #: Integer
 
     def initialize
@@ -3483,6 +3484,8 @@ module DynamicTests
   end
 
   class DispKid < DispBase
+    include DispMixin
+
     def disp_name = "kid"
 
     private
@@ -3497,6 +3500,8 @@ module DynamicTests
   end
 
   class DispOther < DispBase
+    include DispMixin
+
     attr_reader :disp_extra #: String
 
     def initialize
@@ -3509,20 +3514,20 @@ module DynamicTests
 
   class DispatchPrivateTest < Minitest::Test
     def test_module_self_call_runs_the_override
-      assert_equal ["base:1:tbase-secret", "kid:1:tkid-secret", "kid:3:tkid-secret", "base:1:other-x"],
-                   [DispBase.new, DispKid.new, DispGrandKid.new, DispOther.new].map(&:disp_label)
+      assert_equal ["kid:1:tkid-secret", "kid:3:tkid-secret", "base:1:other-x"],
+                   [DispKid.new, DispGrandKid.new, DispOther.new].map(&:disp_label)
     end
 
     def test_private_override_runs_from_the_base_body
       assert_equal %w[base-secret kid-secret kid-secret], [DispBase.new, DispKid.new, DispGrandKid.new].map(&:disp_reveal)
-      assert_equal %w[m:mod-hidden m:kid-hidden m:kid-hidden], [DispBase.new, DispKid.new, DispGrandKid.new].map(&:disp_mixed)
+      assert_equal %w[m:kid-hidden m:kid-hidden m:mod-hidden], [DispKid.new, DispGrandKid.new, DispOther.new].map(&:disp_mixed)
     end
 
     def test_send_reaches_private_and_plain_call_does_not
       kid = DispGrandKid.new
       assert_equal "kid-secret", kid.send(:disp_secret)
       assert_equal "kid-hidden", kid.send(:disp_hidden)
-      assert_equal "mod-hidden", DispBase.new.send(:disp_hidden)
+      assert_equal "mod-hidden", DispOther.new.send(:disp_hidden)
       [%i[disp_secret], %i[disp_hidden]].each do |(name)|
         raised = begin
           dynamic_ident(kid).public_send(name)
@@ -3553,7 +3558,7 @@ module DynamicTests
       assert_equal [1, 2], [kid.disp_bump, kid.disp_bump]
       kid.disp_count = 10
       assert_equal [11, 11], [kid.disp_bump, kid.disp_count]
-      assert_equal "x", DispOther.new.disp_extra
+      assert_equal [1, "x"], [DispOther.new.disp_bump, DispOther.new.disp_extra]
     end
   end
 end

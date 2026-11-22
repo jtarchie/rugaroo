@@ -38,6 +38,7 @@ RUGAROO_TREE_CHECK=1 go run ./cmd/rugaroo gen ...         # each def whose synta
 RUGAROO_NO_WIDEN_CHAIN=1 go run ./cmd/rugaroo gen ...     # a final pass that widens a parameter widens one link per pass (A/B for decision 480)
 RUGAROO_NO_MODULE_ARMS=1 go run ./cmd/rugaroo gen ...     # a non-dispatched module method keeps a Dyn wrapper on each includer (A/B for decision 485)
 RUGAROO_NO_PRIVATE_DISPATCH=1 go run ./cmd/rugaroo gen ... # private defs keep interface slots and forwarders instead of type-switch dispatch (A/B for decision 486)
+RUGAROO_NO_INCLUDER_DISPATCH=1 go run ./cmd/rugaroo gen ... # a name a module calls on self without answering it keeps a Go method on its includers, and the call stays dynamic (A/B for decision 486)
 RUGAROO_GEM_WARNINGS=1 RUGAROO_UNTYPED_WHY=1 go run ./cmd/rugaroo gen ...  # each dynamic-call warning names the root of its untyped receiver (sig untyped, widened local, unannotated return, ...)
 RUGAROO_UNTYPED_REPORT=1 go run ./cmd/rugaroo gen ... >/dev/null  # one report: the roots of untyped receivers ranked by dynamic-call sites, each with the rule and uses (or writes, returns, sig) that left it untyped; =path writes a file; both inference lanes (internal/compiler/untypedreport.go)
 RUGAROO_BACKTRACE=1 ./prog                       # a built program reports an uncaught exception as MRI does, file:line and from lines (decision 178)
