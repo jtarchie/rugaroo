@@ -58,7 +58,7 @@ func (f *fctx) preludeArrayZip(z *parser.CallNode) bool {
 // noteZipChain marks `xs.zip(ys).m { |x, y| }`'s inner call for zipViewEnum, before either call generates.
 func (f *fctx) noteZipChain(n *parser.CallNode) {
 	blk, ok := n.Block.(*parser.BlockNode)
-	if !ok || f.c.env.NoZipFuse || !zipConsumers[n.Name] || n.IsSAFE_NAVIGATION() || !destructures(blk) {
+	if !ok || !zipConsumers[n.Name] || n.IsSAFE_NAVIGATION() || !destructures(blk) {
 		return
 	}
 	z := zipCall(n.Receiver)
@@ -89,7 +89,7 @@ func (f *fctx) zipViewEnum(n parser.Node, e *entry, recvT Type, block parser.Nod
 
 // zipEachBlock is a statement `xs.zip(ys).each { ... }` as `xs.__zip_each(ys) { ... }`: the same pairs, and nothing reads each's value.
 func (f *fctx) zipEachBlock(n *parser.CallNode, t tail) *parser.CallNode {
-	if t.kind != tailNone || n.Name != "each" || f.c.env.NoZipFuse || n.IsSAFE_NAVIGATION() {
+	if t.kind != tailNone || n.Name != "each" || n.IsSAFE_NAVIGATION() {
 		return n
 	}
 	if _, ok := n.Block.(*parser.BlockNode); !ok {
@@ -106,7 +106,7 @@ func (f *fctx) zipEachBlock(n *parser.CallNode, t tail) *parser.CallNode {
 
 // zipLoopHead is `__zip_block`/`__zip_each` as an index loop, with the copies their prelude bodies take.
 func (f *fctx) zipLoopHead(m *Method, recv expr, codes []string, gp string) string {
-	if m.Owner != f.c.classes["Array"] || m.Name != "__zip_block" && m.Name != "__zip_each" || len(codes) != 1 || f.c.env.NoZipFuse {
+	if m.Owner != f.c.classes["Array"] || m.Name != "__zip_block" && m.Name != "__zip_each" || len(codes) != 1 {
 		return ""
 	}
 	each := m.Name == "__zip_each"

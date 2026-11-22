@@ -129,9 +129,9 @@ func (f *fctx) aliasProcs(a, b Type) {
 }
 
 // plainRounds: the not-known-yet rounds need none of the per-shape exemptions of decisions 358, 383 and 466 (gate 1 of
-// docs/research/inference-2026-11.md; RUGAROO_INFER_SPECIAL=1 keeps them, for the A/B).
+// docs/research/inference-2026-11.md).
 func (c *Compiler) plainRounds() bool {
-	return c.env.InferUnknown && os.Getenv("RUGAROO_INFER_SPECIAL") == ""
+	return c.env.InferUnknown
 }
 
 // unknownNow reports a round in which a value no call has typed is "not known yet" instead of untyped.
@@ -1208,7 +1208,7 @@ func (c *Compiler) settleRound(inf *inference, settled bool, bets []pendingKey, 
 		return
 	}
 	inf.settled++
-	if c.env.NoAnyUse || c.env.InferUnknown { // not-known-yet rounds untype after resolution, by updateInference's rule
+	if c.env.InferUnknown { // not-known-yet rounds untype after resolution, by updateInference's rule
 		return
 	}
 	for _, key := range bets {

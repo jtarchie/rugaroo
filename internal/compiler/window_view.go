@@ -37,9 +37,6 @@ var windowValueOps = map[string]bool{
 
 // windowSafe reports whether blk cannot let its yielded window escape; immediate says the caller uses the block's value at once (see windowConsumers).
 func (c *Compiler) windowSafe(blk *parser.BlockNode, immediate bool) bool {
-	if c.env.NoWindowReuse {
-		return false
-	}
 	if ok, seen := c.windowSafeMemo[blk]; seen {
 		return ok
 	}

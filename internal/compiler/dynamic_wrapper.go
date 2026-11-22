@@ -282,7 +282,7 @@ func (c *Compiler) moduleArm(cls *Class, e *entry) bool {
 	if !mod.IsModule || mod.universal || len(mod.TypeParams) > 0 {
 		return false
 	}
-	return c.dispatchable(mod, e.M) || !c.env.NoModuleArms && !sigMentions(e.M, cls) && !c.constraintNamesSelf(mod)
+	return c.dispatchable(mod, e.M) || !sigMentions(e.M, cls) && !c.constraintNamesSelf(mod)
 }
 
 // cutPlainSelf is `\b<lit>\w+\(self\b` removed from s (build) and counted, without the regexp engine: the bodies are scanned once per wrapper.

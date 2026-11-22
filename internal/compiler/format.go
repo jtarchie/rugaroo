@@ -169,17 +169,13 @@ func formatGo(src []byte, lazy map[string]bool, next func(reached, selected func
 			p.explain(f, os.Stderr)
 		}
 	}
-	if !env.NoSpecialize {
-		err = specializeSelf(fset, f, labels)
-		if err != nil {
-			return nil, err
-		}
+	err = specializeSelf(fset, f, labels)
+	if err != nil {
+		return nil, err
 	}
-	if !env.NoCountedLoop {
-		inlineBlockLoops(f)
-		inlineIdxSet(f)
-		inlinePush(f)
-	}
+	inlineBlockLoops(f)
+	inlineIdxSet(f)
+	inlinePush(f)
 	if p != nil {
 		keepPCs(f)
 	}

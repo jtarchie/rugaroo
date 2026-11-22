@@ -278,9 +278,9 @@ func (c *Compiler) includerRoot(mod *Class, name string) *entry {
 // notModules reports a name module mod calls on self but does not answer, nor do its method_missing, a top-level def
 // or Object: its constraint does not declare it (emitModuleInterface), and the call is includerRoot's or dynamic, so
 // the includers need no Go method for it. Not `class`, which no lookup answers but the constraint declares as
-// `_ClassObj`. Always false with RUGAROO_NO_INCLUDER_DISPATCH.
+// `_ClassObj`.
 func (c *Compiler) notModules(mod *Class, name string) bool {
-	return !c.env.NoIncluderDispatch && name != "class" && mod.IsModule && !mod.universal && mod.lookup(name) == nil &&
+	return name != "class" && mod.IsModule && !mod.universal && mod.lookup(name) == nil &&
 		mod.lookup("method_missing") == nil && c.topDefs[name] == nil && c.classes["Object"].lookup(name) == nil
 }
 
@@ -310,10 +310,9 @@ func (c *Compiler) universalDispatch(name string) bool {
 	return e != nil && e.Owner.universal && c.dispatchable(e.Owner, e.M)
 }
 
-// plainMethod: a def with one Go signature and no adapters; a private one too (decision 486), unless
-// RUGAROO_NO_PRIVATE_DISPATCH.
+// plainMethod: a def with one Go signature and no adapters; a private one too (decision 486).
 func (c *Compiler) plainMethod(m *Method) bool {
-	return (m.Kind == kindDef || m.Kind == kindPrimitive) && (!m.Private || !c.env.NoPrivateDispatch) && !m.generic() && m.Name != "initialize" && !m.seqAdapter && len(m.shadowed) == 0 && m.SelfType == nil
+	return (m.Kind == kindDef || m.Kind == kindPrimitive) && !m.generic() && m.Name != "initialize" && !m.seqAdapter && len(m.shadowed) == 0 && m.SelfType == nil
 }
 
 // sendArms lists the classes below owner whose own resolution of m is not owner's body: the dispatcher's cases.

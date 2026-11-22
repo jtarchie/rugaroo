@@ -623,7 +623,7 @@ func inferRounds(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 				fmt.Fprintln(os.Stderr, "rugaroo: infer round failed:", err)
 			}
 		}
-		early := opts.infer.settled >= settledRounds && !opts.env.NoEarlyRounds && !opts.env.InferUnknown // not-known-yet rounds end by themselves
+		early := opts.infer.settled >= settledRounds && !opts.env.InferUnknown // not-known-yet rounds end by themselves
 		done := !errors.Is(err, errInferRound) || !opts.infer.changed || early
 		if done && opts.env.InferUnknown && opts.infer != nil && !opts.infer.resolved && (err == nil || errors.Is(err, errInferRound)) {
 			if opts.infer.settling {
@@ -1471,5 +1471,5 @@ func (c *Compiler) addPkgVar(decl string) { c.pkgVars[decl] = true }
 
 // widenChain reports a pass that runs again when it widens a parameter (decision 480).
 func (o *options) widenChain() bool {
-	return o.widenRedo < maxWidenRedo && !o.env.NoWidenChain
+	return o.widenRedo < maxWidenRedo
 }
