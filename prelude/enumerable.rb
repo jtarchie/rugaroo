@@ -566,12 +566,15 @@ module Enumerable
       v E
     }
     tmp := []kv{}
+    if a, ok := any(self).(*Array[E]); ok { // its size is known: one allocation
+      tmp = make([]kv, 0, len(a.s))
+    }
     for x := range self.Each() {
       tmp = append(tmp, kv{blk(x), x})
     }
     cmp := rbCmpFunc[K]()
     rbSortStable(tmp, func(a, b kv) int { return -int(cmp(b.k, a.k)) })
-    out := &Array[E]{}
+    out := &Array[E]{s: make([]E, 0, len(tmp))}
     for _, p := range tmp {
       out.s = append(out.s, p.v)
     }
@@ -581,6 +584,9 @@ module Enumerable
   #: () -> Array[E]
   def sort = %x{
     out := &Array[E]{}
+    if a, ok := any(self).(*Array[E]); ok { // its size is known: one allocation
+      out.s = make([]E, 0, len(a.s))
+    }
     for x := range self.Each() {
       out.s = append(out.s, x)
     }

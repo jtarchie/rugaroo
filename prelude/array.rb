@@ -264,9 +264,13 @@ class Array < Object
   #: (Integer) { (Integer) -> E } -> E
   def __fetch_block(i) = i < size && i >= -size ? fetch(i) : yield(i)
 
+  # Past 256 elements Go's append grows by about 1.25x, so an Array built by pushes would copy about 4x its size; it doubles instead (decision 488).
   #: (E) -> self
   def <<(x) = %x{
     self.rbCheckFrozen()
+    if len(self.s) == cap(self.s) && len(self.s) >= 256 {
+      self.s = append(self.s, make([]E, len(self.s))...)[:len(self.s)] // not slices.Grow: one instantiation fewer per element type
+    }
     self.s = append(self.s, x)
     return self
   }
@@ -274,6 +278,9 @@ class Array < Object
   #: (*E) -> self
   def push(*xs) = %x{
     self.rbCheckFrozen()
+    if len(self.s)+len(rest_) > cap(self.s) && len(self.s) >= 256 {
+      self.s = append(self.s[:cap(self.s)], make([]E, max(len(self.s), len(rest_)))...)[:len(self.s)]
+    }
     self.s = append(self.s, rest_...)
     return self
   }
@@ -345,7 +352,7 @@ class Array < Object
 
   #: (Array[E]) -> Array[E]
   def +(other) = %x{
-    out := &Array[E]{}
+    out := &Array[E]{s: make([]E, 0, len(self.s)+len(other.s))}
     out.s = append(append(out.s, self.s...), other.s...)
     return out
   }
@@ -744,7 +751,7 @@ class Array < Object
 
   #: () -> Array[E]
   def reverse = %x{
-    out := &Array[E]{}
+    out := &Array[E]{s: make([]E, 0, len(self.s))}
     for i := len(self.s) - 1; i >= 0; i-- {
       out.s = append(out.s, self.s[i])
     }
@@ -1093,7 +1100,7 @@ class Array < Object
     if same, ok := any(self).(*Array[any]); ok {
       return same // already untyped: share it, so writes are seen
     }
-    out := &Array[any]{}
+    out := &Array[any]{s: make([]any, 0, len(self.s))}
     for _, x := range self.s {
       out.s = append(out.s, rbUnbox(x))
     }

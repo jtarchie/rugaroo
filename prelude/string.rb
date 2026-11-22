@@ -354,8 +354,9 @@ class String < Object
 
   #: () -> Array[String]
   def lines = %x{
-    out := &Array[String]{}
-    for _, l := range strings.SplitAfter(string(self), "\\n") {
+    ls := strings.SplitAfter(string(self), "\\n")
+    out := &Array[String]{s: make([]String, 0, len(ls))}
+    for _, l := range ls {
       if l != "" {
         out.s = append(out.s, rbNewStr(self, String(l)))
       }
@@ -373,14 +374,18 @@ class String < Object
     }
     if sep == nil || *sep == " " {
       isSpace := func(r rune) bool { return r == ' ' || r >= '\\t' && r <= '\\r' }
-      for _, f := range strings.FieldsFunc(string(self), isSpace) {
+      fs := strings.FieldsFunc(string(self), isSpace)
+      out.s = make([]String, 0, len(fs))
+      for _, f := range fs {
         out.s = append(out.s, rbNewStr(self, String(f)))
       }
       return out
     }
     str, sp := string(self), string(*sep)
     if sp == "" {
-      for _, p := range strings.Split(str, "") {
+      ps := strings.Split(str, "")
+      out.s = make([]String, 0, len(ps))
+      for _, p := range ps {
         out.s = append(out.s, String(p))
       }
       return out
@@ -578,8 +583,9 @@ class String < Object
   # a negative one keeps trailing empty fields.
   #: (String?, Integer) -> Array[String]
   def __split_2(sep, limit) = %x{
-    out := &Array[String]{}
-    for _, p := range rbSplitLimit(string(self), sep, int(limit)) {
+    ps := rbSplitLimit(string(self), sep, int(limit))
+    out := &Array[String]{s: make([]String, 0, len(ps))}
+    for _, p := range ps {
       out.s = append(out.s, String(p))
     }
     return out
@@ -867,7 +873,7 @@ class String < Object
 
   #: () -> Array[Integer]
   def codepoints = %x{
-    out := &Array[Integer]{}
+    out := &Array[Integer]{s: make([]Integer, 0, utf8.RuneCountInString(string(self)))}
     for _, r := range string(self) {
       out.s = append(out.s, Integer(r))
     }

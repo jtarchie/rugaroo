@@ -3399,3 +3399,90 @@ module ArrayTests
     end
   end
 end
+
+module ArrayTests
+  # Growth past 256 doubles the backing array, and results of known size are presized (decision 488).
+  class ArrayGrowthTest < Minitest::Test
+    def test_push_past_256_with_dup_and_freeze
+      a = [] #: Array[Integer]
+      copies = [] #: Array[Array[Integer]]
+      5000.times do |i|
+        a << i
+        a.push(i * 2) if i.even?
+        copies << a.dup if [255, 256, 257, 511, 512, 513, 4095].include?(a.size)
+        assert_equal i, a[-1] if i.odd?
+      end
+      assert_equal 7500, a.size
+      sizes = copies.map(&:size)
+      copies.each { |c| c << -1 }
+      assert_equal sizes.map { |n| n + 1 }, copies.map(&:size)
+      assert_equal 7500, a.size
+      refute_includes a, -1
+      b = a.dup
+      a << 1
+      assert_equal 7500, b.size
+      b.freeze
+      raised = begin
+        b << 1
+        false
+      rescue FrozenError
+        true
+      end
+      assert raised
+      raised = begin
+        b.push(1, 2)
+        false
+      rescue FrozenError
+        true
+      end
+      assert raised
+      assert_equal 7500, b.size
+    end
+
+    def test_push_many_past_256
+      a = (1..300).to_a
+      a.push(*(1..300).to_a)
+      a.push(1, 2, 3)
+      assert_equal 603, a.size
+      assert_equal 300, a[599]
+      assert_equal 3, a[-1]
+    end
+
+    def test_presized_results
+      [[], [7], (1..3000).to_a].each do |xs|
+        assert_equal xs.size, xs.reverse.size
+        assert_equal xs.last.to_i, xs.reverse.first.to_i
+        assert_equal xs + xs, xs.dup.concat(xs)
+        assert_equal((xs + [1]).size, xs.size + 1)
+        assert_equal xs, xs.sort_by { |x| -x }.reverse
+        assert_equal xs, xs.reverse.sort
+        assert_equal xs, xs.each_with_index.map { |x, _i| x }
+        assert_equal xs.size, xs.each_with_index.map { |_x, i| i }.size
+      end
+      assert_equal [], (1..0).to_a
+      assert_equal [5], (5..5).to_a
+      assert_equal [5], (5...6).to_a
+      assert_equal 3000, (1..3000).to_a.size
+      assert_equal 2999, (1...3000).to_a.last
+      assert_equal [-2, -1, 0], (-2..0).to_a
+      assert_equal [0], 0.digits
+      assert_equal [7], 7.digits
+      assert_equal [6, 5, 4, 3, 2, 1], 123_456.digits
+      assert_equal [1, 1, 1], 7.digits(2)
+      assert_equal [7, 0, 8, 5, 7, 7, 4, 5, 8, 6, 3, 0, 2, 7, 3, 3, 2, 2, 9], 9_223_372_036_854_775_807.digits
+      msg = ""
+      begin
+        -1.digits
+      rescue Math::DomainError => e
+        msg = e.message
+      end
+      assert_equal "out of domain", msg
+      begin
+        5.digits(1)
+      rescue ArgumentError => e
+        msg = e.message
+      end
+      assert_equal "invalid radix 1", msg
+    end
+  end
+end

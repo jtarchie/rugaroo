@@ -348,7 +348,14 @@ func rbSplatAny(x any) []any {
 
 // rbArgsCat joins a call's argument pieces, splats spread, into one slice.
 func rbArgsCat(parts ...[]any) []any {
-	var out []any
+	n := 0
+	for _, p := range parts {
+		n += len(p)
+	}
+	if n == 0 {
+		return nil
+	}
+	out := make([]any, 0, n)
 	for _, p := range parts {
 		out = append(out, p...)
 	}

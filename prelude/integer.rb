@@ -303,19 +303,26 @@ class Integer < Object
   def pow(exp) = self**exp
 
   #: (?Integer) -> Array[Integer]
-  def digits(base = 10)
-    raise Math::DomainError, "out of domain" if negative?
-    raise ArgumentError, "invalid radix #{base}" if base < 2
-    return [0] if zero?
-
-    out = [] #: Array[Integer]
-    n = self
-    while n > 0
-      out << n % base
-      n /= base
-    end
-    out
-  end
+  def digits(base = 10) = %x{
+    if self < 0 {
+      panic(NewMath_DomainError(Ref(String("out of domain"))))
+    }
+    if base < 2 {
+      panic(NewArgumentError(Ref(String("invalid radix " + strconv.FormatInt(int64(base), 10)))))
+    }
+    if self == 0 {
+      return &Array[Integer]{s: []Integer{0}}
+    }
+    k := 0 // the result's length, counted first so it is built in one allocation
+    for n := self; n > 0; n /= base {
+      k++
+    }
+    out := &Array[Integer]{s: make([]Integer, 0, k)}
+    for n := self; n > 0; n /= base {
+      out.s = append(out.s, n%base)
+    }
+    return out
+  }
 
   #: (Integer) -> Float
   def fdiv(other) = to_f / other

@@ -337,7 +337,17 @@ class Range < Object
     if self.endless {
       panic(NewRangeError(Ref(String("cannot convert endless range to an array"))))
     }
-    out := &Array[E]{}
+    n := 0 // an Integer range's length, capped as map's
+    if b, ok := any(self.b).(Integer); ok && !self.beginless {
+      e := any(self.e).(Integer)
+      if self.excl {
+        e--
+      }
+      if e >= b {
+        n = int(min(uint64(e)-uint64(b), 1<<20-1)) + 1
+      }
+    }
+    out := &Array[E]{s: make([]E, 0, n)}
     rbRangeEach(self, func(x E) bool { out.s = append(out.s, x); return true })
     return out
   }

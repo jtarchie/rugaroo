@@ -153,12 +153,15 @@ func inlinePush(f *ast.File) {
 	})
 }
 
-// preludeAppend is the prelude's body (frozen check, append, return self), not a program's own `def push`.
+// preludeAppend is the prelude's body (frozen check, doubling growth, append, return self), not a program's own `def push`.
 func preludeAppend(b *ast.BlockStmt) bool {
-	if b == nil || len(b.List) != 3 {
+	if b == nil || len(b.List) != 4 {
 		return false
 	}
-	as, ok := b.List[1].(*ast.AssignStmt)
+	if _, ok := b.List[1].(*ast.IfStmt); !ok {
+		return false
+	}
+	as, ok := b.List[2].(*ast.AssignStmt)
 	if !ok || len(as.Rhs) != 1 {
 		return false
 	}
@@ -189,12 +192,29 @@ func pushFast(s ast.Stmt, own map[string]bool) ast.Stmt {
 	notFrozen := &ast.UnaryExpr{OpPos: pos, Op: token.NOT, X: &ast.CallExpr{Fun: &ast.SelectorExpr{X: sel(a, "frozen"), Sel: id("Load")}, Lparen: pos, Rparen: pos}}
 	app := &ast.CallExpr{Fun: id("append"), Lparen: pos, Args: []ast.Expr{sel(a, "s"), id(v)}, Rparen: pos}
 	store := &ast.AssignStmt{Lhs: []ast.Expr{sel(a, "s")}, TokPos: pos, Tok: token.ASSIGN, Rhs: []ast.Expr{app}}
+	// Past 256 elements the backing array doubles, as the prelude's `<<` (decision 488): Go's own 1.25x growth copies an Array built by pushes about 4x over.
+	// Not slices.Grow: each element type would instantiate it, one more compiled function per type.
+	lenS := func() ast.Expr {
+		return &ast.CallExpr{Fun: id("len"), Lparen: pos, Args: []ast.Expr{sel(a, "s")}, Rparen: pos}
+	}
+	full := &ast.BinaryExpr{X: lenS(), OpPos: pos, Op: token.EQL, Y: &ast.CallExpr{Fun: id("cap"), Lparen: pos, Args: []ast.Expr{sel(a, "s")}, Rparen: pos}}
+	big := &ast.BinaryExpr{X: lenS(), OpPos: pos, Op: token.GEQ, Y: &ast.BasicLit{ValuePos: pos, Kind: token.INT, Value: "256"}}
+	grow := &ast.IfStmt{If: pos, Cond: &ast.BinaryExpr{X: full, OpPos: pos, Op: token.LAND, Y: big}, Body: &ast.BlockStmt{Lbrace: pos, List: []ast.Stmt{
+		&ast.AssignStmt{Lhs: []ast.Expr{sel(a, "s")}, TokPos: pos, Tok: token.ASSIGN, Rhs: []ast.Expr{doubled(lenS, sel(a, "s"), ix.Index, pos)}},
+	}, Rbrace: pos}}
 	slow := &ast.ExprStmt{X: &ast.CallExpr{Fun: call.Fun, Lparen: pos, Args: []ast.Expr{id(a), id(v)}, Rparen: pos}}
 	return &ast.IfStmt{
 		If:   pos,
 		Init: &ast.AssignStmt{Lhs: []ast.Expr{id(a), id(v)}, TokPos: pos, Tok: token.DEFINE, Rhs: []ast.Expr{headSafe(call.Args[0]), headSafe(typedConst(call.Args[1], ix.Index))}},
 		Cond: notFrozen,
-		Body: &ast.BlockStmt{Lbrace: pos, List: []ast.Stmt{store}, Rbrace: pos},
+		Body: &ast.BlockStmt{Lbrace: pos, List: []ast.Stmt{grow, store}, Rbrace: pos},
 		Else: &ast.BlockStmt{Lbrace: pos, List: []ast.Stmt{slow}, Rbrace: call.End()},
 	}
+}
+
+// doubled is `append(s, make([]T, len(s))...)[:len(s)]` for a full s: Go's append-of-make extends without a temporary, to at least twice the capacity.
+func doubled(lenS func() ast.Expr, s, t ast.Expr, pos token.Pos) ast.Expr {
+	mk := &ast.CallExpr{Fun: &ast.Ident{NamePos: pos, Name: "make"}, Lparen: pos, Args: []ast.Expr{&ast.ArrayType{Lbrack: pos, Elt: t}, lenS()}, Rparen: pos}
+	app := &ast.CallExpr{Fun: &ast.Ident{NamePos: pos, Name: "append"}, Lparen: pos, Args: []ast.Expr{s, mk}, Ellipsis: pos, Rparen: pos}
+	return &ast.SliceExpr{X: app, Lbrack: pos, High: lenS(), Rbrack: pos}
 }

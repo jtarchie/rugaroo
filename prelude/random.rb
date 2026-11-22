@@ -144,8 +144,9 @@ class Array
     if r := Hash_Op_idx(opts, Symbol("random")); r != nil {
       rng = *r
     }
-    out := &Array[E]{}
-    for _, i := range rbSampleIdx(int(n), len(self.s), &rng.mt) {
+    idx := rbSampleIdx(int(n), len(self.s), &rng.mt)
+    out := &Array[E]{s: make([]E, 0, len(idx))}
+    for _, i := range idx {
       out.s = append(out.s, self.s[i])
     }
     return out

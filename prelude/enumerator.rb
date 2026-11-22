@@ -146,7 +146,7 @@ class Enumerator < Object
 
     #: [U] (?Integer) { (E, Integer) -> U } -> Array[U]
     def with_index(offset = 0) = %x{
-      out := &Array[U]{}
+      out := &Array[U]{s: make([]U, 0, len(self.items.s))}
       for i, x := range self.items.s {
         out.s = append(out.s, blk(x, Integer(i)+offset))
       }
@@ -155,7 +155,7 @@ class Enumerator < Object
 
     #: [U] () { (E, Integer) -> U } -> Array[U]
     def each_with_index = %x{
-      out := &Array[U]{}
+      out := &Array[U]{s: make([]U, 0, len(self.items.s))}
       for i, x := range self.items.s {
         out.s = append(out.s, blk(x, Integer(i)))
       }
