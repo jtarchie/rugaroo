@@ -24,6 +24,9 @@ func (f *fctx) optCall(n parser.Node, recv expr, name string, args []parser.Node
 		if len(args) != 1 {
 			f.errorf(n, "%s takes one argument", name)
 		}
+		if _, isNil := args[0].(*parser.NilNode); isNil && name == "==" && f.c.identityEqBelow(recv.typ.(TOpt).Elem) {
+			return expr{code: "Boolean(" + optIsNil(recv.code, recv.typ) + ")", typ: f.cls("Boolean")} // decision 488
+		}
 		a := f.genExpr(args[0], nil)
 		if name == "==" && f.plainOptEq(recv.typ, a.typ) { // `flags[i] == 1`: no boxing into rbEq (decision 387)
 			if valOpt(recv.typ) {
@@ -527,4 +530,25 @@ func (f *fctx) plainOptEq(recv, arg Type) bool {
 	}
 	eq := c.C.lookup("==")
 	return eq != nil && eq.M.File != nil && eq.M.File.isPrelude() && (valOpt(recv) || f.c.goType(recv) == "*"+f.c.goType(c))
+}
+
+// identityEqBelow: every class an object of type t can be (t's class and, closed world, each class below it) has
+// Object#== (identity), so `x == nil` on a t? is the nil test. A class whose own or inherited == is any other method
+// (a program's, Comparable's, Delegator's) keeps the call, as MRI calls it with nil (decision 488).
+func (c *Compiler) identityEqBelow(t Type) bool {
+	tc, ok := t.(TClass)
+	if !ok || tc.C == nil {
+		return false
+	}
+	below := c.classesBelow(tc.C)
+	if len(below) == 0 {
+		return false
+	}
+	for k := range below {
+		e := k.lookup("==")
+		if e == nil || e.M.File == nil || !e.M.File.isPrelude() || !e.Owner.universal {
+			return false
+		}
+	}
+	return true
 }

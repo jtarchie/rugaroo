@@ -7068,3 +7068,64 @@ module ObjectHoistTests
     end
   end
 end
+
+module ObjectTests
+  class NilEqNode
+    attr_reader :left #: NilEqNode?
+
+    #: (NilEqNode?) -> void
+    def initialize(left) = @left = left
+  end
+
+  class NilEqOwn
+    attr_reader :calls #: Integer
+
+    def initialize = @calls = 0
+
+    #: (untyped) -> bool
+    def ==(other)
+      @calls += 1
+      other.nil?
+    end
+  end
+
+  class NilEqSub < NilEqOwn
+  end
+
+  class NilEqBase
+  end
+
+  class NilEqBaseSub < NilEqBase
+    #: (untyped) -> bool
+    def ==(other) = other.nil? || equal?(other)
+  end
+
+  # `x == nil` on a typed optional object is a nil test unless some class it can be defines == (decision 488).
+  class NilEqTest < Minitest::Test
+    def test_plain_class
+      n = NilEqNode.new(NilEqNode.new(nil))
+      l = n.left
+      assert_equal [false, true, false], [l == nil, l != nil, nil == l]
+      ll = l&.left
+      assert_equal [true, false, true], [ll == nil, ll != nil, nil == ll]
+    end
+
+    def test_own_eq_called_with_nil
+      o = NilEqOwn.new
+      x = [o, nil].first
+      assert_equal [true, false, false], [x == nil, x != nil, nil == x]
+      assert_equal 2, o.calls
+      s = NilEqSub.new
+      y = [s, nil].first
+      assert_equal [true, false], [y == nil, y != nil]
+      assert_equal 2, s.calls
+    end
+
+    def test_subclass_defines_eq
+      b = [NilEqBaseSub.new, nil].first #: NilEqBase?
+      assert_equal [true, false], [b == nil, b != nil]
+      c = [NilEqBase.new, nil].first #: NilEqBase?
+      assert_equal [false, true], [c == nil, c != nil]
+    end
+  end
+end
