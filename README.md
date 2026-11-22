@@ -108,7 +108,7 @@ their fixes. Or try it in the browser at the [playground](https://play.rugaroo.d
 | | Tier |
 |---|---|
 | Classes, modules, blocks, procs, exceptions, pattern matching, `Struct`/`Data`, threads and fibers, Ruby 4.0 syntax, reflection the compiler can answer (`send`, `method_missing`, `const_get`, `instance_variable_get`) | stable |
-| Core classes: `String`, `Array`, `Hash`, `Integer`, `Float`, `Range`, `Set`, `Enumerable`, `Regexp`, `Time`, `File`, `IO`, `Kernel`, ... (Array 87%, Hash 89%, String 76% of the ruby/spec examples that run; per class in docs/support.md) | stable |
+| Core classes: `String`, `Array`, `Hash`, `Integer`, `Float`, `Range`, `Set`, `Enumerable`, `Regexp`, `Time`, `File`, `IO`, `Kernel`, ... (Array 87%, Hash 86%, String 77% of the ruby/spec examples that run; per class in docs/support.md) | stable |
 | Standard library: `json`, `csv`, `date`, `time`, `net/http`, `webrick`, `socket`, `fileutils`, `optparse`, `logger`, `erb`, `bigdecimal`, `rexml`, `minitest` and about 25 more | stable |
 | Gems compiled from source (rack, Cuba, pairing_heap; kramdown and liquid through `-trace`), a Rails app transpiled by [roundhouse](https://rubys.github.io/roundhouse/) to its Spinel shape, `fiddle`, `sqlite3`, `prism`, `yaml` (loads by Psych's rules; dump text is not libyaml's), `openssl` (RSA verify, HMAC, PBKDF2), Sorbet signatures, `Ractor`, `--int-overflow=promote`, `--nil-check=runtime` | experimental |
 | `eval`, `define_method` in your own code, in-place String mutation, encodings beyond ten | not supported |
@@ -135,11 +135,11 @@ lists them with workarounds.
 ## Performance and conformance
 
 A compiled program does no interpretation. Over the workloads in
-[`benchmarks/`](benchmarks/) rugaroo runs about 3.5x faster than MRI;
+[`benchmarks/`](benchmarks/) rugaroo runs about 3.6x faster than MRI;
 [BENCHMARKS.md](BENCHMARKS.md) has the table, the comparison columns (YJIT,
 spinel, Crystal, hand-written Go) and where rugaroo trails. On spinel's own
-74-program suite it builds 66 unmodified (47 by default, 19 more with
-`--nil-check=runtime`); the 65 timed last run 18.0x faster than MRI (spinel: 23.8x on
+74-program suite it builds 67 of the 73 that end under `--nil-check=runtime`
+(47 of them by default); those 67 last ran 19.2x faster than MRI (spinel: 20.8x on
 the same programs).
 A hot program can go a further 0-15% with a profile of its own run
 (`-profile-out`, then `-pgo`: [docs/cli.md](docs/cli.md#make-a-hot-program-faster)).
@@ -147,7 +147,7 @@ A hot program can go a further 0-15% with a profile of its own run
 Correctness is measured against MRI: every [example](examples/), minitest
 suite and compile-error archive runs against `ruby` under `go test`. As a
 wider probe, `cmd/rubyspec` runs [ruby/spec](https://github.com/ruby/spec):
-12,630 of its examples pass (9,495 in `core`, 1,943 in `library`, 1,192 in `language`;
+12,652 of its examples pass (9,509 in `core`, 1,951 in `library`, 1,192 in `language`;
 73% of the `core` examples that run), and most of the rest are skipped for something rugaroo leaves out by
 design. [docs/support.md](docs/support.md#core-classes--stable) has the rate
 for each core class.

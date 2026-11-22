@@ -54,19 +54,19 @@ ruby/spec numbers come from a dated `go run ./cmd/rubyspec` run (see
 
 ## Core classes — stable
 
-ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-11-13 (commit 6296b90d). "Of those run" leaves out examples skipped because they use something rugaroo leaves out by design (Bignum by default, String mutation, `eval`, ...); the skipped column counts those.
+ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-11-22 (commit 6ff749a1). "Of those run" leaves out examples skipped because they use something rugaroo leaves out by design (Bignum by default, String mutation, `eval`, ...); the skipped column counts those.
 
 | Class | Tier | ruby/spec pass (of those run) | Skipped | Notes |
 |---|---|---:|---:|---|
 | `Array` | stable | 624 of 720 (87%) | 495 |  |
 | `Array#pack`, `String#unpack` | stable | 2,738 of 3,004 (91%) | 173 | No C pointers (`P`, `p`); Bignum directives need `promote`. |
 | `Hash` | stable | 266 of 311 (86%) | 251 | Insertion-ordered; `Hash#[]` is typed `V?`. |
-| `String` | stable | 1,038 of 1,357 (76%) | 1,006 | Immutable ([decision 58](decisions/058.md)), except `<<`/`concat` on an unaliased local ([decision 382](decisions/382.md)) and `setbyte` on one, or on an ivar in `initialize` ([decision 395](decisions/395.md)). |
+| `String` | stable | 1,040 of 1,359 (77%) | 1,004 | Immutable ([decision 58](decisions/058.md)), except `<<`/`concat` on an unaliased local ([decision 382](decisions/382.md)) and `setbyte` on one, or on an ivar in `initialize` ([decision 395](decisions/395.md)). |
 | `Symbol` | stable | 90 of 111 (81%) | 67 |  |
 | `Integer` | stable | 185 of 265 (70%) | 333 | 64-bit; see below. |
 | `Float` | stable | 152 of 181 (84%) | 80 |  |
-| `Rational`, `Complex` | stable | 145 of 169 (86%) | 157 | Mixed arithmetic coerces as MRI. |
-| `Numeric` | stable | 27 of 55 (49%) | 260 |  |
+| `Rational`, `Complex` | stable | 150 of 175 (86%) | 151 | Mixed arithmetic coerces as MRI. |
+| `Numeric` | stable | 27 of 58 (47%) | 257 |  |
 | `Range` | stable | 308 of 351 (88%) | 255 |  |
 | `Set` | stable | 85 of 103 (83%) | 73 | Core, as in MRI 4.0. |
 | `Struct`, `Data` | stable | 102 of 138 (74%) | 120 |  |
@@ -81,7 +81,7 @@ ruby/spec numbers: `go run ./cmd/rubyspec core` on 2026-11-13 (commit 6296b90d).
 | `File::Stat` | stable | 8 of 108 (7%) | 27 | Partial. |
 | `IO`, `ARGF`, `$stdin` | stable | 380 of 598 (64%) | 861 | `IO.popen`, `system` and backticks run real processes. |
 | `ENV` | stable | 75 of 97 (77%) | 96 |  |
-| `Kernel` | stable | 696 of 1,149 (61%) | 747 | No `eval`, `binding` or `load`. |
+| `Kernel` | stable | 703 of 1,169 (60%) | 727 | No `eval`, `binding` or `load`. |
 | `Exception` and its subclasses | stable | 93 of 159 (58%) | 97 |  |
 | `Proc`, `Method`, `UnboundMethod` | stable | 101 of 245 (41%) | 153 |  |
 | `Module`, `Class` | stable | 195 of 346 (56%) | 758 | No `define_method` or runtime reopening in user code. |
