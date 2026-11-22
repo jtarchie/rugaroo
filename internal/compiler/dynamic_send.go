@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"maps"
 	"regexp"
 	"slices"
@@ -19,25 +20,28 @@ func (c *Compiler) emitMarkers(marker string, classes []*Class) {
 		return
 	}
 	c.markers[marker] = true
+	checks := c.markerChecks(marker, classes)
+	c.w("func rbHas%s(recv any) bool {\n%s\treturn false\n}\n\n", marker, checks)
+}
+
+// markerChecks is the statements that return true when recv is one of classes: a switch on its class ID, and
+// Boolean's marker method (emitted here), since no value answers Boolean's ID.
+func (c *Compiler) markerChecks(marker string, classes []*Class) string {
 	var ids []string
-	methods := false
+	var b strings.Builder
 	for _, cls := range classes {
 		if cls == c.classes["Boolean"] { // true and false answer TrueClass's and FalseClass's IDs, never Boolean's
 			c.w("func (self %s) %s() {}\n\n", c.recvType(cls), marker)
-			methods = true
+			fmt.Fprintf(&b, "\tif _, ok := recv.(interface{ %s() }); ok {\n\t\treturn true\n\t}\n", marker)
 		} else {
 			ids = append(ids, strconv.Itoa(c.classID(cls)))
 		}
 	}
-	c.w("func rbHas%s(recv any) bool {\n", marker)
-	if methods {
-		c.w("\tif _, ok := recv.(interface{ %s() }); ok {\n\t\treturn true\n\t}\n", marker)
-	}
 	if len(ids) > 0 {
-		c.w("\tif id, ok := recv.(interface{ _ClassID() int }); ok {\n")
-		c.w("\t\tswitch id._ClassID() {\n\t\tcase %s:\n\t\t\treturn true\n\t\tdefault:\n\t\t}\n\t}\n", strings.Join(ids, ", "))
+		b.WriteString("\tif id, ok := recv.(interface{ _ClassID() int }); ok {\n")
+		fmt.Fprintf(&b, "\t\tswitch id._ClassID() {\n\t\tcase %s:\n\t\t\treturn true\n\t\tdefault:\n\t\t}\n\t}\n", strings.Join(ids, ", "))
 	}
-	c.w("\treturn false\n}\n\n")
+	return b.String()
 }
 
 // emitRespond emits rbRespondsName(recv, priv), backed by a
@@ -54,9 +58,8 @@ func (c *Compiler) emitRespond(name string) {
 			public = append(public, cls)
 		}
 	}
-	c.emitMarkers("_Responds"+gn, public)
-	c.w("func rbResponds%s(recv any, priv bool) Boolean {\n", gn)
-	c.w("\tif rbHas_Responds%s(recv) {\n\t\treturn true\n\t}\n", gn)
+	checks := c.markerChecks("_Responds"+gn, public) // inline: the table had this one reader, and was a function per name (decision 485)
+	c.w("func rbResponds%s(recv any, priv bool) Boolean {\n%s", gn, checks)
 	if procCallNames[name] || name == "arity" || name == "to_proc" || name == "lambda?" { // a Proc is a Go func: no class table (liquid's `operation.respond_to?(:call)`, decision 331)
 		c.w("\tif rbIsProc(recv) {\n\t\treturn true\n\t}\n")
 	}

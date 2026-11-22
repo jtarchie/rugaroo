@@ -414,8 +414,7 @@ func (c *Compiler) emitDynName(name string) {
 	c.w("func rbDyn%s(how int, recv any, args ...any) any {\n", gn)
 	// the arms go first: their class IDs are exact, and a class they serve
 	// may still embed its parent's DynX, promoted by Go with the parent as self
-	c.emitDynArms(shared, false)
-	c.emitDynArms(shared, true)
+	c.emitDynArms(shared)
 	c.w("\tif r, ok := recv.(interface{ Dyn%s(...any) any }); ok {\n\t\treturn r.Dyn%s(args...)\n\t}\n", gn, gn)
 	if fn := seqNames[name]; fn != "" {
 		c.w("\tif s, ok := recv.(rbView); ok {\n\t\tif v, ok := %s(%q, s, args); ok {\n\t\t\treturn v\n\t\t}\n\t}\n", fn, name)

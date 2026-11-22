@@ -249,9 +249,10 @@ func (c *Compiler) dynShareable(w dynWrapper, name string) (iface, body string, 
 		// a class object's body already calls the owner's plain func (Module_ConstGet(self, ...)): the same text serves every metaclass
 		iface, rest = e.Owner.objType(), plainCut(rest)
 	}
-	if mod := e.Owner; iface == "" && mod.IsModule && !mod.universal && len(mod.TypeParams) == 0 && c.dispatchable(mod, e.M) {
-		// a dispatched module method's body over the constraint itself (decision 208), the same for every includer
-		// (decision 234): self asserted to the constraint
+	if mod := e.Owner; iface == "" && mod.IsModule && !mod.universal && len(mod.TypeParams) == 0 && (c.dispatchable(mod, e.M) || !c.env.NoModuleArms && !sigMentions(e.M, cls) && !c.constraintNamesSelf(mod)) {
+		// a module method's body over the constraint itself (decision 208), the same for every includer (decision
+		// 234): self asserted to the constraint. Dispatched or not: a private one was a wrapper on each includer, and an
+		// instantiation of the module's body per includer's interface (decision 485)
 		inst := c.re(`\b` + regexp.QuoteMeta(freeFuncName(e.M)) + `\[[^\]]*\]\(self\b`)
 		if inst.MatchString(body) {
 			cons := mod.selfName() + "[any]"
@@ -334,23 +335,25 @@ func (c *Compiler) shareableClass(w dynWrapper, name string) bool {
 	return cls.isStruct()
 }
 
-// emitDynArms emits the shared public (or private) arms: a switch on the
-// receiver's class ID, so only the classes that reach the method take it.
-func (c *Compiler) emitDynArms(arms []*dynArm, private bool) {
-	var cases []*dynArm
-	for _, a := range arms {
-		if a.private == private {
-			cases = append(cases, a)
+// emitDynArms emits the shared arms: one switch on the receiver's class ID, so only the classes that reach the method
+// take it. A class resolves the name one way, so the public and private arms' IDs are disjoint; a private arm serves
+// only a call that may reach private methods (decision 485: one switch, where two cost every public receiver of a
+// name with private arms a second assertion).
+func (c *Compiler) emitDynArms(arms []*dynArm) {
+	cases := slices.Clone(arms)
+	slices.SortStableFunc(cases, func(a, b *dynArm) int { // public first, as when they were two switches
+		switch {
+		case a.private == b.private:
+			return 0
+		case b.private:
+			return -1
 		}
-	}
+		return 1
+	})
 	if len(cases) == 0 {
 		return
 	}
-	cond := ""
-	if private {
-		cond = " && how != rbCall"
-	}
-	c.w("\tif id, ok := recv.(interface{ _ClassID() int }); ok%s {\n", cond)
+	c.w("\tif id, ok := recv.(interface{ _ClassID() int }); ok {\n")
 	arm := func(a *dynArm) {
 		switch {
 		case a.iface != "":
@@ -364,7 +367,13 @@ func (c *Compiler) emitDynArms(arms []*dynArm, private bool) {
 	c.w("\tswitch id._ClassID() {\n")
 	for _, a := range cases {
 		c.w("\tcase %s:\n", strings.Join(a.ids, ", "))
+		if a.private {
+			c.w("\tif how != rbCall {\n")
+		}
 		arm(a)
+		if a.private {
+			c.w("\t}\n")
+		}
 	}
 	c.w("\tdefault:\n\t}\n\t}\n") // default: gocritic rejects a one-case switch; Go compiles the cases to a binary search
 }

@@ -26,6 +26,7 @@ type envConfig struct {
 	TreeCheck     bool   // RUGAROO_TREE_CHECK: report each def whose syntax tree a pass rewrote in place (decision 478)
 	NoFileReuse   bool   // RUGAROO_NO_FILE_REUSE: parse the sources again in every round and pass (A/B for decision 479)
 	NoWidenChain  bool   // RUGAROO_NO_WIDEN_CHAIN: a final pass that widens a parameter does not widen what it passes on in the same pass (A/B for decision 480)
+	NoModuleArms  bool   // RUGAROO_NO_MODULE_ARMS: a non-dispatched module method keeps a Dyn wrapper on each includer (A/B for decision 485)
 	NoEarlyRounds bool   // RUGAROO_NO_EARLY_ROUNDS: run inference rounds to the cap even once they have settled (A/B for decision 444)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
@@ -64,6 +65,7 @@ func loadEnv() envConfig {
 		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
 		InferUses:     os.Getenv("RUGAROO_INFER_USES"),
 		NoAnyUse:      os.Getenv("RUGAROO_NO_ANY_USE") != "",
+		NoModuleArms:  os.Getenv("RUGAROO_NO_MODULE_ARMS") != "",
 		NoWidenChain:  os.Getenv("RUGAROO_NO_WIDEN_CHAIN") != "",
 		NoFileReuse:   os.Getenv("RUGAROO_NO_FILE_REUSE") != "",
 		TreeCheck:     os.Getenv("RUGAROO_TREE_CHECK") != "",
