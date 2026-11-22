@@ -562,7 +562,15 @@ class Doc
   def title = "t"
 end
 
-puts Doc.new.label
+# two unrelated includers: no one owner to dispatch from, so the call stays dynamic (decision 486)
+class Page
+  include Named
+
+  #: () -> String
+  def title = "p"
+end
+
+puts Doc.new.label, Page.new.label
 -- warn_subclass_only_method.rb --
 # warning: main.rb:11: dynamic call: bark on Animal
 class Animal
