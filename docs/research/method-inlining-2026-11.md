@@ -292,3 +292,8 @@ It is right about which side of 80 a function falls in, but about one function i
 ### E4
 
 Skipped: E3 makes pasting unnecessary. A sweep of the paste cap (200/320/500) would have needed the paste pass, spinel's suite at each cap (instructions and binary size), and rubocop's compile time. With synthetic PGO, the equivalent knob is how many edges to name and Go's hot-site budget (2,000, `-d=pgoinlinebudget`), and the same sweep applies.
+
+## Decision after stage 0 and 1 (2026-11-22)
+
+Stage 1 (fused checked arithmetic) was built and passed the full suite on branch `inline-stage1` (commit ae2d4b78), and is **not merged**. It made `@w * @h + 1` and `(@w + @h) * 2` inline (cost 100 -> 76, against a budget of 80), and a scratch loop of such readers went from 799M to 209M instructions; but no benchmark, spinel program, example or gem measured here contains the shape, so its effect on real programs is unmeasured. Against that it adds an AST pass with 16 generated helper shapes, a change to the backtrace runtime that every program carries, a 4-point margin under a cost model Go does not specify, and an unexplained +3% on `thread_churn`. Stage 2 (pasting) is not needed: stage 0's E3 shows a synthetic PGO profile handed to `main` alone gets ~95% of the paste's gain with every frame intact. That route is recorded, not built: it needs the compiler to choose hot edges statically (E2's estimator is close enough to rank candidates) and depends on the go command's internal `-pgoprofile` contract. Revisit either when a real program shows small arithmetic methods hot in a profile.
+
