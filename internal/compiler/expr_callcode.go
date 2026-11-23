@@ -115,9 +115,9 @@ func (f *fctx) callEntry(n parser.Node, e *entry, recv expr, args []parser.Node,
 	return f.instanceResult(e, recv, f.callEntryAny(n, e, recv, args, block))
 }
 
-// instanceResult types a class method's `-> instance` result as the class it was called on: `Article.find` of `Base.find` (decision 404).
+// instanceResult: `-> instance` is the receiver's class at the call, for a superclass's class method or an extended module's (decision 404).
 func (f *fctx) instanceResult(e *entry, recv expr, r expr) expr {
-	if e.M.sig == nil || e.M.Owner == nil || e.M.Owner.metaOf == nil {
+	if e.M.sig == nil || e.M.Owner == nil {
 		return r
 	}
 	ret, opt := e.M.sig.Return, false
@@ -125,15 +125,23 @@ func (f *fctx) instanceResult(e *entry, recv expr, r expr) expr {
 		ret, opt = o.Elem, true
 	}
 	rc, ok := recv.typ.(TClass)
-	if _, inst := ret.(rbs.Instance); !inst || !ok || rc.C.metaOf == nil || rc.C.metaOf == e.M.Owner.metaOf || !rc.C.metaOf.isSubclassOf(e.M.Owner.metaOf) {
+	if _, inst := ret.(rbs.Instance); !inst || !ok || rc.C.metaOf == nil {
+		return r
+	}
+	switch {
+	case e.M.Owner.metaOf != nil: // a class method: narrowed on a subclass only
+		if rc.C.metaOf == e.M.Owner.metaOf || !rc.C.metaOf.isSubclassOf(e.M.Owner.metaOf) {
+			return r
+		}
+	case !e.M.Owner.IsModule || !rc.C.isSubclassOf(e.M.Owner): // an extended module's method: `instance` is the extender's
 		return r
 	}
 	want := TClass{C: rc.C.metaOf}
-	g := f.c.goType(want)
+	g, boxed := f.c.goType(want), f.coerceToAny(r)
 	if opt {
-		return expr{code: "func() " + g + " { v, _ := any(" + r.code + ").(" + g + "); return v }()", typ: TOpt{Elem: want}}
+		return expr{code: "func() " + g + " { v, _ := any(" + boxed + ").(" + g + "); return v }()", typ: TOpt{Elem: want}}
 	}
-	return expr{code: "any(" + r.code + ").(" + g + ")", typ: want}
+	return expr{code: "any(" + boxed + ").(" + g + ")", typ: want}
 }
 
 func (f *fctx) callEntryAny(n parser.Node, e *entry, recv expr, args []parser.Node, block parser.Node) expr {

@@ -58,10 +58,45 @@ module ClassMethodTests
     out
   end
 
+  # Sqlx's shape: the finders arrive by `extend`, so `instance` is the extending class at each call.
+  module Finder
+    #: (Integer id) -> instance
+    def find(id) = new(id)
+
+    #: (Integer id) -> instance?
+    def find_by(id) = id.positive? ? new(id) : nil
+  end
+
+  class Row
+    extend Finder
+
+    attr_reader :id #: Integer
+
+    #: (Integer id) -> void
+    def initialize(id)
+      @id = id
+    end
+  end
+
+  class Article < Row
+    #: () -> String
+    def title = "article #{id}"
+  end
+
+  #: (Article) -> String
+  def self.article_title(article) = article.title
+
   class InstanceTest < Minitest::Test
     def test_instance_is_the_receivers_class
       assert_equal "hello", Post.find(1).title
       assert_equal "model", Model.find(1).kind
+    end
+
+    def test_instance_from_an_extended_module
+      assert_equal "article 1", ClassMethodTests.article_title(Article.find(1))
+      assert_equal "article 2", Article.find_by(2)&.title
+      assert_nil Article.find_by(0)
+      assert_equal 3, Row.find(3).id
     end
 
     def test_a_wider_array_result_override
