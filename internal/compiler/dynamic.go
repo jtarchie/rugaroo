@@ -453,18 +453,7 @@ func (c *Compiler) emitDynName(name string) {
 	if hidden {
 		c.w("\tif rbHas_Private%s(recv) {\n\t\tpanic(rbPrivateMethod(%q, recv))\n\t}\n", gn, name)
 	}
-	if name == "===" {
-		// Kernel#===: == unless its class defines one.
-		// ponytail: a class object held untyped gets ==, not Module#=== (is_a?);
-		// needs a generated per-metaclass instance check.
-		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbEq[any](recv, args[0]))\n}\n\n")
-	} else if name == "eql?" || name == "equal?" {
-		// Kernel's, on what defines none: a class object held untyped (the ast gem's `self.class.eql?(other.class)`;
-		// decision 497) compares by identity, as rbKeyEql does
-		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbKeyEql(recv, args[0]))\n}\n\n")
-	} else {
-		c.w("\tpanic(rbNoMethod(%q, recv, how == rbVCall))\n}\n\n", name)
-	}
+	c.emitDynTail(name)
 	for _, w := range own {
 		c.emitDynWrapper(w.cls, w.e, name, w.private, w.body)
 	}
@@ -477,3 +466,20 @@ func (c *Compiler) emitDynName(name string) {
 
 // procCallNames are Proc#call and its aliases: a dispatcher of one of them also calls a Proc held untyped.
 var procCallNames = map[string]bool{"call": true, "[]": true, "yield": true, "===": true}
+
+// emitDynTail ends a dispatcher: what every receiver answers by Kernel when nothing above did, else NoMethodError.
+func (c *Compiler) emitDynTail(name string) {
+	switch name {
+	case "===":
+		// Kernel#===: == unless its class defines one.
+		// ponytail: a class object held untyped gets ==, not Module#=== (is_a?);
+		// needs a generated per-metaclass instance check.
+		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbEq[any](recv, args[0]))\n}\n\n")
+	case "eql?", "equal?":
+		// Kernel's, on what defines none: a class object held untyped (the ast gem's `self.class.eql?(other.class)`;
+		// decision 497) compares by identity, as rbKeyEql does
+		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbKeyEql(recv, args[0]))\n}\n\n")
+	default:
+		c.w("\tpanic(rbNoMethod(%q, recv, how == rbVCall))\n}\n\n", name)
+	}
+}
