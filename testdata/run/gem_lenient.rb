@@ -52,6 +52,7 @@ require "lazyish"
 require "captureish"
 require "sharedivarish"
 require "ancestorwalkish"
+require "eqlnodish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -242,3 +243,8 @@ p shared_cop.out, shared_cop.column_delta, SharedIvarArrayCop.new.run([0, 3])
 walk_node = AncestorWalkish.new(:casgn, AncestorWalkish.new(:class, AncestorWalkish.new(:begin, AncestorWalkish.new(:module, nil))))
 walk_any = [walk_node, 1, "s"].first
 p AncestorWalkishCop.new.public_send(:run, walk_any), AncestorWalkishCop.new.others(walk_any)
+# a gem class's own eql? and hash key Array#& and uniq (decision 497)
+eql_a = [EqlNodish.new(:lvar, [:date]), EqlNodish.new(:send, [:start])]
+eql_b = [EqlNodish.new(:lvar, [:date]), EqlNodish.new(:send, [:finish])]
+eql_r = EqlNodishInter.new.first_common([eql_a, 1].first, [eql_b, 1].first)
+p eql_r&.type, (eql_a & eql_b).size, eql_a.uniq.size, [eql_a[0], eql_b[0]].uniq.size, { eql_a[0] => 1 }[eql_b[0]]

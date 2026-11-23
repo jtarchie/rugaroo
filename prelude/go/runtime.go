@@ -1058,12 +1058,22 @@ type rbEqlHash interface {
 	Hash() Integer
 }
 
+// rbEqlHashAny is a gem class's eql? and hash whose results inference left untyped (the ast gem's Node#eql?, an &&
+// chain): the same key by value, its eql? tested for truth (decision 497).
+type rbEqlHashAny interface {
+	EqlQ(other any) any
+	Hash() Integer
+}
+
 // rbValueKey is k's hash when k matches by value rather than Go ==.
 func rbValueKey(k any) (uint64, bool) {
 	if p, ok := rbKeyUnbox(k); ok {
 		return rbKeyHash(p), true
 	}
 	if v, ok := k.(rbEqlHash); ok {
+		return uint64(v.Hash()), true
+	}
+	if v, ok := k.(rbEqlHashAny); ok {
 		return uint64(v.Hash()), true
 	}
 	return 0, false
@@ -1088,6 +1098,9 @@ func rbKeyEql(a, b any) bool {
 	}
 	if e, ok := a.(rbEqlHash); ok {
 		return bool(e.EqlQ(b))
+	}
+	if e, ok := a.(rbEqlHashAny); ok {
+		return rbTruthy(e.EqlQ(b))
 	}
 	return false
 }

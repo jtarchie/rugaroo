@@ -458,6 +458,10 @@ func (c *Compiler) emitDynName(name string) {
 		// ponytail: a class object held untyped gets ==, not Module#=== (is_a?);
 		// needs a generated per-metaclass instance check.
 		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbEq[any](recv, args[0]))\n}\n\n")
+	} else if name == "eql?" || name == "equal?" {
+		// Kernel's, on what defines none: a class object held untyped (the ast gem's `self.class.eql?(other.class)`;
+		// decision 497) compares by identity, as rbKeyEql does
+		c.w("\trbArity(len(args), 1, 1)\n\treturn Boolean(rbKeyEql(recv, args[0]))\n}\n\n")
 	} else {
 		c.w("\tpanic(rbNoMethod(%q, recv, how == rbVCall))\n}\n\n", name)
 	}
