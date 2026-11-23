@@ -38,5 +38,5 @@ mkdir -p "$R/shim"
 cp "$here/../lib/"*.rb "$R/shim/"
 cp "$here/serve.rb" "$R/serve.rb"
 go build -o "$W/rugaroo" "$here/../../../cmd/rugaroo"
-(cd "$R" && "$W/rugaroo" build -gem snails-core -gem app -gem gen -o "$W/snails-rugaroo" serve.rb)
+(cd "$R" && "$W/rugaroo" build -gem snails-core -o "$W/snails-rugaroo" serve.rb)
 ls -la "$W/snails-spinel" "$W/snails-rugaroo"

@@ -37,6 +37,6 @@ cp "$here/main.rb" "$A/rugaroo_main.rb"
 go build -o "$W/rugaroo" "$here/../../cmd/rugaroo"
 cd "$A"
 ruby rugaroo_main.rb 2>/dev/null | grep -v '^demo (ruby)\|one green' > mri.out
-"$W/rugaroo" build -gem snails-core -gem app -gem gen -o demo-bin rugaroo_main.rb
+"$W/rugaroo" build -gem snails-core -o demo-bin rugaroo_main.rb
 ./demo-bin 2>/dev/null | grep -v '^demo (ruby)\|one green' > rugaroo.out
 diff mri.out rugaroo.out && echo "compiled == MRI ($(wc -l < mri.out) lines)"

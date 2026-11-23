@@ -79,7 +79,7 @@ anything, and it should be re-measured on Linux.
    `sig/snails_fixes.rbs` is gone).
 3. Declined upstream: typed model finders in the generated `.rbs`
    ([snails-rb/snails#104](https://github.com/snails-rb/snails/issues/104), not planned). The sidecar is Spinel's
-   analyzer input; Spinel infers `Post.find` → `Post` from the Ruby source. Closing the gap is rugaroo's job.
+   analyzer input; Spinel infers `Post.find` → `Post` from the Ruby source, and now rugaroo does too (fix 8 below).
 4. A server seam: split `Snails::Main.start` into setup and `serve(port, workers)`, so another server (this
    adapter, or a Rack adapter) is one override and prefork stays inside tep's own server.
 
@@ -98,11 +98,13 @@ anything, and it should be re-measured on Linux.
    blocks (ponytail: poll(2) with the timeout). The WEBrick path no longer needs it.
 7. Spinel's `ffi_*` syntax is read as the ffi gem's (decision 375's Snails amendment), so Snails' database adapters
    compile unchanged.
+8. `app/` and `gen/` compile strictly, as the user's own code, with no model signatures: a sidecar's `untyped`
+   return is a hint the body types, and the finders `Sqlx::Base` extends answer the class they are called on
+   (`Post.find` a `Post`, `Comment.fetch_many` an `Array[Comment]`; decisions 404 and 494). Before, they needed
+   `-gem app -gem gen`.
 
 ### rugaroo, open
 
 - `accept_nonblock(exception: false)` / `read_nonblock(..., exception: false)`: the keyword is refused. Snails no
   longer needs it.
-- `app/` compiles only leniently (`-gem app -gem gen`): `Sqlx::Query`'s sidecar types `find`/`fetch_many` as
-  `untyped`, and rugaroo takes that over its own inference, where Spinel infers the model class (#104 above).
 - Spinel's `ffi_struct` and `ffi_source` (a C fragment) are not read; Snails uses neither.
