@@ -131,15 +131,7 @@ func (f *fctx) forwardClosureCode(n parser.Node, sig *BlockSig, env map[string]T
 		unify(p, f.blockSig.Params[i], env)
 	}
 	if isVoid(sig.Ret) && !isNil(sig.Ret) && !isVoid(f.blockSig.Ret) && f.lenient() && sig.Self == nil && f.blockSig.Self == nil {
-		// a value block where the callee's is void (concurrent-ruby's ns_execute passing &task to fallback_action): its
-		// value dropped
-		params := make([]string, len(sig.Params))
-		args := make([]string, len(sig.Params))
-		for i, p := range sig.Params {
-			params[i] = fmt.Sprintf("p%d %s", i, f.c.goType(subst(p, env)))
-			args[i] = f.coerce(nil, expr{code: fmt.Sprintf("p%d", i), typ: subst(p, env)}, f.blockSig.Params[i])
-		}
-		return f.adapterFunc(params, "blk("+strings.Join(args, ", ")+")", sig.Ret, f.blockSig.Ret)
+		return f.valueToVoidAdapter(n, sig, env)
 	}
 	if tv, ok := sig.Ret.(TVar); ok && env[tv.Name] == nil && isVoid(f.blockSig.Ret) && !isNil(f.blockSig.Ret) {
 		// a void block where the callee's returns X (`return super if block_given?` in Homebrew's Cask#tap over
@@ -293,4 +285,31 @@ func (f *fctx) procArityAdapter(sig *BlockSig, env map[string]Type) string {
 	}
 	call := "blk(" + strings.Join(args, ", ") + ")"
 	return f.adapterFunc(params, call, subst(sig.Ret, env), f.blockSig.Ret)
+}
+
+// restVoidAdapter is forwardClosureCode's value-to-void adapter where both blocks take `(*T)`: the values passed on as
+// they came, converted one by one when the element types differ (decision 497).
+func (f *fctx) restVoidAdapter(n parser.Node, sig *BlockSig, env map[string]Type) string {
+	if !typeEq(subst(sig.Params[0], env), f.blockSig.Params[0]) {
+		return f.restBlockAdapter(n, sig, env)
+	}
+	params := []string{"p0 ..." + f.c.goType(subst(sig.Params[0], env))}
+	return f.adapterFunc(params, "blk(p0...)", sig.Ret, f.blockSig.Ret)
+}
+
+// valueToVoidAdapter is a value block where the callee's is void (concurrent-ruby's ns_execute passing &task to
+// fallback_action): its value dropped.
+func (f *fctx) valueToVoidAdapter(n parser.Node, sig *BlockSig, env map[string]Type) string {
+	// a value block where the callee's is void (concurrent-ruby's ns_execute passing &task to fallback_action): its
+	// value dropped
+	params := make([]string, len(sig.Params))
+	args := make([]string, len(sig.Params))
+	for i, p := range sig.Params {
+		params[i] = fmt.Sprintf("p%d %s", i, f.c.goType(subst(p, env)))
+		args[i] = f.coerce(nil, expr{code: fmt.Sprintf("p%d", i), typ: subst(p, env)}, f.blockSig.Params[i])
+	}
+	if sig.Rest && f.blockSig.Rest && len(sig.Params) == 1 { // both `(*T)`: the values passed on as they came (decision 497)
+		return f.restVoidAdapter(n, sig, env)
+	}
+	return f.adapterFunc(params, "blk("+strings.Join(args, ", ")+")", sig.Ret, f.blockSig.Ret)
 }

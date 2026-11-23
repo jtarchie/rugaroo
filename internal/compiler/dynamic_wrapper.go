@@ -499,6 +499,7 @@ func (c *Compiler) emitDynCall(f *fctx, e *entry, recv expr, env map[string]Type
 	}
 	c.dynBlockTwin(f, e, recv, env)
 	blk := c.dynCallBlock(f, m, env)
+	c.dynBlocklessEnum(f, e, recv)
 	var kwh *exprNode // the call's keywords, passed on as **kwh (#51)
 	if m.hasKeywords() {
 		f.emit("kwh, args := rbDynKw(args, %d)", req)
@@ -986,4 +987,23 @@ func (c *Compiler) dynWideClassOverloads(f *fctx, e *entry, recv expr, req, maxA
 		f.emit("\t}")
 		f.emit("}")
 	}
+}
+
+// dynBlocklessEnum: a block method called dynamically with no block and no arguments answers its `__<name>_enum`
+// twin, as a typed call does: rubocop's `node.each_ancestor(:class, :module).reverse_each.with_object([])` on the
+// Enumerator each_ancestor returns. Without it the wrapper yielded to the missing block (decision 497).
+func (c *Compiler) dynBlocklessEnum(f *fctx, e *entry, recv expr) {
+	m, cls := e.M, classOf(recv.typ)
+	if m.Block == nil || m.Block.Optional || cls == nil || strings.HasPrefix(m.Name, "__") {
+		return
+	}
+	tw := cls.lookup("__" + overloadBase(m.Name) + "_enum")
+	if tw == nil || tw.M.Block != nil || tw.M.generic() || len(tw.M.Params) != 0 || len(cls.TypeParams) > 0 && growsTypeParams(cls, tw) {
+		return // a twin answering a bigger generic (each_with_index's Enumerator[[E, Integer]]) is a Go instantiation cycle
+	}
+	f.emit("if blk_ == nil && len(args) == 0 {")
+	f.indent++
+	f.emitDynReturn(f.callEntry(&parser.NilNode{}, tw, recv, nil, nil))
+	f.indent--
+	f.emit("}")
 }

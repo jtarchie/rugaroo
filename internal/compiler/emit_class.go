@@ -112,6 +112,11 @@ func (c *Compiler) emitModuleInterface(mod *Class) {
 			c.w("\t_%s() *%s\n", im.Name, ivarsType(im))
 		}
 	}
+	for _, p := range c.coIncluded(mod) { // a sibling module that holds an ivar this one uses (decision 497)
+		if len(p.IvarList) > 0 && !slices.Contains(ivarModules(mod), p) && c.usesIvarOf(mod, p) {
+			c.w("\t_%s() *%s\n", p.Name, ivarsType(p))
+		}
+	}
 	// Constraint = what the module's bodies call on self (docs/design.md).
 	called := c.selfCalls(mod)
 	for _, e := range c.publicEntries(mod) {

@@ -455,7 +455,7 @@ func (c *Compiler) yieldShape(m *Method) (n int, optional, ok bool) {
 	}
 	n = -1
 	agree := true
-	if !c.gemFile(m.File) && splatYields(m.Node.Body) { // a gem's `yield(*args)` spreads at run time (decision 250)
+	if splatYields(m.Node.Body) { // `yield(*args)`, user or gem code: a *rest block (decisions 363, 497)
 		n = 1 // the *rest (decision 363)
 		walkNode(m.Node.Body, func(x parser.Node) (bool, bool) {
 			if c, ok := x.(*parser.CallNode); ok && c.Receiver == nil && c.Name == "block_given?" {

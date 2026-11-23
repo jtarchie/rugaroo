@@ -379,7 +379,7 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 			bps[i] = "untyped"
 			m.pendingBlock = append(m.pendingBlock, pendingParam{key: yieldKey(m, i), name: "yield's argument " + strconv.Itoa(i+1)})
 		}
-		splat := !c.gemFile(from.File) && splatYields(from.Node.Body)
+		splat := splatYields(from.Node.Body)
 		if splat { // `yield(*xs)`: the block takes the elements, `{ (*T) -> R }` (decision 363)
 			bps[0] = "*untyped"
 		}

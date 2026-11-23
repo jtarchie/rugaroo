@@ -7129,3 +7129,36 @@ module ObjectTests
     end
   end
 end
+
+module ObjectTests
+  # decision 497: two modules an includer both has, setting the same ivar, share one, as one object's @x is in MRI
+  module SharedAligned
+    # @rbs @delta: Integer?
+
+    #: () -> Integer?
+    def delta = @delta
+  end
+
+  module SharedMeasured
+    # @rbs @delta: Integer?
+
+    #: (Integer, Integer) -> void
+    def measure(expected, actual)
+      @delta = expected - actual
+    end
+  end
+
+  class SharedIvarCop
+    include SharedAligned
+    include SharedMeasured
+  end
+
+  class SharedModuleIvarTest < Minitest::Test
+    def test_sibling_modules_share_an_ivar
+      c = SharedIvarCop.new
+      assert_nil c.delta
+      c.measure(5, 2)
+      assert_equal 3, c.delta
+    end
+  end
+end

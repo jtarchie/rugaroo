@@ -49,6 +49,9 @@ require "sockish"
 require "buildish"
 require "prismish"
 require "lazyish"
+require "captureish"
+require "sharedivarish"
+require "ancestorwalkish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -227,3 +230,15 @@ lazy_src = LazyishSrc.new(3, [LazyishLazy.new, 1].first)
 p lazy_src.ast, lazy_src.toks
 plain_src = LazyishSrc.new(2, [LazyishBase.new, 1].first)
 p plain_src.ast, plain_src.toks
+# yield(*captures) into |*args| (decision 497)
+captureish = Captureish.new
+p captureish.on_and([[:v, :lo, :v, :hi], 1].first), captureish.matcher([[:v, :lo, :v, :hi], 1].first)
+# two included modules setting one ivar share it (decision 497)
+shared_cop = SharedIvarHashCop.new
+shared_cop.on_hash(4, 2)
+shared_cop.on_hash(1, 5)
+p shared_cop.out, shared_cop.column_delta, SharedIvarArrayCop.new.run([0, 3])
+# a blockless reverse_each on a dynamic Enumerator (decision 497)
+walk_node = AncestorWalkish.new(:casgn, AncestorWalkish.new(:class, AncestorWalkish.new(:begin, AncestorWalkish.new(:module, nil))))
+walk_any = [walk_node, 1, "s"].first
+p AncestorWalkishCop.new.public_send(:run, walk_any), AncestorWalkishCop.new.others(walk_any)

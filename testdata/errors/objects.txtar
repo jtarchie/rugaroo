@@ -1159,6 +1159,25 @@ class C
   include M
 end
 C.new.bump
+-- module_ivar_sibling_types.rb --
+# error: main.rb:11: ivar @delta declared as String but Aligned, which every includer of Measured also includes, has it as Integer: one object has one @delta (decision 497)
+module Aligned
+  # @rbs @delta: Integer
+
+  #: () -> Integer
+  def delta = @delta
+end
+module Measured
+  # @rbs @delta: String
+
+  #: (String) -> void
+  def measure(s) = @delta = s
+end
+class Cop
+  include Aligned
+  include Measured
+end
+p Cop.new.delta
 -- module_ivar_in_go_type.rb --
 # error: M has instance variables, so only a class whose objects are structs can include it, not String (decision 147)
 module M

@@ -51,6 +51,9 @@ func (c *Compiler) declareIvar(cls *Class, name string, t Type, f *File, line in
 			return iv
 		}
 	}
+	if iv := c.siblingIvar(cls, name, t, f, line); iv != nil {
+		return iv
+	}
 	if c.nilIvars[ivarKey{cls, name}] {
 		t = optOf(t) // this class assigns it nil too
 	}
@@ -64,6 +67,11 @@ func (c *Compiler) declareIvar(cls *Class, name string, t Type, f *File, line in
 			if m := k.Methods[strings.TrimPrefix(name, "@")]; m != nil && (m.Kind == kindAttrReader && m.Attr == name || readsOnlyIvar(m, name)) {
 				cls, t = k, optOf(t)
 			}
+		}
+	}
+	if cls.IsModule {
+		if iv := c.coIncludedIvar(cls, name, t, f, line); iv != nil {
+			return iv
 		}
 	}
 	iv := &Ivar{Name: name, Type: t, Owner: cls}
@@ -107,6 +115,95 @@ func (c *Compiler) findIvar(cls *Class, name string) *Ivar {
 		if iv := mod.Ivars[name]; iv != nil {
 			return iv
 		}
+	}
+	if cls.IsModule {
+		for _, p := range c.coIncluded(cls) { // a sibling module every includer also has (decision 497)
+			if iv := p.Ivars[name]; iv != nil {
+				return iv
+			}
+		}
+	}
+	return nil
+}
+
+// siblingIvar is module cls's @name held by a module every includer of cls also includes (decision 497).
+func (c *Compiler) siblingIvar(cls *Class, name string, t Type, f *File, line int) *Ivar {
+	if !cls.IsModule {
+		return nil
+	}
+	for _, p := range c.coIncluded(cls) {
+		if iv := p.Ivars[name]; iv != nil {
+			if !typeEq(iv.Type, t) && !isAny(iv.Type) && !c.gemFile(f) {
+				c.errorAt(srcPos{f, line}, "ivar %s declared as %s but %s, which every includer of %s also includes, has it as %s: one object has one %s (decision 497)", name, t, p.RubyName, cls.RubyName, iv.Type, name)
+			}
+			return iv
+		}
+	}
+	return nil
+}
+
+// coIncluded lists the other modules every class including mod also includes: rubocop's FirstHashElementIndentation
+// includes Alignment and MultilineElementIndentation, both of which set @column_delta, one ivar per object in MRI. A
+// module's ivar another of these holds is that one's field (decision 497). Empty for a module no struct class includes.
+func (c *Compiler) coIncluded(mod *Class) []*Class {
+	if out, ok := c.coIncludedMemo[mod]; ok {
+		return out
+	}
+	var out []*Class
+	first := true
+	for _, k := range c.classList {
+		if k.IsModule || !k.isStruct() || k.universal {
+			continue
+		}
+		anc := k.allAncestors()
+		if !slices.Contains(anc, mod) {
+			continue
+		}
+		var mods []*Class
+		for _, a := range anc {
+			if a.IsModule && a != mod && !a.universal && len(a.TypeParams) == 0 && !slices.Contains(mod.allAncestors(), a) {
+				mods = append(mods, a)
+			}
+		}
+		if first {
+			out, first = mods, false
+		} else {
+			out = slices.DeleteFunc(out, func(a *Class) bool { return !slices.Contains(mods, a) })
+		}
+		if len(out) == 0 {
+			break
+		}
+	}
+	if c.coIncludedMemo == nil {
+		c.coIncludedMemo = map[*Class][]*Class{}
+	}
+	c.coIncludedMemo[mod] = out
+	return out
+}
+
+// coIncludedIvar moves @name, declared earlier by a module whose includers all include mod, onto mod, its type joined
+// with t: the module declaring it second still makes one field (decision 497).
+func (c *Compiler) coIncludedIvar(mod *Class, name string, t Type, f *File, line int) *Ivar {
+	for _, other := range c.classList {
+		if !other.IsModule || other == mod || !slices.Contains(c.coIncluded(other), mod) {
+			continue
+		}
+		iv := other.Ivars[name]
+		if iv == nil {
+			continue
+		}
+		if !typeEq(iv.Type, t) && !isAny(iv.Type) && !isAny(t) && !c.gemFile(f) {
+			c.errorAt(srcPos{f, line}, "ivar %s declared as %s but %s, which every includer of %s also includes, has it as %s: one object has one %s (decision 497)", name, t, other.RubyName, mod.RubyName, iv.Type, name)
+		}
+		delete(other.Ivars, name)
+		other.IvarList = slices.DeleteFunc(other.IvarList, func(x *Ivar) bool { return x == iv })
+		iv.Owner = mod
+		if !typeEq(iv.Type, t) {
+			iv.Type = TAny{} // gem code: the two writes' classes differ, so untyped, as a gem module's undeclared ivar is (decision 172)
+		}
+		mod.Ivars[name] = iv
+		mod.IvarList = append(mod.IvarList, iv)
+		return iv
 	}
 	return nil
 }
@@ -236,4 +333,14 @@ func (c *Compiler) literalSelfArgs(name string, param int) ([]string, bool) {
 		})
 	}
 	return names, ok
+}
+
+// usesIvarOf reports whether mod's methods name an ivar p holds: its constraint then requires p's accessor.
+func (c *Compiler) usesIvarOf(mod, p *Class) bool {
+	for _, m := range mod.MethodList {
+		if m.Node != nil && anyNode(m.Node, func(n parser.Node) bool { name, _ := ivarNodeName(n); return name != "" && p.Ivars[name] != nil }) {
+			return true
+		}
+	}
+	return false
 }
