@@ -1,6 +1,6 @@
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cache_config.rb rubocop-1.92.1/lib/rubocop/cache_config.rb
---- rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-12 06:00:10
+--- rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 12:25:56
 @@ -31,6 +31,13 @@
      # the full ConfigStore/ConfigLoader. This method can be used, for example,
      # before loading configuration files. Please note that this method doesn't
@@ -27,8 +27,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cache_config.rb rubocop-
  
          # For compatibility with Ruby 3.0 or lower.
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/config_loader.rb rubocop-1.92.1/lib/rubocop/config_loader.rb
---- rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-12 06:00:10
+--- rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 12:25:57
 @@ -78,9 +78,9 @@
  
        def load_yaml_configuration(absolute_path)
@@ -43,8 +43,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/config_loader.rb rubocop
          puts "configuration from #{absolute_path}" if debug?
  
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/base.rb rubocop-1.92.1/lib/rubocop/cop/base.rb
---- rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-12 08:19:57
+--- rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 12:25:56
 @@ -356,7 +356,8 @@
            # is faster in this specific case.
            m.start_with?('on_', 'after_') &&
@@ -56,8 +56,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/base.rb rubocop-1.92
        end
        # rubocop:enable Layout/ClassStructure
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb
---- rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-12 09:28:34
+--- rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 12:25:57
 @@ -108,7 +108,7 @@
          def format_int_part(int_part)
            int_part = Integer(int_part)
@@ -68,8 +68,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/style/numeric_litera
          end
  
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb
---- rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-11 20:59:18
+--- rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 12:25:56
 @@ -218,7 +218,9 @@
          # end
          class Case < Base
@@ -104,8 +104,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/variable_force/branc
  
            def always_run?
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/options.rb rubocop-1.92.1/lib/rubocop/options.rb
---- rubocop-1.92.1/lib/rubocop/options.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/options.rb	2026-11-12 06:54:55
+--- rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 12:25:56
 @@ -31,7 +31,7 @@
        args_from_env = ArgumentsEnv.read_as_arguments
        args = args_from_file.concat(args_from_env).concat(command_line_args)
@@ -116,8 +116,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/options.rb rubocop-1.92.
        return_path_given_to_changed(args)
        imply_autocorrect_for_diff
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/server/cache.rb rubocop-1.92.1/lib/rubocop/server/cache.rb
---- rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-12 06:00:20
+--- rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 12:25:56
 @@ -178,7 +178,7 @@
  
          def load_erb_templated_yaml(content)
@@ -127,9 +127,21 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/server/cache.rb rubocop-
  
            require 'yaml'
            YAML.safe_load(yaml_code, permitted_classes: [Regexp, Symbol], aliases: true) || {}
+diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/target_ruby.rb rubocop-1.92.1/lib/rubocop/target_ruby.rb
+--- rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 12:25:56
+@@ -7,7 +7,7 @@
+     KNOWN_RUBIES = [
+       2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.0, 3.1, 3.2, 3.3, 3.4, 4.0, 4.1
+     ].freeze
+-    DEFAULT_VERSION = 2.7
++    DEFAULT_VERSION = 3.3 # rugaroo: prism only (its lowest target), not 2.7
+ 
+     OBSOLETE_RUBIES = {
+       1.9 => '0.41',
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb
---- rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-10-27 20:22:56
-+++ rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-11 20:59:18
+--- rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 12:25:56
++++ rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 12:25:56
 @@ -2,33 +2,10 @@
  
  module RuboCop

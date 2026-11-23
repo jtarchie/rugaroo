@@ -11,6 +11,11 @@ the test inputs, and it runs 1.4-5.3x faster than `ruby` (`docs/research/rubocop
   slice by character (a compiled String carries no encoding), and `Lexer::Dedenter#dedent` returning the dedented
   String, which `Builders::Default#dedent_string` puts back into the node, instead of editing Strings in place
   through shared references. Under MRI the ASTs are unchanged.
+- **Prism only** (2026-11-23, decision 496): `rubocop-ast-1.50.0.patch` names the four lazy-token prism parsers
+  (`LazyParser33`..`41`) instead of `Class.new(base)`, makes `parser_prism` the engine for every target and raises
+  for `ParserEngine: parser_whitequark`, so the parser gem's grammars (`parser/rubyNN`) are not compiled in.
+  `rubocop-1.92.1.patch` moves `TargetRuby::DEFAULT_VERSION` from 2.7 to 3.3, prism's lowest, so a project with no
+  target still runs. TargetRubyVersion below 3.3 is an error, as it is for prism under MRI.
 - `main.rb`: `exe/rubocop`'s non-server path (`--server` is not supported).
 - `setup`: copies the installed gems into the work dir once and applies the patches (`GEM_DIR` to use other gems).
   The work dir is `RUBOCOP_WORK`, else `$TMPDIR/rugaroo-rubocop`: outside any project, because rubocop reads the
