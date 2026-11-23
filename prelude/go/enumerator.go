@@ -538,3 +538,32 @@ func (a *Enumerator_ArithmeticSequence[E]) rbSize() *Integer {
 	}
 	return Ref(Integer(n))
 }
+
+// DynWithIndex is `x.filter_map.with_index { }` on an untyped x: the block's truthy results. Written here because the
+// method's own [U] is a wrapper the compiler does not emit (growsTypeParams; decision 496).
+func (self *Enumerator_FilterMap[E]) DynWithIndex(args ...any) any {
+	b, args := rbPopBlock(args)
+	rbArity(len(args), 0, 1)
+	offset := Integer(0)
+	if len(args) == 1 && args[0] != nil {
+		offset = rbAs[Integer](args[0], "Integer")
+	}
+	return self.rbDynKeep(b, offset)
+}
+
+// DynEachWithIndex is DynWithIndex from 0.
+func (self *Enumerator_FilterMap[E]) DynEachWithIndex(args ...any) any {
+	b, args := rbPopBlock(args)
+	rbArity(len(args), 0, 0)
+	return self.rbDynKeep(b, 0)
+}
+
+func (self *Enumerator_FilterMap[E]) rbDynKeep(b *rbBlockArg, offset Integer) any {
+	out := &Array[any]{}
+	for i, x := range self.items.s {
+		if v := rbUnbox(rbViewYield(b, rbUnbox(any(x)), Integer(i)+offset)); rbTruthy(v) {
+			out.s = append(out.s, v)
+		}
+	}
+	return out
+}

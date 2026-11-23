@@ -47,6 +47,7 @@ require "readyish"
 require "matchish"
 require "sockish"
 require "buildish"
+require "prismish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -214,3 +215,10 @@ fwd_root = Fwdblk::Cn.new(nil, :z)
 fwd_mid = Fwdblk::Cn.new(fwd_root, :a)
 fwd_leaf = Fwdblk::Cn.new(fwd_mid, :b)
 p Fwdblk.of(fwd_leaf).excl(Fwdblk.of(fwd_mid)), Fwdblk.of(fwd_leaf).excl(Fwdblk.of(fwd_leaf))
+# prism's translation in miniature (decision 496)
+prismish = Prismish.new("héllo ; world\n  two\n three", [true, false, true])
+p prismish.semicolon(6, 9), prismish.semicolon(0, 3), prismish.semicolon(6, nil)
+p prismish.semicolon_typed(6, 9), prismish.semicolon_typed(6, nil)
+p prismish.kept_lines
+p prismish.percent?("%i["), prismish.percent?("["), prismish.percent?(nil)
+p prismish.least_indent(["  a", " b"]), prismish.least_indent([])

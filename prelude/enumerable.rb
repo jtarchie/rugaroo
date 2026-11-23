@@ -725,6 +725,9 @@ module Enumerable
     memo
   end
 
+  #: () -> Enumerator::FilterMap[E]
+  def __filter_map_enum = Enumerator::FilterMap.new(to_a)
+
   # Keeps the block's truthy results.
   #: [U] () { (E) -> U? } -> Array[U]
   def filter_map

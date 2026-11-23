@@ -49,7 +49,7 @@ var seqNames = viewHelpers(map[string][]string{
 	"rbViewBlockCall": {"each", "each_entry", "each_with_index", "each_index", "reverse_each", "each_slice", "each_cons", "cycle",
 		"first", "select", "filter", "find_all", "reject", "select!", "filter!", "keep_if", "reject!", "delete_if", "map!", "collect!",
 		"find", "detect", "rfind", "inject", "reduce", "each_with_object", "sort_by", "sort_by!", "max_by", "min_by",
-		"take_while", "drop_while", "bsearch", "bsearch_index"},
+		"take_while", "drop_while", "bsearch", "bsearch_index", "filter_map"},
 	"rbViewPredicate": {"all?", "any?", "none?", "one?"},
 	"rbViewSum":       {"sum"},
 	"rbViewCore": {"length", "size", "empty?", "frozen?", "to_a", "entries", "deconstruct", "itself", "dup", "clear", "[]",
@@ -645,7 +645,10 @@ func (c *Compiler) dynClassOverloads(f *fctx, e *entry, recv expr, req, opt int)
 	prefix := "__" + overloadBase(m.Name) + "_"
 	for _, x := range cls.methodSet() {
 		tw := x.M
-		if !strings.HasPrefix(tw.Name, prefix) || tw.generic() || tw.Block != nil || len(tw.Params) != len(m.Params) {
+		// a twin shorter than the method stands for the counts it takes, where the method's own extra parameters are
+		// optional: `s.byteslice(a...b)` is `__byteslice_range`, byteslice's (Integer, ?Integer) aside (decision 496)
+		short := len(tw.Params) < len(m.Params) && len(tw.Params) >= max(req, 1)
+		if !strings.HasPrefix(tw.Name, prefix) || tw.generic() || tw.Block != nil || len(tw.Params) != len(m.Params) && !short {
 			continue
 		}
 		c.resolveMethod(tw)
@@ -663,9 +666,16 @@ func (c *Compiler) dynClassOverloads(f *fctx, e *entry, recv expr, req, opt int)
 			pt := tw.Params[i].Type
 			nodes = append(nodes, &exprNode{e: expr{code: c.dynArg(pt, i), typ: pt}})
 		}
-		if opt == 0 {
+		switch {
+		case short:
+			f.emit("if len(args) == %d {", len(tw.Params))
+			f.indent++
 			f.emitDynReturn(f.callEntry(&parser.NilNode{}, te, recv, nodes, nil))
-		} else {
+			f.indent--
+			f.emit("}")
+		case opt == 0:
+			f.emitDynReturn(f.callEntry(&parser.NilNode{}, te, recv, nodes, nil))
+		default:
 			for k := max(req, 1); k <= req+opt; k++ {
 				f.emit("if len(args) == %d {", k)
 				f.indent++

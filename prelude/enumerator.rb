@@ -190,6 +190,49 @@ class Enumerator < Object
     def to_s = inspect
   end
 
+  # Blockless filter_map: its with_index keeps the block's truthy results, as MRI's does (decision 496).
+  # @rbs generic E
+  # @go_type struct { items *Array[E] }
+  class FilterMap < Object
+    #: [X] (Array[X]) -> FilterMap[X]
+    def self.new(items) = %x{ return &Enumerator_FilterMap[X]{items: items} }
+
+    #: [U] (?Integer) { (E, Integer) -> U? } -> Array[U]
+    def with_index(offset = 0)
+      out = [] #: Array[U]
+      to_a.each_with_index do |x, i|
+        v = yield(x, i + offset)
+        out << v if v
+      end
+      out
+    end
+
+    #: [U] () { (E, Integer) -> U? } -> Array[U]
+    def each_with_index
+      out = [] #: Array[U]
+      to_a.each_with_index do |x, i|
+        v = yield(x, i)
+        out << v if v
+      end
+      out
+    end
+
+    #: () -> Integer
+    def size = to_a.size
+
+    #: () -> Array[E]
+    def to_a = %x{ self.items }
+
+    #: () -> FilterMap[untyped]
+    def _to_any = %x{ return &Enumerator_FilterMap[any]{items: self.items._ToAny()} }
+
+    #: () -> String
+    def inspect = "#<Enumerator: #{to_a.inspect}:filter_map>"
+
+    #: () -> String
+    def to_s = inspect
+  end
+
   # @rbs generic E
   # @go_type struct { items *Array[E]; negate bool; name string; ext rbExt[E]; shown string }
   class Select < Object

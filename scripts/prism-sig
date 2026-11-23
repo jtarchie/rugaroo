@@ -16,6 +16,7 @@ out = +<<~RBS
     class Node
       @location: Location | Integer
       def location: () -> Location
+      def accept: (untyped) -> untyped
     end
 RBS
 src.scan(/^  class (\w+) < Node\n((?:(?!^  class ).*\n)*)/) do |cls, body|

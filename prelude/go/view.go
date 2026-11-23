@@ -781,6 +781,9 @@ func rbViewBlockCall(name string, s rbView, args []any) (any, bool) { //nolint:c
 			xs := slices.Clone(rbViewElems(s))
 			slices.Reverse(xs)
 			return &Array[any]{s: xs}, true
+		case "filter_map": // its with_index keeps the block's truthy results (prism's `unescaped.filter_map.with_index { }`, decision 496)
+			rbArity(len(args), 0, 0)
+			return &Enumerator_FilterMap[any]{items: &Array[any]{s: slices.Clone(rbViewElems(s))}}, true
 		case "each_with_index":
 			rbArity(len(args), 0, 0)
 			out := &Array[any]{}
@@ -868,6 +871,15 @@ func rbViewBlockCall(name string, s rbView, args []any) (any, bool) { //nolint:c
 		}
 		xs := rbViewElems(s)
 		return rbViewFrom(s, xs[:min(n, len(xs))]), true
+	case "filter_map":
+		rbArity(len(args), 0, 0)
+		out := &Array[any]{}
+		for _, x := range rbViewElems(s) {
+			if v := rbUnbox(rbViewYield(b, x)); rbTruthy(v) {
+				out.s = append(out.s, v)
+			}
+		}
+		return out, true
 	case "select", "filter", "find_all":
 		rbArity(len(args), 0, 0)
 		return rbViewFrom(s, rbViewKeep(s, b, true)), true

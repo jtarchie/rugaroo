@@ -232,3 +232,31 @@ func rbNumCmp(a, b any) *Integer {
 	}
 	return nil
 }
+
+// rbIntCmpAny is a gem's `i < x` (op '<', 'l' for <=, '>', 'g' for >=) of an Integer and an untyped x: a Float compares
+// as a number, anything else by the implicit conversion to Integer as before (decision 496).
+func rbIntCmpAny(op byte, a Integer, b any) Boolean {
+	var c int
+	if f, ok := b.(Float); ok {
+		x, y := float64(a), float64(f)
+		switch {
+		case x < y:
+			c = -1
+		case x > y:
+			c = 1
+		case x != y: // NaN compares to nothing
+			return false
+		}
+	} else {
+		c = int(a.Op_cmp(rbAs[Integer](b, "Integer")))
+	}
+	switch op {
+	case '<':
+		return c < 0
+	case 'l':
+		return c <= 0
+	case '>':
+		return c > 0
+	}
+	return c >= 0
+}

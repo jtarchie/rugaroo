@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -196,6 +197,12 @@ func (f *fctx) numConvert(n parser.Node, x expr, target *Class) expr {
 // argument itself. Arguments are generated once and passed on as exprNodes.
 // Any other call is plain callEntry.
 func (f *fctx) numericMix(n parser.Node, recv expr, e *entry, args []parser.Node, block parser.Node) expr {
+	if op, ok := intCmpOps[e.M.Name]; ok && len(args) == 1 && f.lenient() && isClass(recv.typ, "Integer") && anyOrUnion(f.probeType(args[0], nil)) {
+		// gem code: an Integer against an untyped value that is a Float when it runs compares as numbers, where the
+		// implicit conversion truncated it or raised (prism's `common_whitespace < result`, Float::MAX; decision 496)
+		x := f.genExpr(args[0], nil)
+		return expr{code: fmt.Sprintf("rbIntCmpAny('%c', %s, %s)", op, recv.code, f.coerce(args[0], x, TAny{})), typ: f.cls("Boolean")}
+	}
 	x, args, ok := f.numericTower(n, recv, e, args, block)
 	if ok {
 		return x
@@ -244,6 +251,15 @@ func (f *fctx) numericMix(n parser.Node, recv expr, e *entry, args []parser.Node
 	}
 	return f.callEntry(n, fe, widen(recv), nodes, nil)
 }
+
+// anyOrUnion reports an untyped value or a union (a local written a Float and an Integer).
+func anyOrUnion(t Type) bool {
+	_, u := t.(TUnion)
+	return u || isAny(t)
+}
+
+// intCmpOps are Integer's ordering operators and rbIntCmpAny's code for each.
+var intCmpOps = map[string]byte{"<": '<', "<=": 'l', ">": '>', ">=": 'g'}
 
 // rbNumCall calls Comparable method m with Self = rbNum, one Go type for
 // Integer and Float values (recv and args are untyped Go code).

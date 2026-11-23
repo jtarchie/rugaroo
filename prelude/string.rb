@@ -204,11 +204,17 @@ class String < Object
   #: (String, String, String) -> bool
   def __start_with_q_3(a, b, c) = start_with?(a) || start_with?(b) || start_with?(c)
 
+  #: (String, String, String, String) -> bool
+  def __start_with_q_4(a, b, c, d) = start_with?(a) || start_with?(b) || start_with?(c) || start_with?(d)
+
   #: (String, String) -> bool
   def __end_with_q_2(a, b) = end_with?(a) || end_with?(b)
 
   #: (String, String, String) -> bool
   def __end_with_q_3(a, b, c) = end_with?(a) || end_with?(b) || end_with?(c)
+
+  #: (String, String, String, String) -> bool
+  def __end_with_q_4(a, b, c, d) = end_with?(a) || end_with?(b) || end_with?(c) || end_with?(d)
 
   # `end_with?(*suffixes)`: any number of them, none is false (decision 444).
   #: (Array[String]) -> bool

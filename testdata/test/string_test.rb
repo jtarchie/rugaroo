@@ -3202,3 +3202,14 @@ module StringTests
     end
   end
 end
+
+module StringTests
+  class FourPrefixTest < Minitest::Test
+    def test_start_and_end_with_four
+      assert "%i[a]".start_with?("%w", "%W", "%i", "%I")
+      refute "[a]".start_with?("%w", "%W", "%i", "%I")
+      assert "a.rb".end_with?(".py", ".js", ".go", ".rb")
+      refute "a.c".end_with?(".py", ".js", ".go", ".rb")
+    end
+  end
+end

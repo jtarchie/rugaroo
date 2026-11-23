@@ -366,6 +366,7 @@ func (f *fctx) genRange(n *parser.RangeNode, expected Type) expr {
 			types = append(types, f.genExpr(p, want).typ)
 		}
 	})
+	optEnd := f.nilableRangeEnd(n, want, types)
 	elem := want
 	inf := len(types) == 2 && isClass(types[0], "Integer") && isFloatInfinity(n.Right) && (want == nil || isClass(want, "Integer"))
 	switch {
@@ -387,6 +388,8 @@ func (f *fctx) genRange(n *parser.RangeNode, expected Type) expr {
 	switch {
 	case inf:
 		code += ", endless: true, inf: true"
+	case optEnd:
+		return f.endlessWhenNil(n, code, elem, t)
 	case n.Right != nil:
 		code += ", e: " + f.coerce(n.Right, f.genExpr(n.Right, elem), elem)
 	default:
@@ -396,6 +399,44 @@ func (f *fctx) genRange(n *parser.RangeNode, expected Type) expr {
 		code += ", excl: true"
 	}
 	return expr{code: code + "})", typ: t}
+}
+
+// nilableRangeEnd: in gem code, `a...b` whose b may be nil is endless when it is, as MRI's Range.new(a, nil) (prism's
+// `source.byteslice(start_offset...end_offset)`; decision 496). It narrows types[1] to the value's own type.
+func (f *fctx) nilableRangeEnd(n *parser.RangeNode, want Type, types []Type) bool {
+	if !f.lenient() || n.Left == nil || n.Right == nil {
+		return false
+	}
+	rt := f.probeType(n.Right, nil)
+	switch {
+	case isOpt(rt) && !isAny(stripOpt(rt)) && (want == nil || typeEq(want, stripOpt(rt))):
+		types[1] = stripOpt(rt)
+		return true
+	case isAny(rt) && want != nil && !isAny(want): // an untyped end where the callee wants a Range[T]: T or nil
+		return true
+	}
+	return false
+}
+
+// endlessWhenNil finishes genRange's code (open at its fields) for a nilableRangeEnd: the end set when b is not nil.
+func (f *fctx) endlessWhenNil(n *parser.RangeNode, code string, elem Type, t TClass) expr {
+	e := f.genExpr(n.Right, nil)
+	tmp, r := f.newTmp(), f.newTmp()
+	f.emit("%s := %s", tmp, f.materialize(e))
+	if n.IsEXCLUDE_END() {
+		code += ", excl: true"
+	}
+	f.emit("%s := %s})", r, code)
+	f.emit("if %s {", optNotNil(tmp, e.typ))
+	val := expr{code: tmp, typ: e.typ}
+	if isOpt(e.typ) {
+		val = expr{code: derefOpt(tmp, e.typ), typ: stripOpt(e.typ)}
+	}
+	f.emit("\t%s.e = %s", r, f.coerce(n.Right, val, elem))
+	f.emit("} else {")
+	f.emit("\t%s.endless = true", r)
+	f.emit("}")
+	return expr{code: r, typ: t}
 }
 
 // mentionsSelf reports whether t holds the Self type variable.

@@ -697,6 +697,9 @@ class Array < Object
   #: () -> Enumerator::Select[E]
   def __select_enum = Enumerator::Select.new(self, false, "select")
 
+  #: () -> Enumerator::FilterMap[E]
+  def __filter_map_enum = Enumerator::FilterMap.new(self)
+
   #: () -> Enumerator::Select[E]
   def __filter_enum = Enumerator::Select.new(self, false, "filter")
 

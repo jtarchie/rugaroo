@@ -3508,3 +3508,15 @@ module ArrayTests
     end
   end
 end
+
+module ArrayTests
+  class FilterMapWithIndexTest < Minitest::Test
+    def test_blockless_filter_map_with_index
+      xs = %w[a b c d]
+      assert_equal %w[B D], xs.filter_map.with_index { |x, i| x.upcase if i.odd? }
+      assert_equal %w[a1 c3], xs.filter_map.with_index(1) { |x, i| "#{x}#{i}" if i.odd? }
+      assert_equal [0, 4, 6], xs.filter_map.each_with_index { |x, i| i * 2 if x != "b" }
+      assert_equal [3, 7], (1..4).filter_map.with_index { |x, i| x + i if x.even? }
+    end
+  end
+end

@@ -4,6 +4,7 @@ module Prism
   class Node
     @location: Location | Integer
     def location: () -> Location
+    def accept: (untyped) -> untyped
   end
 
   class AliasGlobalVariableNode < Node
