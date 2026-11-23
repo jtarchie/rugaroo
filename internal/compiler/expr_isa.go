@@ -307,6 +307,11 @@ func (f *fctx) narrowIsA(call *parser.CallNode, v *local) (string, []narrowInfo)
 	if cond == "true" || cond == "false" || cls.universal {
 		return cond, nil
 	}
+	if cls == f.c.classes["Proc"] && isAny(base) {
+		// a Proc is a Go func (rbIsProc's cases), not the prelude's Proc struct: an untyped value stays untyped
+		// (rubocop-ast's `tokens.is_a?(Proc)` on prism's deferred-token lambda; decision 496)
+		return cond, nil
+	}
 	if nw, ok := f.narrowUnion(v, func(m Type) bool { mc := classOf(m); return mc != nil && mc.isSubclassOf(cls) }); ok {
 		return cond, []narrowInfo{nw} // the members that are a cls (decision 150)
 	}

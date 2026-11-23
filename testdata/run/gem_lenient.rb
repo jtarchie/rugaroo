@@ -48,6 +48,7 @@ require "matchish"
 require "sockish"
 require "buildish"
 require "prismish"
+require "lazyish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -222,3 +223,7 @@ p prismish.semicolon_typed(6, 9), prismish.semicolon_typed(6, nil)
 p prismish.kept_lines
 p prismish.percent?("%i["), prismish.percent?("["), prismish.percent?(nil)
 p prismish.least_indent(["  a", " b"]), prismish.least_indent([])
+lazy_src = LazyishSrc.new(3, [LazyishLazy.new, 1].first)
+p lazy_src.ast, lazy_src.toks
+plain_src = LazyishSrc.new(2, [LazyishBase.new, 1].first)
+p plain_src.ast, plain_src.toks
