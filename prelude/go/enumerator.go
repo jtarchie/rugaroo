@@ -13,6 +13,8 @@ import (
 
 type Enumerator_Map_Any interface{ _ToAny() *Enumerator_Map[any] }
 
+type Enumerator_FilterMap_Any interface{ _ToAny() *Enumerator_FilterMap[any] }
+
 type Enumerator_Select_Any interface {
 	_ToAny() *Enumerator_Select[any]
 }
