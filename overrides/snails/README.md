@@ -25,7 +25,7 @@ upgrades, `Set-Cookie`.
 `bench/setup workdir spinel-checkout` builds [snails-benchmark](https://github.com/snails-rb/snails-benchmark)'s
 scenario app (`GET /up`, and `GET /items/:id` as a primary-key read over 10,000 SQLite rows) with Spinel (tep's own
 server, as `snails build-binary` makes it) and with rugaroo (`Tep::APP` on WEBrick/`net/http`), both on Snails main
-91b921e5. `bench/run workdir` drives them with k6 the way its `bin/bench` does: constant connections, an 8-connection
+(measured on 91b921e5; both scripts now pin 06f052bb). `bench/run workdir` drives them with k6 the way its `bin/bench` does: constant connections, an 8-connection
 warmup, the contenders' order rotating each round, logging off.
 
 2026-11-21, Apple M4 (10 cores), macOS. 15 s × 3 rounds, median RPS (p95 ms):
@@ -60,7 +60,6 @@ anything, and it should be re-measured on Linux.
 - FFI: Snails' `database/*.rb` compile as written; rugaroo reads Spinel's `ffi_*` syntax (decision 375's Snails
   amendment). MRI gets it from `testdata/run/spinel_ffi_mri/spinel/ffi.rb` on `RUBYLIB`.
 - `patches/`: fixes to Snails' Ruby.
-- `sig/snails_fixes.rbs`: corrections to Snails' `.rbs` sidecars (decision 404's member-by-member override).
 - `nil_default_audit.rb`: finds parameters whose Ruby default is `nil` while the sidecar type rejects nil.
 
 ## Findings
@@ -75,12 +74,12 @@ anything, and it should be re-measured on Linux.
 
 1. `runtime/snails/form.rb`: `Form::FIELDS` names a private constant; MRI raises at the first `validates`.
    Lexical `FIELDS` is the fix (`patches/0001-form-private-constant.patch`).
-2. `.rbs` sidecars say non-nil where the Ruby can be nil: `render(body = nil)`, `Request#initialize(env = nil)`,
-   `find_by(order: nil)`, `fetch_many(order:/limit:/offset: nil)`, and `Logger::Context.controller/action/format`
-   (a thread-local read before its first write). Filed as
-   [snails-rb/snails#105](https://github.com/snails-rb/snails/issues/105).
-3. Model finders and associations are `untyped` in the generated `.rbs`. Filed as
-   [snails-rb/snails#104](https://github.com/snails-rb/snails/issues/104).
+2. Done upstream: `.rbs` sidecars said non-nil where the Ruby can be nil
+   ([snails-rb/snails#105](https://github.com/snails-rb/snails/issues/105), fixed in 06f052bb; the local
+   `sig/snails_fixes.rbs` is gone).
+3. Declined upstream: typed model finders in the generated `.rbs`
+   ([snails-rb/snails#104](https://github.com/snails-rb/snails/issues/104), not planned). The sidecar is Spinel's
+   analyzer input; Spinel infers `Post.find` → `Post` from the Ruby source. Closing the gap is rugaroo's job.
 4. A server seam: split `Snails::Main.start` into setup and `serve(port, workers)`, so another server (this
    adapter, or a Rack adapter) is one override and prefork stays inside tep's own server.
 
@@ -104,5 +103,6 @@ anything, and it should be re-measured on Linux.
 
 - `accept_nonblock(exception: false)` / `read_nonblock(..., exception: false)`: the keyword is refused. Snails no
   longer needs it.
-- `app/` compiles only leniently (`-gem app -gem gen`) until model types are declared (#104 above).
+- `app/` compiles only leniently (`-gem app -gem gen`): `Sqlx::Query`'s sidecar types `find`/`fetch_many` as
+  `untyped`, and rugaroo takes that over its own inference, where Spinel infers the model class (#104 above).
 - Spinel's `ffi_struct` and `ffi_source` (a C fragment) are not read; Snails uses neither.

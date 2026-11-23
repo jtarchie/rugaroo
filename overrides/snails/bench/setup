@@ -4,7 +4,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 W=$1
 SPINEL=$2
-SNAILS_REV=91b921e5408bbb1b3bdd75e41ea039a6d9b69d66 # one core for every contender; the benchmark pins v1.0.0-rc.2
+SNAILS_REV=06f052bb9e4a8282c519adb210517e13d043a5f1 # one core for every contender; the benchmark pins v1.0.0-rc.2
 BENCH_REV=1ea5860cabe5be7b36f8eea3d7f844d1bc55e7e6
 mkdir -p "$W"
 [ -d "$W/snails" ] || git clone -q https://github.com/snails-rb/snails "$W/snails"
@@ -34,9 +34,8 @@ cp -R "$app" "$R"
 cp -R "$W/snails/runtime" "$R/snails-core"
 for p in "$here"/../patches/*.patch; do patch -s -d "$R/snails-core" -p2 < "$p"; done
 export RUBYLIB="$here/../../../testdata/run/spinel_ffi_mri" # MRI reads ffi_* through the shim; rugaroo reads it itself (decision 375)
-mkdir -p "$R/shim" "$R/sig"
+mkdir -p "$R/shim"
 cp "$here/../lib/"*.rb "$R/shim/"
-cp "$here/../sig/"*.rbs "$R/sig/"
 cp "$here/serve.rb" "$R/serve.rb"
 go build -o "$W/rugaroo" "$here/../../../cmd/rugaroo"
 (cd "$R" && "$W/rugaroo" build -gem snails-core -gem app -gem gen -o "$W/snails-rugaroo" serve.rb)

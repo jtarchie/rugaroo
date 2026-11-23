@@ -3,7 +3,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 W=${1:-${TMPDIR:-/tmp}/rugaroo-snails}
-REV=91b921e5408bbb1b3bdd75e41ea039a6d9b69d66 # snails main, 2026-11-21
+REV=06f052bb9e4a8282c519adb210517e13d043a5f1 # snails main, 2026-11-23 (#105 sidecar fixes)
 mkdir -p "$W"
 if [ ! -d "$W/snails" ]; then
   git clone -q https://github.com/snails-rb/snails "$W/snails"
@@ -29,10 +29,9 @@ cp -R "$W/snails/runtime" "$A/snails-core"
 for p in "$here"/patches/*.patch; do patch -s -d "$A/snails-core" -p2 < "$p"; done
 export RUBYLIB="$here/../../testdata/run/spinel_ffi_mri" # MRI reads ffi_* through the shim; rugaroo reads it itself (decision 375)
 
-# Ours: Tep::APP on WEBrick, the sp_net stand-in, the driver, and .rbs corrections.
-mkdir -p "$A/shim" "$A/sig"
+# Ours: Tep::APP on WEBrick, the sp_net stand-in, and the driver.
+mkdir -p "$A/shim"
 cp "$here/lib/"*.rb "$A/shim/"
-cp "$here/sig/"*.rbs "$A/sig/"
 cp "$here/main.rb" "$A/rugaroo_main.rb"
 
 go build -o "$W/rugaroo" "$here/../../cmd/rugaroo"
