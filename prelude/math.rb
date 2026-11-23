@@ -166,4 +166,10 @@ class Float
   MAX = 1.7976931348623157e+308 #: Float
   MIN = 2.2250738585072014e-308 #: Float
   DIG = 15 #: Integer
+  MANT_DIG = 53 #: Integer
+  MAX_EXP = 1024 #: Integer
+  MIN_EXP = -1021 #: Integer
+  MAX_10_EXP = 308 #: Integer
+  MIN_10_EXP = -307 #: Integer
+  RADIX = 2 #: Integer
 end

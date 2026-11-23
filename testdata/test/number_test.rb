@@ -1177,6 +1177,13 @@ module NumberTests
   end
 
   class NumberFloatTest < Minitest::Test
+    def test_ieee_constants
+      assert_equal [53, 1024, -1021, 308, -307, 2],
+                   [Float::MANT_DIG, Float::MAX_EXP, Float::MIN_EXP, Float::MAX_10_EXP, Float::MIN_10_EXP, Float::RADIX]
+      assert_equal 1024, Float.const_get(:MAX_EXP)
+      assert_equal Float::MAX, 2.0**(Float::MAX_EXP - 1) * (2 - Float::EPSILON)
+    end
+
     def test_float_behaviour
       x = 2.5 #: Float
       y = -1.25 #: Float
