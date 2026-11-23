@@ -361,6 +361,12 @@ end
 #: (*String, ?print_stdout: bool, ?timeout: Integer?, **untyped) -> String
 def method_curl(*args, print_stdout: true, timeout: nil, **options) = "#{args} #{print_stdout} #{timeout.inspect} #{options}"
 
+#: (Integer, Integer) -> Integer
+def method_dup_underscore(_a, _a) = _a
+
+#: (Integer, *Integer) -> Integer
+def method_dup_underscore_rest(_a, *_a) = _a
+
 module MethodTests
   # `yield(*xs)`: the block takes the elements, `{ (*T) -> R }`, and a tail yield is the method's value (decision 363)
   class SplatYielder
@@ -501,6 +507,23 @@ module MethodTests
       assert_equal %i[req req], two.parameters.map(&:first)
       assert_equal %i[req rest], splat.parameters.map(&:first)
       assert_equal 2, two.parameters.map(&:last).uniq.size
+    end
+  end
+
+  # A repeated `_` name (Ruby allows it): plain parameters bind the first argument, destructuring tuples bind after them.
+  class RepeatedUnderscoreParamTest < Minitest::Test
+    def test_def
+      assert_equal 1, method_dup_underscore(1, 2)
+      assert_equal 1, method_dup_underscore_rest(1, 2, 3)
+      assert_equal [[:req, :_a], [:req, :_a]], method(:method_dup_underscore).parameters
+    end
+
+    def test_block
+      assert_equal [1], [[1, 2]].map { |_x, _x| _x }
+      assert_equal [1], [[1, 2, 3]].map { |_y, *_y| _y }
+      assert_equal [2], [[[1, 2], 3]].map { |(_z, _z), _w| _z }
+      assert_equal [2], [[1, [2, 3]]].map { |_z, (_z, _w)| _z }
+      assert_equal 1, proc { |_a, _a| _a }.call(1, 2)
     end
   end
 end

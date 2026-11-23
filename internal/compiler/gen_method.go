@@ -194,11 +194,14 @@ func (c *Compiler) newFctx(f *File, owner *Class, m *Method) *fctx {
 func (c *Compiler) paramLocals(m *Method) []*local {
 	ps := make([]*local, 0, len(m.Params))
 	for i, p := range m.Params {
+		if repeatedParam(m.Params, i) {
+			continue // `def m(_a, _a)`: the first binds `_a`
+		}
 		t := p.Type
 		if p.Rest {
 			t = TClass{C: c.classes["Array"], Args: []Type{p.Type}}
 		}
-		goName := goParamName(p.Name, i)
+		goName := goParamName(m.Params, i)
 		if p.Rest || p.Out {
 			goName = goLocalName(p.Name) // bound from rest_ or the out pointer in the prologue
 		}
@@ -382,12 +385,12 @@ func (c *Compiler) emitBody(m *Method, namedRet bool) {
 	prologue := func() {
 		for i, p := range m.Params {
 			if p.Out { // copied in, and back out however the method returns, so a raise keeps the appends as in MRI
-				f.emit("%s := *%s.s", goLocalName(p.Name), outParamName(p, i))
-				f.emit("defer func() { *%s.s = %s }()", outParamName(p, i), goLocalName(p.Name))
+				f.emit("%s := *%s.s", goLocalName(p.Name), outParamName(m.Params, i))
+				f.emit("defer func() { *%s.s = %s }()", outParamName(m.Params, i), goLocalName(p.Name))
 			}
 		}
-		for _, p := range m.Params {
-			if p.Rest && p.Name != "_" { // `*_` binds nothing
+		for i, p := range m.Params {
+			if p.Rest && p.Name != "_" && !repeatedParam(m.Params, i) { // `*_` binds nothing
 				f.emit("%s := &Array[%s]{s: rest_}", goLocalName(p.Name), c.goType(p.Type))
 				f.emit("_ = %s", goLocalName(p.Name)) // `*_args` may go unused
 			}

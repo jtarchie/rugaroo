@@ -834,7 +834,7 @@ func (f *fctx) appendBufRef(name string) string {
 	if f.m != nil {
 		for i, p := range f.m.Params {
 			if p.Out && p.Name == name {
-				return outParamName(p, i) + ".b"
+				return outParamName(f.m.Params, i) + ".b"
 			}
 		}
 	}

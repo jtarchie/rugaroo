@@ -159,13 +159,13 @@ func (c *Compiler) sig(m *Method, env map[string]Type) (params string, ret strin
 		ps = append(ps, "rbKw int")
 	}
 	for i, p := range m.Params {
-		name := goParamName(p.Name, i)
+		name := goParamName(m.Params, i)
 		if p.Rest {
 			restParam = "rest_ ..." + c.goType(subst(p.Type, env))
 			continue
 		}
 		if p.Out {
-			ps = append(ps, outParamName(p, i)+" rbStrOut")
+			ps = append(ps, outParamName(m.Params, i)+" rbStrOut")
 			continue
 		}
 		ps = append(ps, name+" "+c.goType(subst(p.Type, env)))
@@ -200,13 +200,13 @@ func (c *Compiler) argNames(m *Method) string {
 		as = append(as, "rbKw")
 	}
 	for i, p := range m.Params {
-		name := goParamName(p.Name, i)
+		name := goParamName(m.Params, i)
 		if p.Rest {
 			restArg = "rest_..."
 			continue
 		}
 		if p.Out {
-			name = outParamName(p, i)
+			name = outParamName(m.Params, i)
 		}
 		as = append(as, name)
 	}

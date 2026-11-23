@@ -419,7 +419,7 @@ func kwAdapterArgs(sm *Method, env map[string]Type) []parser.Node {
 	var args []parser.Node
 	kh := &parser.KeywordHashNode{}
 	for i, p := range sm.Params {
-		a := &exprNode{e: expr{code: goParamName(p.Name, i), typ: subst(p.Type, env)}}
+		a := &exprNode{e: expr{code: goParamName(sm.Params, i), typ: subst(p.Type, env)}}
 		switch {
 		case p.KwRest:
 			kh.Elements = append(kh.Elements, &parser.AssocSplatNode{Value: a})
@@ -519,7 +519,7 @@ func (c *Compiler) iterAdapterBody(cls *Class, e entry, s slot) string {
 			panic(compileError{msg: fmt.Sprintf("%s#%s takes %d parameters where %s#%s's iterator takes %d", cls.RubyName, e.M.Name, len(e.M.Params), s.e.Owner.RubyName, s.e.M.Name, len(s.e.M.Params))})
 		}
 		from, to := c.goType(subst(s.e.M.Params[i].Type, env)), c.goType(subst(p.Type, oenv))
-		a := goParamName(s.e.M.Params[i].Name, i)
+		a := goParamName(s.e.M.Params, i)
 		if from != to && to != "any" {
 			a = fmt.Sprintf("rbAs[%s](any(%s), %q)", to, a, to)
 		}
@@ -607,7 +607,7 @@ func (c *Compiler) adapterBody(cls *Class, e entry, s slot) string {
 	oenv["Self"] = recv.typ
 	args := make([]parser.Node, n)
 	for i, p := range s.e.M.Params[:n] {
-		a := expr{code: goParamName(p.Name, i), typ: subst(p.Type, env)}
+		a := expr{code: goParamName(s.e.M.Params, i), typ: subst(p.Type, env)}
 		to := subst(paramAt(e.M, i).Type, oenv)
 		if tc, ok := to.(TClass); ok && tc.C.isStruct() && !c.adapts(a.typ, to, false) {
 			a = expr{code: a.code + ".(" + c.goType(to) + ")", typ: to} // narrower: assert
@@ -785,7 +785,7 @@ func (c *Compiler) slotSeqAdapter(cls *Class, e entry, env map[string]Type, recv
 		}
 		var args []string
 		for i, p := range m.Params {
-			args = append(args, conv(goParamName(sm.Params[i].Name, i), c.goType(subst(sm.Params[i].Type, senv)), c.goType(subst(p.Type, env))))
+			args = append(args, conv(goParamName(sm.Params, i), c.goType(subst(sm.Params[i].Type, senv)), c.goType(subst(p.Type, env))))
 		}
 		own, slotElem := c.goType(subst(m.Block.Params[0], env)), c.goType(subst(sm.Block.Params[0], senv))
 		blk := fmt.Sprintf("func(x %s) { y(%s) }", own, conv("x", own, slotElem))
@@ -831,7 +831,7 @@ func (c *Compiler) dynAdapterBody(cls *Class, e entry, s slot) string {
 			f.emit("args_ := make([]any, 0, %d+len(rest_))", len(sm.Params))
 			continue
 		}
-		vals = append(vals, f.coerce(nil, expr{code: goParamName(p.Name, i), typ: t}, TAny{}))
+		vals = append(vals, f.coerce(nil, expr{code: goParamName(sm.Params, i), typ: t}, TAny{}))
 	}
 	if rest == "" {
 		f.emit("args_ := make([]any, 0, %d)", len(sm.Params)+1)

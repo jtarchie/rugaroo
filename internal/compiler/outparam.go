@@ -8,7 +8,7 @@ import (
 )
 
 // outParamName is an out parameter's Go name: the *String the caller's local is reached through.
-func outParamName(p Param, i int) string { return goParamName(p.Name, i) + "_out" }
+func outParamName(ps []Param, i int) string { return goParamName(ps, i) + "_out" }
 
 // markOutParams (decision 405): a public gem method must override nothing, since a call through its parent passes a plain String.
 func (c *Compiler) markOutParams() {

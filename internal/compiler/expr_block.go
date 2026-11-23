@@ -96,6 +96,7 @@ func (f *fctx) blockParamList(b parser.Node) blockParams {
 		default:
 			f.errorf(r, "unsupported block parameter form")
 		}
+		blankRepeated(names)
 		return names
 	case *parser.NumberedParametersNode:
 		var names blockParams
@@ -1414,3 +1415,41 @@ func isTuple(t Type) bool { _, ok := t.(TTuple); return ok }
 
 // arrayOfAny is Array[untyped].
 func arrayOfAny(c *Compiler) TClass { return TClass{C: c.classes["Array"], Args: []Type{TAny{}}} }
+
+// blankRepeated leaves one binding of a name Ruby lets a block list repeat (`|_a, _a|`, `_` names only; Go rejects
+// the same name twice) and blanks the others, as MRI binds it: the plain parameters bind first, the destructuring
+// tuples after, so the last tuple occurrence wins, else the first plain one (`|_a, *_a|` is the first argument).
+func blankRepeated(names blockParams) {
+	type slot struct {
+		p   *blockParam
+		sub bool
+	}
+	slots := map[string][]slot{}
+	for i := range names {
+		for j := range names[i].Sub {
+			slots[names[i].Sub[j].Name] = append(slots[names[i].Sub[j].Name], slot{&names[i].Sub[j], true})
+		}
+		if names[i].Sub == nil && names[i].Name != "" {
+			slots[names[i].Name] = append(slots[names[i].Name], slot{&names[i], false})
+		}
+	}
+	for name, ss := range slots {
+		if len(ss) < 2 || name == "_" {
+			continue
+		}
+		win := 0
+		for k, s := range ss {
+			if s.sub {
+				win = k
+			}
+		}
+		for k, s := range ss {
+			if k != win {
+				s.p.Name = "_"
+				if s.p.Rest {
+					s.p.Name = "" // an anonymous rest
+				}
+			}
+		}
+	}
+}

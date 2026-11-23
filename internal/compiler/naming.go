@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -143,10 +144,18 @@ func goFuncName(name string) string {
 }
 
 // goParamName is a method parameter's Go name: `def cause(_)`'s ignored `_` gets a real one, since a forwarder passes
-// its own parameter on and Go cannot read `_`.
-func goParamName(name string, i int) string {
-	if name == "_" {
+// its own parameter on and Go cannot read `_`. So does a repeated `_x` (`def m(_a, _a)`, which Ruby allows and binds to
+// the first argument): Go rejects the same name twice.
+func goParamName(ps []Param, i int) string {
+	if ps[i].Name == "_" || repeatedParam(ps, i) {
 		return fmt.Sprintf("rbU%d_", i)
 	}
-	return goLocalName(name)
+	return goLocalName(ps[i].Name)
+}
+
+// repeatedParam: ps[i] repeats an earlier parameter's name, which Ruby allows only for `_`-prefixed names; the first
+// one binds it.
+func repeatedParam(ps []Param, i int) bool {
+	name := ps[i].Name
+	return strings.HasPrefix(name, "_") && slices.ContainsFunc(ps[:i], func(p Param) bool { return p.Name == name })
 }
