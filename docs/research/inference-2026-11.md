@@ -99,7 +99,7 @@ walked yet, in every compile and not only in a round (three walks instead of two
 
 **New evidence rules.**
 
-- Dynamic calls that all pass one class type a parameter no static call reaches (`dynUsesAgree`).
+- Dynamic calls that all pass one class type a parameter no static call reaches (`dynUsesAgree`). Removed by decision 492: calls that run but record nothing (computed sends, user-code dynamic calls) made it unsound, and it typed 1-2 parameters per gem.
 - Lambdas one slot holds (`@xfrm = flag ? @plain : @skip`, or two writes of one ivar) share their parameter keys
   during the rounds, so the slot is one Go func type and not a union only a dynamic call can call (`procAlias`).
 - A `*args` forwarder passes positional types on (`infer_rest.go`): each call records its rest arguments by

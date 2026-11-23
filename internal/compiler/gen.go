@@ -11,7 +11,6 @@ import (
 // fctx is the per-function code generation context.
 type fctx struct {
 	iterValue        *tail                         // the value tail the next genIterLoop gives its loop frame, for `break v` (decision 410)
-	dynSetter        bool                          // noteDynUses is recording a dynamic `x.name = v` (decision 477)
 	iterBroke        *brokeTarget                  // the label the next genIterLoop's valueless break jumps to (decision 417)
 	iterBreakValue   bool                          // the next genIterCall is a gem's iterator in value position whose block breaks (decision 417)
 	splittingForward bool                          // splitBlockForward's with-a-block side: the plain union loop (decision 418)

@@ -154,7 +154,6 @@ type paramUse struct {
 	file    *File
 	off     int
 	anyRest bool   // a gem's untyped value into a rest parameter: its elements are anything (decision 253)
-	setter  bool   // a dynamic `x.name = v`: the parameter is an ivar's value, which agreeing calls do not type (decision 477)
 	widen   bool   // a gem's untyped value into an overridden method: the parameter is untyped (decision 324)
 	dyn     bool   // a gem's dynamic call by this name, which may reach another class's method of that name (decision 331)
 	deflt   bool   // the parameter's own default, not a call's argument
@@ -995,12 +994,9 @@ func (c *Compiler) unknownRule(inf *inference, key pendingKey, uses []paramUse) 
 // they widen a parameter but never type it alone, so it is untyped until a static call carries a type (decision 331).
 // ProcessedSource's `parser.parse(@buffer)` reaches every `parse` with a Buffer; rubocop-ast's
 // NodePattern::Parser#parse(source) takes a String from NodePattern#initialize, which is untyped this round. The
-// not-known-yet rounds let them type it when they all pass one class (dynUsesAgree).
+// not-known-yet rounds hold to it too (decision 492).
 func (c *Compiler) dynOnly(uses []paramUse) bool {
-	if !slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) || slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) }) {
-		return false
-	}
-	return !c.env.InferUnknown || !dynUsesAgree(uses)
+	return slices.ContainsFunc(uses, func(u paramUse) bool { return u.dyn }) && !slices.ContainsFunc(uses, func(u paramUse) bool { return !u.dyn && realType(u.typ) })
 }
 
 // betOn reports that key reaches the rules a settled round's untyping applies to (settleRound).
@@ -1030,7 +1026,7 @@ func (c *Compiler) useType(inf *inference, key pendingKey, uses []paramUse) (Typ
 	if c.dynOnly(uses) {
 		c.noteWhy(key, uses, "only dynamic calls by its name carry a type, which may be meant for another class's method (decision 331)")
 		if _, had := inf.types[key]; had && c.env.InferUnknown {
-			return TAny{}, "" // typed by agreeing dynamic calls until a static call passed something untyped: untyped now, not kept
+			return TAny{}, "" // an earlier round's static call typed it; only dynamic calls reach it now: untyped, not kept
 		}
 		return nil, ""
 	}
@@ -1354,31 +1350,6 @@ func (c *Compiler) gemMethodsNamed(name string) []*Method {
 		}
 	}
 	return c.gemByName[name]
-}
-
-// dynUsesAgree reports dynamic calls that all pass one class and nothing untyped: with the not-known-yet rounds they
-// type a parameter no static call reaches (liquid's Tag#render(context), called on a node of the untyped nodelist);
-// a later use of another class joins in, since the state only goes up (docs/research/inference-2026-11.md).
-func dynUsesAgree(uses []paramUse) bool {
-	var t Type
-	for _, u := range uses {
-		if u.deflt {
-			continue
-		}
-		if !realType(u.typ) || holdsAny(u.typ) || u.setter {
-			return false
-		}
-		if t == nil {
-			t = u.typ
-			continue
-		}
-		j, ok := join(t, u.typ)
-		if !ok || isAny(j) || holdsUnion(j) && !holdsUnion(t) {
-			return false
-		}
-		t = j
-	}
-	return t != nil
 }
 
 // mergeSameClass folds a union's members of one generic class into one: two instantiations are one Go type, so no union

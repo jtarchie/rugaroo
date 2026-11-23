@@ -1352,8 +1352,6 @@ func (f *fctx) noteDynUses(name string, args []parser.Node) {
 		f.noteDynSplat(name, args[si], si)
 		return
 	}
-	f.dynSetter = strings.HasSuffix(name, "=") && name != "==" && name != "[]=" && name != "<=" && name != ">=" && name != "!=" && name != "==="
-	defer func() { f.dynSetter = false }()
 	if k := len(args) - 1; k >= 0 {
 		if en, ok := args[k].(*exprNode); ok && en.blockArg { // the block goes to the method's &block, not a parameter (rubocop-ast's `emit ss.matched, &:to_sym`)
 			args = args[:k]
