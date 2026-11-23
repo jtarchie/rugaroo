@@ -3486,3 +3486,25 @@ module ArrayTests
     end
   end
 end
+
+# A 14-tuple, as racc's Racc_arg (decision 495).
+#: ([Array[Integer?], Array[Integer?], Integer, Integer, Integer, Integer, Integer, Integer, Integer, Array[Integer | Symbol], Hash[untyped, Integer], Integer, Integer, bool]) -> [Integer, Integer, Integer, Integer]
+def array_racc_like(arg)
+  table, check, _, _,
+  _, _, _, _,
+  base, _, tokens, * = arg
+  _, _, _, _,
+  _, _, _, _,
+  _, _, _, _,
+  _, use, * = arg
+  [(table[0] || 0) + (check[1] || 0), base, tokens.size, use ? 1 : 0]
+end
+
+module ArrayTests
+  class WideTupleTest < Minitest::Test
+    def test_fourteen_tuple_with_repeated_underscores
+      arg = [[1, 2], [nil, 5], 0, 0, 0, 0, 0, 0, 9, [1, :x], { a: 1, b: 2 }, 1, 2, true]
+      assert_equal [6, 9, 2, 1], array_racc_like(arg)
+    end
+  end
+end

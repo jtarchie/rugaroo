@@ -1,0 +1,20 @@
+# Signatures for racc's pure-Ruby parser runtime (racc 1.8), which ships none. A racc-generated parser keeps its
+# tables in one mixed constant Array, `Racc_arg`, that the runtime destructures in every step; inferred, each table
+# is untyped and every lookup in `_racc_do_parse_rb`, `_racc_evalact` and `_racc_do_reduce` is a dynamic call. MRI
+# runs this loop in C (cparse); a compiled program runs the Ruby one. The tuple is what racc's generator writes.
+module Racc
+  class Parser
+    
+    @racc_state: Array[Integer]
+    @racc_tstack: Array[Integer]
+    @racc_t: Integer?
+    @racc_read_next: bool
+    @racc_user_yyerror: bool
+    @racc_error_status: Integer
+
+    def _racc_setup: () -> [Array[Integer?], Array[Integer?], Array[Integer], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Integer, Array[Integer | Symbol], Hash[untyped, Integer], Integer, Integer, bool]
+    def _racc_do_parse_rb: ([Array[Integer?], Array[Integer?], Array[Integer], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Integer, Array[Integer | Symbol], Hash[untyped, Integer], Integer, Integer, bool] arg, bool in_debug) -> untyped
+    def _racc_evalact: (Integer? act, [Array[Integer?], Array[Integer?], Array[Integer], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Integer, Array[Integer | Symbol], Hash[untyped, Integer], Integer, Integer, bool] arg) -> Integer?
+    def _racc_do_reduce: ([Array[Integer?], Array[Integer?], Array[Integer], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Array[Integer?], Integer, Array[Integer | Symbol], Hash[untyped, Integer], Integer, Integer, bool] arg, Integer act) -> Integer?
+  end
+end

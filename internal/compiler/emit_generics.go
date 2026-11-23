@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// maxTuple is the widest RBS tuple: Socket.getaddrinfo's rows have 7 elements (decision 135).
-const maxTuple = 7
+// maxTuple is the widest RBS tuple: racc's Racc_arg has 14 elements (decision 495).
+const maxTuple = 14
 
 // emitTuples emits every arity: the pruner keeps the ones kept code names (decision 432).
 func (c *Compiler) emitTuples() {

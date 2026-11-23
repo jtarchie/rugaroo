@@ -576,6 +576,15 @@ func (f *fctx) toAry(v expr) expr {
 func (f *fctx) assignTarget(target parser.Node, v expr) {
 	switch t := target.(type) {
 	case *parser.LocalVariableTargetNode:
+		if strings.HasPrefix(t.Name, "_") && t.Depth == 0 {
+			if info := f.localInfo(t.Name); info != nil && info.reads == 0 && !info.param {
+				// a `_` slot of `a, _, _, b = tuple` nothing reads: Go's blank, so its fields' types never join into one local
+				if !isNil(v.typ) {
+					f.emit("_ = %s", f.materialize(v))
+				}
+				return
+			}
+		}
 		v.provisional = v.provisional || f.mwProvisional && isAny(v.typ)
 		f.assignLocal(t, t.Name, v, nil)
 	case *parser.InstanceVariableTargetNode:

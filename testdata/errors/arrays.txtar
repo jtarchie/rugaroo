@@ -146,11 +146,11 @@ puts pair[2].inspect
 def pair = [1, "a"]
 a, b, c = pair
 puts a, b, c
--- tuple_eight_elements.rb --
-# error: main.rb:3: only 2- to 7-tuples are supported
-#: () -> [Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer]
-def eight = [1, 2, 3, 4, 5, 6, 7, 8]
-puts eight.inspect
+-- tuple_fifteen_elements.rb --
+# error: main.rb:3: only 2- to 14-tuples are supported
+#: () -> [Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer, Integer]
+def fifteen = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+puts fifteen.inspect
 -- multi_assign_nil.rb --
 # error: main.rb:2: cannot infer a type from nil; annotate the target first
 a, b = 1, nil
