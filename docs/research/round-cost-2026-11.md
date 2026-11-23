@@ -6,6 +6,8 @@ Read-only plan, written against `main` at ff19ddb1 by a planning agent; nothing 
 
 S0 was built (the `round work` line and `RUGAROO_ROUND_DUMP`, decision 491). It measured s, the share of `collectUses` time in seen classes, at about 7% on rubocop, not the 60% assumed below, so S2 and S3 would save about 1 s a round and were not built. What was built instead is the one-walk part of stage 1 without its semantic change: the return walk records the round's uses and emission runs only where that walk does not count (decision 491; rubocop 227 s -> 200 s, Go identical). S1 and S4 remain open; S4 is the large one (`r-refine` is about 38 s of rubocop's 200 s, most of it the one searching round).
 
+S4 sized (2026-11-22, a throwaway counter in `dryRunIvarUsers`): a rubocop try is about 0.7 s over ~1,000 method steps. The 40-53 methods whose body names a candidate ivar (or its reader) take ~320 ms, the ~950 others ~360 ms. A memo that skipped every other step would save at most about half of `r-refine`, about 18 s, and less, since those methods can read a candidate through a callee's return. Not built: the accessor refactor (about 100 `Ivar.Type` reads) costs more than 10-15 s earns. S1 saves 1-2 s and is not built either.
+
 ## Summary and recommendation
 
 **Where a round's time goes.** A round runs `refineIvars`, then resets and re-infers every return, then emits every user method to record call uses (`compiler.go:518-533`). Only the uses feed the next round (`infer.go:923`). Most of that work is done twice:
