@@ -184,6 +184,7 @@ func (c *Compiler) addDef(f *File, cls *Class, n *parser.DefNode, private bool, 
 		m.sigText = protocolSig(n) // `def respond_to_missing?(name, priv)`: Ruby's protocol fixes its types (decision 182)
 	}
 	c.defAnnotations(f, cls, n, m, line)
+	m.newTail = newTailDef(n)
 	if m.sigText == "" && !f.isPrelude() {
 		// A `.rbs` signature fills a method with no inline `#:` (decision 160);
 		// overloads compile once, merged, and each call picks its arm (decision 12).
@@ -195,6 +196,7 @@ func (c *Compiler) addDef(f *File, cls *Class, n *parser.DefNode, private bool, 
 			m.sig = sd.Overloads[0]
 			if sd.Advisory {
 				c.inferAdvisoryParams(m, n)
+				m.advisoryRet = untypedHint(m.sig.Return)
 			}
 		} else if merged := mergeArms(sd); merged != nil {
 			m.sig, m.arms = merged, sd.Overloads

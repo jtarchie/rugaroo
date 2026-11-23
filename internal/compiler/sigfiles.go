@@ -401,6 +401,47 @@ func unionAdd(a, b rbs.Type) rbs.Type {
 	return rbs.Union{Elems: append(slices.Clone(elems), b)}
 }
 
+// newTailDef reports a def whose last expression is `new(...)` on self.
+func newTailDef(n *parser.DefNode) bool {
+	body, ok := n.Body.(*parser.StatementsNode)
+	if !ok || len(body.Body) == 0 {
+		return false
+	}
+	call, ok := body.Body[len(body.Body)-1].(*parser.CallNode)
+	if !ok || call.Name != "new" {
+		return false
+	}
+	_, self := call.Receiver.(*parser.SelfNode)
+	return call.Receiver == nil || self
+}
+
+// instanceRet reports a method whose result is an instance of the class it is called on, and whether it may be nil: `-> instance` declared, or an inferred return that is `new` on self.
+func instanceRet(m *Method) (inst, opt bool) {
+	if m.inferRet || m.sig == nil {
+		return m.newTail, false
+	}
+	ret := m.sig.Return
+	if o, ok := ret.(rbs.Optional); ok {
+		ret, opt = o.Elem, true
+	}
+	_, inst = ret.(rbs.Instance)
+	return inst, opt
+}
+
+// untypedHint reports a sidecar return that says nothing the body would not: untyped, or an optional or Array of it.
+func untypedHint(t rbs.Type) bool {
+	switch t := t.(type) {
+	case rbs.Untyped:
+		return true
+	case rbs.Optional:
+		return untypedHint(t.Elem)
+	case rbs.Name:
+		return t.Name == "Array" && len(t.Args) == 1 && untypedHint(t.Args[0])
+	case rbs.Bool, rbs.Bot, rbs.Instance, rbs.Intersection, rbs.Literal, rbs.Nil, rbs.Proc, rbs.Record, rbs.Self, rbs.Singleton, rbs.Tuple, rbs.Union, rbs.Void: // says something
+	}
+	return false
+}
+
 // inferAdvisoryParams types a sidecar's `untyped` positional parameters from use, as an unannotated def's (decisions 146, 404).
 func (c *Compiler) inferAdvisoryParams(m *Method, n *parser.DefNode) {
 	names, _, _ := c.defParams(m, n.Parameters)

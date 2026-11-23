@@ -65,6 +65,14 @@ module ClassMethodTests
 
     #: (Integer id) -> instance?
     def find_by(id) = id.positive? ? new(id) : nil
+
+    #: (Integer n) -> Array[instance]
+    def first_n(n) = (1..n).map { |i| new(i) }
+
+    #: (Integer n) { (instance) -> void } -> void
+    def each_row(n)
+      first_n(n).each { |row| yield row }
+    end
   end
 
   class Row
@@ -81,6 +89,14 @@ module ClassMethodTests
   class Article < Row
     #: () -> String
     def title = "article #{id}"
+
+    #: () -> Array[String]
+    def self.titles = first_n(2).map { |article| article.title }
+  end
+
+  class Draft < Article
+    #: (Integer id) -> Draft
+    def self.find(id) = new(id * 100)
   end
 
   #: (Article) -> String
@@ -97,6 +113,22 @@ module ClassMethodTests
       assert_equal "article 2", Article.find_by(2)&.title
       assert_nil Article.find_by(0)
       assert_equal 3, Row.find(3).id
+    end
+
+    def test_instance_inside_a_container
+      assert_equal ["article 1", "article 2"], Article.first_n(2).map { |article| article.title }
+      assert_equal [1], Row.first_n(1).map { |row| row.id }
+      seen = [] #: Array[String]
+      Article.each_row(2) { |article| seen << article.title }
+      assert_equal ["article 1", "article 2"], seen
+      assert_equal ["article 1", "article 2"], Article.titles
+    end
+
+    def test_instance_with_an_override_below
+      assert_equal "article 100", Draft.find(1).title
+      assert_equal "article 1", Draft.first_n(1).first&.title
+      klass = [Article, Draft].last
+      assert_equal 200, klass&.find(2)&.id
     end
 
     def test_a_wider_array_result_override

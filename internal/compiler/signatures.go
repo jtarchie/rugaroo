@@ -225,7 +225,11 @@ func (c *Compiler) resolveMethod(m *Method) {
 		}
 		m.SelfType = c.resolveType(st, sc)
 	}
-	if m.inferRet {
+	if c.hintedRet(m) {
+		m.hintRet = m.Ret
+	}
+	if m.inferRet || m.hintRet != nil {
+		m.inferRet = true
 		m.Ret = nil
 	}
 	c.typeStoredBlock(m.Block)
@@ -233,6 +237,19 @@ func (c *Compiler) resolveMethod(m *Method) {
 		m.Iterator = c.isIterator(m, m.Block)
 	}
 	c.bindParamNames(m)
+}
+
+// hintOr is ret, or the sidecar's hint when ret is untyped: a hint is a floor (`Array[untyped]` over a recursive walk's untyped).
+func hintOr(m *Method, ret Type) Type {
+	if m.hintRet != nil && isAny(ret) {
+		return m.hintRet
+	}
+	return ret
+}
+
+// hintedRet reports a sidecar's `untyped` return the body types (decision 494); an override keeps the hint, its Go signature being its parent's.
+func (c *Compiler) hintedRet(m *Method) bool {
+	return m.advisoryRet && m.Kind == kindDef && m.Owner != nil && c.inheritedSig(m) == nil
 }
 
 // resolveBlockSig resolves m's block signature, typing from use the parameters that have no annotation.
@@ -389,7 +406,8 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 // inheritsRet: an override answers what its slot does, unless its gem parent only answers nil, a placeholder (rubocop-ast's
 // Node#receiver under MethodDispatchNode's): then it infers its own value, and typeAbstracts widens the parent to it.
 func (c *Compiler) inheritsRet(m *Method) bool {
-	return m.inherited != nil && (!c.gemFile(m.File) || !onlyLiteral(m.inherited.Node))
+	abstract := m.inherited != nil && m.inherited.advisoryRet && m.inherited.Node != nil && onlyRaises(m.inherited.Node) // a sidecar's untyped hint on a stub that only raises types no override
+	return m.inherited != nil && !abstract && (!c.gemFile(m.File) || !onlyLiteral(m.inherited.Node))
 }
 
 // inferRet: a dry run joins the body's returns; provisional until ivar discovery finishes (discoverIvars clears it).
@@ -398,7 +416,7 @@ func (c *Compiler) inferRet(m *Method) {
 		return
 	}
 	if m.inferring && c.pruneGems && c.gemFile(m.File) { // a gem's recursion (bindata's `superclass.dsl_parser`): untyped at the inner call, the outer run types the rest
-		m.Ret, m.retWhy = TAny{}, "recursive"
+		m.Ret, m.retWhy = hintOr(m, TAny{}), "recursive"
 		c.taintRetWalks(m)
 		return
 	}
@@ -480,6 +498,7 @@ func (c *Compiler) inferRet(m *Method) {
 	if c.overriddenSelfRet(m, ret) {
 		ret = TClass{C: m.Owner}
 	}
+	ret = hintOr(m, ret)
 	m.Ret = ret
 	m.roundRet = c.awaitsParams(m, ret)
 	c.noteHardAny(m, ret)

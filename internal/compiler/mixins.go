@@ -472,6 +472,77 @@ func (c *Compiler) linkExtends() {
 			cls.meta.Includes = append(cls.meta.Includes, ext)
 		}
 	}
+	c.instanceParams()
+}
+
+// usesInstance reports a module whose methods name `instance` or call a maker on self, and hold no instance variable (decision 147: a generic module has none).
+func usesInstance(mod *Class, makers map[string]bool) bool {
+	uses := false
+	for _, m := range mod.MethodList {
+		if m.sig != nil && strings.Contains(m.sig.String(), "instance") || strings.Contains(m.sigText, "instance") {
+			uses = true
+		}
+		if m.Node == nil {
+			continue
+		}
+		if walkNode(m.Node.Body, func(n parser.Node) (bool, bool) {
+			switch n := n.(type) {
+			case *parser.InstanceVariableReadNode, *parser.InstanceVariableWriteNode, *parser.InstanceVariableOrWriteNode, *parser.InstanceVariableOperatorWriteNode, *parser.InstanceVariableAndWriteNode, *parser.InstanceVariableTargetNode:
+				return true, false
+			case *parser.CallNode:
+				_, self := n.Receiver.(*parser.SelfNode)
+				uses = uses || makers[n.Name] && (n.Receiver == nil || self)
+			}
+			return false, true
+		}) {
+			return false
+		}
+	}
+	return uses
+}
+
+// instanceTP names the type parameter `instance` is in a module only classes extend.
+const instanceTP = "Instance"
+
+// instanceParams: one generic body serves every extender, so `-> Array[instance]` is Array[Post] at `Post.all` with no copy (decision 404).
+func (c *Compiler) instanceParams() {
+	extended := map[*Class]bool{}
+	for _, cls := range c.classList {
+		for _, inc := range cls.Includes {
+			if cls.metaOf != nil && !cls.metaOf.IsModule && inc.Mod != nil && !inc.Mod.File.isPrelude() && !inc.latent {
+				extended[inc.Mod] = true
+			}
+		}
+	}
+	for _, cls := range c.classList {
+		for _, inc := range cls.Includes {
+			if cls.metaOf == nil || cls.metaOf.IsModule || inc.latent {
+				delete(extended, inc.Mod) // also included, or extended onto a module: self is not always a class
+			}
+		}
+	}
+	makers := map[string]bool{"new": true} // class methods that answer an instance of the class they are called on
+	for _, cls := range c.classList {
+		for _, m := range cls.MethodList {
+			if inst, _ := instanceRet(m); cls.metaOf != nil && (inst || m.newTail) {
+				makers[m.Name] = true
+			}
+		}
+	}
+	for mod := range extended {
+		if len(mod.includers) > 0 || slices.Contains(mod.TypeParams, instanceTP) || !usesInstance(mod, makers) {
+			continue
+		}
+		mod.instanceParam = true
+		mod.TypeParams = append(mod.TypeParams, instanceTP)
+	}
+	for _, cls := range c.classList {
+		for i := range cls.Includes {
+			if cls.Includes[i].Mod != nil && cls.Includes[i].Mod.instanceParam {
+				cls.Includes[i].Args = append(cls.Includes[i].Args, TAny{}) // erased behind a class object's Go methods; a call on the constant binds it
+			}
+		}
+	}
 }
 
 // copyIncluderTemplates copies into each including class a module's unannotated method that calls, on self, a

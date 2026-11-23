@@ -6,14 +6,13 @@ import (
 	goparser "go/parser"
 	"go/scanner"
 	"go/token"
+	"maps"
 	"math/big"
 	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/danielgatis/go-ruby-prism/parser"
-
-	"github.com/jtarchie/rugaroo/internal/rbs"
 )
 
 // closed returns subst(t, env) if it has no unbound method type vars.
@@ -117,15 +116,12 @@ func (f *fctx) callEntry(n parser.Node, e *entry, recv expr, args []parser.Node,
 
 // instanceResult: `-> instance` is the receiver's class at the call, for a superclass's class method or an extended module's (decision 404).
 func (f *fctx) instanceResult(e *entry, recv expr, r expr) expr {
-	if e.M.sig == nil || e.M.Owner == nil {
+	if e.M.Owner == nil {
 		return r
 	}
-	ret, opt := e.M.sig.Return, false
-	if o, ok := ret.(rbs.Optional); ok {
-		ret, opt = o.Elem, true
-	}
+	inst, opt := instanceRet(e.M)
 	rc, ok := recv.typ.(TClass)
-	if _, inst := ret.(rbs.Instance); !inst || !ok || rc.C.metaOf == nil {
+	if !inst || !ok || rc.C.metaOf == nil {
 		return r
 	}
 	switch {
@@ -133,7 +129,7 @@ func (f *fctx) instanceResult(e *entry, recv expr, r expr) expr {
 		if rc.C.metaOf == e.M.Owner.metaOf || !rc.C.metaOf.isSubclassOf(e.M.Owner.metaOf) {
 			return r
 		}
-	case !e.M.Owner.IsModule || !rc.C.isSubclassOf(e.M.Owner): // an extended module's method: `instance` is the extender's
+	case !e.M.Owner.IsModule || !rc.C.isSubclassOf(e.M.Owner) || exactInstance(e, recv) != nil: // an extended module's method: the extender's, already so on the constant
 		return r
 	}
 	want := TClass{C: rc.C.metaOf}
@@ -142,6 +138,20 @@ func (f *fctx) instanceResult(e *entry, recv expr, r expr) expr {
 		return expr{code: "func() " + g + " { v, _ := any(" + boxed + ").(" + g + "); return v }()", typ: TOpt{Elem: want}}
 	}
 	return expr{code: "any(" + boxed + ").(" + g + ")", typ: want}
+}
+
+// selfInstance: in a module only classes extend, a class method's `-> instance` called on self is the extender's instance, the body's Instance.
+func (f *fctx) selfInstance(e *entry, x expr) (expr, bool) {
+	inst, opt := instanceRet(e.M)
+	if f.owner == nil || !f.owner.instanceParam || e.Owner == nil || e.Owner.metaOf == nil || !inst {
+		return expr{}, false
+	}
+	boxed := f.coerceToAny(x)
+	if opt {
+		t := TOpt{Elem: TVar{Name: instanceTP}}
+		return expr{code: "func() " + f.c.goType(t) + " { v, ok := any(" + boxed + ").(" + instanceTP + "); if !ok { return nil }; return &v }()", typ: t}, true
+	}
+	return expr{code: "any(" + boxed + ").(" + instanceTP + ")", typ: TVar{Name: instanceTP}}, true
 }
 
 func (f *fctx) callEntryAny(n parser.Node, e *entry, recv expr, args []parser.Node, block parser.Node) expr {
@@ -276,7 +286,32 @@ func receiverEnv(e *entry, recv expr) map[string]Type {
 		}
 	}
 	env["Self"] = recv.typ
+	if t := exactInstance(e, recv); t != nil {
+		env[instanceTP] = t
+	}
 	return env
+}
+
+// exactInstance is what `instance` is in an extended module's method called on a class object: its class, where the method found is the one that runs.
+func exactInstance(e *entry, recv expr) Type {
+	rc, ok := recv.typ.(TClass)
+	if !ok || e.Owner == nil || !e.Owner.instanceParam || rc.C.metaOf == nil || e.M.Owner != e.Owner || e.M.Kind != kindDef || e.M.generic() {
+		return nil
+	}
+	if !recv.classObj && overriddenBelow(rc.C, e.M) {
+		return nil
+	}
+	return TClass{C: rc.C.metaOf}
+}
+
+// overriddenBelow reports a subclass of cls whose own m is another method.
+func overriddenBelow(cls *Class, m *Method) bool {
+	for _, k := range cls.Subclasses {
+		if e := k.lookup(m.Name); e == nil || e.M != m || overriddenBelow(k, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // callEnv is receiverEnv plus what the method's `@self` binds (decision 92).
@@ -1184,6 +1219,15 @@ func (f *fctx) leafCall(recv expr) bool {
 // directCall is a call settled before the Go method or free func choice: a dispatcher, an operator body, a class constant's own method.
 func (f *fctx) directCall(e *entry, selfRecv, recv expr, args []string, env map[string]Type) (string, bool) {
 	argList := strings.Join(args, ", ")
+	if t := exactInstance(e, recv); t != nil {
+		bound := &entry{M: e.M, Owner: e.Owner, Env: maps.Clone(e.Env), Entry: e.Entry}
+		bound.Env[instanceTP] = t
+		self := selfRecv.code
+		if !recv.classObj { // a class object behind its interface: the constraint is asserted, as decision 234 does
+			self = "any(" + self + ").(" + e.Owner.selfName() + "[any" + comma(strings.Join(f.c.moduleCallArgs(bound), ", ")) + "])"
+		}
+		return freeFuncName(e.M) + moduleSelfArgs(e.Owner, f.c.moduleCallArgs(bound)) + "(" + self + comma(argList) + ")", true
+	}
 	if code, ok := f.dispatchCall(e, selfRecv, argList); ok {
 		return code, true
 	}

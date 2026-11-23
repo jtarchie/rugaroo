@@ -1,0 +1,24 @@
+module Finders
+  def find_all: (Integer n) -> Array[untyped]
+  def find_by: (Integer id) -> untyped
+  def find: (Integer id) -> untyped
+end
+
+class Record
+  extend Finders
+
+  attr_reader id: Integer
+
+  def initialize: (Integer id) -> void
+  def self.from_row: (Integer id) -> untyped
+  def self.all: () -> Array[untyped]
+end
+
+class Article < Record
+  def title: () -> String
+  def notes: () -> Array[untyped]
+end
+
+class Note < Record
+  def text: () -> String
+end

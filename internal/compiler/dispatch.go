@@ -246,7 +246,7 @@ func (c *Compiler) dispatchableOwner(owner *Class, m *Method) string {
 // dispatches from that owner (decision 486). nil when an includer resolves it elsewhere (a module, a universal owner,
 // another class's root) or not at all; the call is then dynamic, as before.
 func (c *Compiler) includerRoot(mod *Class, name string) *entry {
-	if !c.notModules(mod, name) || len(mod.TypeParams) > 0 {
+	if !c.notModules(mod, name) || len(mod.TypeParams) > 0 && (!mod.instanceParam || len(mod.TypeParams) != 1) {
 		return nil
 	}
 	if len(c.classList) != c.rootN {

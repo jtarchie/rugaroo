@@ -48,6 +48,7 @@ type Class struct {
 	extends           []Include         // `extend M`: included into the class object
 	mixesIn           []Include         // Sorbet's `mixes_in_class_methods(M)` in a module: its includers extend M (decision 241)
 	includers         []*Class          // a module's: the classes and modules that include it (linkInclude)
+	instanceParam     bool              // a module only classes extend: `instance` is its last type parameter, the class at each call (decision 404)
 	delegations       []delegation
 	singleFwd         bool       // `extend SingleForwardable` seen: def_single_delegator(s) and single_delegate work
 	fwdSingle         bool       // the later of Forwardable/SingleForwardable extended was SingleForwardable: def_delegator(s) and delegate define class methods
@@ -208,6 +209,9 @@ type Method struct {
 	resolved    bool
 	inherited   *Method // signature source for unannotated overrides
 	inferRet    bool    // no return annotation: Ret comes from the body (inferRet)
+	advisoryRet bool    // a sidecar's `untyped` return: a hint, so the body types it as an unannotated def's (decision 494)
+	hintRet     Type    // that hint, resolved: what an inference that ends untyped falls back to
+	newTail     bool    // its value is `new(...)` on self: an instance of the class it is called on, as `-> instance` says
 	inferring   bool
 	recursed    bool    // inferRet met a call to itself while inferring: its return is a fixpoint (decision 355)
 	structDef   *Method // the generated Struct/Data method a block def overrides; super reaches it

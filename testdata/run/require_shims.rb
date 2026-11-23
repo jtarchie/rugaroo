@@ -7,3 +7,10 @@ puts Lib.first_byte("A")
 puts Lib.sum_to(4)
 puts Lib.show(3)
 puts Lib.show("x")
+
+# A sidecar's `untyped` return is a hint: the finders a class extends answer that class's instances (decision 494).
+puts Article.find(1).title
+puts Article.all.map { |article| article.title }.join(", ")
+puts Article.find(2).notes.map { |note| note.text }.join(", ")
+p Article.find_by(0)
+puts Note.find_all(1).first&.text

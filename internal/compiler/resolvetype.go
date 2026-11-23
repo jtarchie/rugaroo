@@ -55,6 +55,9 @@ func (c *Compiler) resolveType(t rbs.Type, sc typeScope) Type {
 		if sc.class == nil {
 			c.errorAt(sc.srcPos, "`instance` type outside a class")
 		}
+		if sc.class.instanceParam {
+			return TVar{Name: instanceTP}
+		}
 		if sc.class.metaOf != nil {
 			return TClass{C: sc.class.metaOf}
 		}

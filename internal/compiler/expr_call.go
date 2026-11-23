@@ -752,6 +752,9 @@ func (f *fctx) selfEntryCall(n parser.Node, e *entry, recv expr, args []parser.N
 	if x, ok := f.untypedCmpOp(n, TClass{C: f.owner}, recv, e, args, block); ok {
 		return x
 	}
+	if e.Owner != nil && e.Owner.instanceParam && f.owner != nil && f.owner.metaOf != nil && isSelfVar(recv.typ) {
+		recv.typ = TClass{C: f.owner} // a class method's self call of an extended module's method: `instance` is this class's (decision 404)
+	}
 	return f.callEntry(n, e, recv, args, block)
 }
 
@@ -1078,6 +1081,11 @@ var nilMethodsMRI = strings.Fields("to_h to_c & === =~ inspect rationalize to_a 
 // cannot take (an argument of another type) stays dynamic, and so does a void one in user code, where Go would
 // reject its value.
 func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []parser.Node, block parser.Node) (expr, bool) {
+	if f.owner.instanceParam && name == "new" {
+		// ponytail: the constructor is found by name at run time (each extender's takes its own arguments); a static call needs `New` in the constraint
+		x := f.universalCall(n, recv, name, args, block)
+		return expr{code: "any(" + f.coerce(n, x, TAny{}) + ").(" + instanceTP + ")", typ: TVar{Name: instanceTP}}, true
+	}
 	if !f.owner.IsModule || block != nil {
 		return expr{}, false
 	}
@@ -1085,6 +1093,7 @@ func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []pa
 	if e == nil || e.M.Iterator || !f.c.dispatchable(e.Owner, e.M) {
 		return expr{}, false
 	}
+	f.c.inferRet(e.M) // one not inferred yet reads as void below, and the caller's own return would then come from a dynamic call
 	if _, ret := f.c.sig(e.M, map[string]Type{}); ret == "" && !f.lenient() {
 		return expr{}, false
 	}
@@ -1110,6 +1119,9 @@ func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []pa
 	}
 	if isVoid(x.typ) || isAny(x.typ) {
 		return x, true
+	}
+	if r, ok := f.selfInstance(e, x); ok {
+		return r, true
 	}
 	return expr{code: f.coerce(n, x, TAny{}), typ: TAny{}}, true
 }
