@@ -21,6 +21,10 @@ module Digest
     #: (String) -> Base
     def <<(s) = update(s)
 
+    # MRI's Digest::Instance#file: the file's bytes fed in, self back (rubocop's ResultCache#file_checksum).
+    #: (String) -> Base
+    def file(path) = update(File.binread(path))
+
     #: () -> Base
     def reset = %x{
       self.buf = self.buf[:0]

@@ -246,6 +246,18 @@ module StdlibTests
       end
     end
 
+    # Digest::Instance#file: the file's bytes fed into an existing digest, the digest back (rubocop's ResultCache)
+    def test_instance_file
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "digest_inst_tmp.txt")
+        File.write(path, "world")
+        d = Digest::SHA1.new
+        d.update("hello ")
+        assert_same d, d.file(path)
+        assert_equal Digest::SHA1.hexdigest("hello world"), d.hexdigest
+      end
+    end
+
     def test_equality
       a = Digest::SHA256.new
       b = Digest::SHA256.new
