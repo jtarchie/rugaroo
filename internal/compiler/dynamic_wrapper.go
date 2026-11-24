@@ -71,7 +71,7 @@ func viewHelpers(by map[string][]string) map[string]string {
 // hashViewNames are the whole-hash methods a dynamic call answers through the Hash view (decisions 236, 302), by helper.
 var hashViewNames = viewHelpers(map[string][]string{
 	"rbHashViewCall": {"merge", "merge!", "update", "except", "slice", "to_h", "compact", "compact!", "flatten", "value?",
-		"has_value?", "key", "replace"},
+		"has_value?", "key", "replace", "<", "<=", ">", ">="},
 	"rbHashViewBlockCall": {"each", "each_pair", "each_entry", "each_key", "each_value", "each_with_index", "each_slice",
 		"each_cons", "cycle", "select", "filter", "reject", "select!", "filter!", "keep_if", "reject!", "delete_if", "count",
 		"find", "detect", "inject", "reduce", "each_with_object", "transform_values!"},

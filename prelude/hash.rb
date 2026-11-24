@@ -315,6 +315,26 @@ class Hash < Object
   #: (K) -> bool
   def include?(k) = key?(k)
 
+  # Subset: every pair of self is in other, values by == (MRI's Hash#<=; rubocop's `@options > { cache: 'false' }`).
+  #: (Hash[untyped, untyped]) -> bool
+  def <=(other)
+    return false if size > other.size
+
+    all? { |k, v| other.key?(k) && other.fetch(k) == v }
+  end
+
+  # A proper subset.
+  #: (Hash[untyped, untyped]) -> bool
+  def <(other) = size < other.size && self <= other
+
+  # Superset.
+  #: (Hash[untyped, untyped]) -> bool
+  def >=(other) = other <= self
+
+  # A proper superset.
+  #: (Hash[untyped, untyped]) -> bool
+  def >(other) = other < self
+
   #: (K) -> bool
   def has_key?(k) = key?(k)
 

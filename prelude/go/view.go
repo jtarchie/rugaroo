@@ -531,6 +531,22 @@ func rbHashViewCall(name string, s rbHashView, args []any) (any, bool) { //nolin
 		args = rest
 	}
 	switch name {
+	case "<", "<=", ">", ">=": // subset and superset, values by == (rubocop's `@options > { cache: 'false' }`)
+		rbArity(len(args), 1, 1)
+		a, b := s, rbHashViewArg(args[0])
+		if name[0] == '>' {
+			a, b = b, a
+		}
+		ka, kb := rbHashViewKeys(a), rbHashViewKeys(b)
+		if len(ka) > len(kb) || len(name) == 1 && len(ka) == len(kb) {
+			return Boolean(false), true
+		}
+		for _, k := range ka {
+			if !b._Has(k) || !rbEq[any](rbUnbox(a._Get(k)), rbUnbox(b._Get(k))) {
+				return Boolean(false), true
+			}
+		}
+		return Boolean(true), true
 	case "merge":
 		rbArity(len(args), 1, 1)
 		out := rbHashViewCopy(s)

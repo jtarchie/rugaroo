@@ -53,6 +53,7 @@ require "captureish"
 require "sharedivarish"
 require "ancestorwalkish"
 require "eqlnodish"
+require "hashsubsetish"
 p Foo::ORDERINGS
 p Foo::FLAGS
 p Foo::RETURN_IN_ORDER
@@ -248,3 +249,5 @@ eql_a = [EqlNodish.new(:lvar, [:date]), EqlNodish.new(:send, [:start])]
 eql_b = [EqlNodish.new(:lvar, [:date]), EqlNodish.new(:send, [:finish])]
 eql_r = EqlNodishInter.new.first_common([eql_a, 1].first, [eql_b, 1].first)
 p eql_r&.type, (eql_a & eql_b).size, eql_a.uniq.size, [eql_a[0], eql_b[0]].uniq.size, { eql_a[0] => 1 }[eql_b[0]]
+# Hash#> on an untyped Hash (rubocop's `@options > { cache: 'false' }`)
+p HashSubsetish.new([{ cache: "false", parallel: true }, 1].first).invalid, HashSubsetish.new([{ parallel: true }, 1].first).invalid

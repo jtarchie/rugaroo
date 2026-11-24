@@ -2822,3 +2822,23 @@ module HashTests
     end
   end
 end
+
+module HashTests
+  class HashSubsetTest < Minitest::Test
+    def test_subset_and_superset
+      a = { cache: "false", x: "1" }
+      b = { cache: "false" }
+      c = { cache: "true" }
+      assert_equal [true, true, true, true], [a > b, a >= b, b < a, b <= a]
+      assert_equal [false, true, false, false], [a > a, a >= a, a > c, b <= c]
+      assert_equal [true, true], [{} < a, b <= b]
+    end
+
+    def test_subset_across_value_types
+      ints = { n: 1, m: 2 }
+      strs = { n: "1" }
+      refute strs <= ints
+      assert({ n: 1 } <= ints)
+    end
+  end
+end
