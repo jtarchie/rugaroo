@@ -16,6 +16,12 @@ the test inputs, and it runs 1.4-5.3x faster than `ruby` (`docs/research/rubocop
   for `ParserEngine: parser_whitequark`, so the parser gem's grammars (`parser/rubyNN`) are not compiled in.
   `rubocop-1.92.1.patch` moves `TargetRuby::DEFAULT_VERSION` from 2.7 to 3.3, prism's lowest, so a project with no
   target still runs. TargetRubyVersion below 3.3 is an error, as it is for prism under MRI.
+- **Per-file setup cached** (2026-11-23): `rubocop-1.92.1.patch` works out once per cop class what
+  `Team#roundup_relevant_cops` redid for every cop of every file (enabled, Ruby/Rails target, and whether the cop has
+  Include/Exclude patterns at all), and `Commissioner` keeps its callback and restricted maps as positions per list
+  of cop classes (`Base#ready` makes new cop objects for every file, so objects cannot be the key). Same output as
+  MRI; 250 files of a Rails app: compiled 44.81G -> 42.39G instructions (-5.4%), MRI -4.8%. It skips any override of
+  `relevant_file?`/`excluded_file?` for cops without Include/Exclude: none in rubocop or the plugins installed here.
 - `main.rb`: `exe/rubocop`'s non-server path (`--server` is not supported).
 - `setup`: copies the installed gems into the work dir once and applies the patches (`GEM_DIR` to use other gems).
   The work dir is `RUBOCOP_WORK`, else `$TMPDIR/rugaroo-rubocop`: outside any project, because rubocop reads the

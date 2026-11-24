@@ -1,6 +1,6 @@
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cache_config.rb rubocop-1.92.1/lib/rubocop/cache_config.rb
---- rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cache_config.rb	2026-11-23 18:40:56
 @@ -31,6 +31,13 @@
      # the full ConfigStore/ConfigLoader. This method can be used, for example,
      # before loading configuration files. Please note that this method doesn't
@@ -27,8 +27,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cache_config.rb rubocop-
  
          # For compatibility with Ruby 3.0 or lower.
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/config_loader.rb rubocop-1.92.1/lib/rubocop/config_loader.rb
---- rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 12:25:57
+--- rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/config_loader.rb	2026-11-23 18:40:56
 @@ -78,9 +78,9 @@
  
        def load_yaml_configuration(absolute_path)
@@ -43,8 +43,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/config_loader.rb rubocop
          puts "configuration from #{absolute_path}" if debug?
  
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/base.rb rubocop-1.92.1/lib/rubocop/cop/base.rb
---- rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cop/base.rb	2026-11-23 18:40:56
 @@ -356,7 +356,8 @@
            # is faster in this specific case.
            m.start_with?('on_', 'after_') &&
@@ -55,9 +55,57 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/base.rb rubocop-1.92
          end
        end
        # rubocop:enable Layout/ClassStructure
+diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/commissioner.rb rubocop-1.92.1/lib/rubocop/cop/commissioner.rb
+--- rubocop-1.92.1/lib/rubocop/cop/commissioner.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cop/commissioner.rb	2026-11-23 18:40:56
+@@ -41,6 +41,8 @@
+ 
+       attr_reader :errors
+ 
++      PLANS = {} # rugaroo: see initialize_callbacks
++
+       def initialize(cops, forces = [], options = {})
+         @cops = cops
+         @forces = forces
+@@ -115,9 +117,33 @@
+         @errors = []
+       end
+ 
++      # rugaroo: the callback and restricted maps depend on which cop classes there are, in order, and every file
++      # brings the same ones as new objects (Base#ready): worked out once per list of classes as positions in
++      # @cops, then filled with this file's cops.
+       def initialize_callbacks
+-        @callbacks = build_callbacks(@cops)
+-        @restricted_map = restrict_callbacks(@callbacks)
++        classes = @cops.map(&:class)
++        plan = PLANS[classes]
++        unless plan
++          @callbacks = build_callbacks(@cops)
++          @restricted_map = restrict_callbacks(@callbacks)
++          PLANS[classes] = plan_of(@callbacks, @restricted_map)
++          return
++        end
++
++        cops = @cops
++        @callbacks = plan[0].transform_values { |positions| positions.map { |i| cops[i] } }
++        @restricted_map = plan[1].transform_values do |by_name|
++          by_name.transform_values { |positions| positions.map { |i| cops[i] } }
++        end
++      end
++
++      def plan_of(callbacks, restricted_map)
++        position = {}.compare_by_identity
++        @cops.each_with_index { |cop, i| position[cop] = i }
++        [callbacks.transform_values { |list| list.map { |cop| position[cop] } },
++         restricted_map.transform_values do |by_name|
++           by_name.transform_values { |list| list.map { |cop| position[cop] } }
++         end]
+       end
+ 
+       def build_callbacks(cops)
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb
---- rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 12:25:57
+--- rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cop/style/numeric_literals.rb	2026-11-23 18:40:56
 @@ -108,7 +108,7 @@
          def format_int_part(int_part)
            int_part = Integer(int_part)
@@ -67,9 +115,58 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/style/numeric_litera
            formatted_int
          end
  
+diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/team.rb rubocop-1.92.1/lib/rubocop/cop/team.rb
+--- rubocop-1.92.1/lib/rubocop/cop/team.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cop/team.rb	2026-11-23 18:40:56
+@@ -261,13 +261,42 @@
+       end
+ 
+       def roundup_relevant_cops(processed_source)
++        path = processed_source.file_path
+         (cops + opted_in_standby_cops(processed_source)).select do |cop|
+-          next false if cop.excluded_file?(processed_source.file_path)
++          next false if excluded_file_for?(cop, path)
+           next true if processed_source.comment_config.cop_opted_in?(cop)
+-          next false unless @registry.enabled?(cop, @config)
+ 
+-          support_target_ruby_version?(cop) && support_target_rails_version?(cop)
++          enabled_and_supported?(cop)
+         end
++      end
++
++      # rugaroo: what depends on the cop's class and this team's config, not on the file, is worked out once per
++      # class (cops are new objects for every file, Base#ready), where it was redone for every cop of every file.
++      def enabled_and_supported?(cop)
++        @enabled_and_supported ||= {}
++        cache = @enabled_and_supported
++        return cache[cop.class] if cache.key?(cop.class)
++
++        cache[cop.class] = @registry.enabled?(cop, @config) &&
++                           support_target_ruby_version?(cop) && support_target_rails_version?(cop)
++      end
++
++      # A cop without Include/Exclude patterns is relevant to every file; one whose gem requirement is unmet to none.
++      # (No cop in rubocop or the plugins installed here overrides relevant_file?/excluded_file?, which this skips;
++      # a reflective guard, `instance_method(...).owner`, does not compile: decision 141.)
++      def excluded_file_for?(cop, path)
++        @file_relevance ||= {}
++        klass = cop.class
++        kind = (@file_relevance[klass] ||= file_relevance_of(cop))
++        kind == :check ? cop.excluded_file?(path) : kind == :never
++      end
++
++      def file_relevance_of(cop)
++        klass = cop.class
++        return :never unless cop.send(:target_satisfies_all_gem_version_requirements?)
++        return :always unless cop.config.clusivity_config_for_badge?(klass.badge)
++
++        :check
+       end
+ 
+       # Cops that were not mobilized because they are disabled in the config,
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb
---- rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/cop/variable_force/branch.rb	2026-11-23 18:40:56
 @@ -218,7 +218,9 @@
          # end
          class Case < Base
@@ -104,8 +201,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/cop/variable_force/branc
  
            def always_run?
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/options.rb rubocop-1.92.1/lib/rubocop/options.rb
---- rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/options.rb	2026-11-23 18:40:56
 @@ -31,7 +31,7 @@
        args_from_env = ArgumentsEnv.read_as_arguments
        args = args_from_file.concat(args_from_env).concat(command_line_args)
@@ -116,8 +213,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/options.rb rubocop-1.92.
        return_path_given_to_changed(args)
        imply_autocorrect_for_diff
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/server/cache.rb rubocop-1.92.1/lib/rubocop/server/cache.rb
---- rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/server/cache.rb	2026-11-23 18:40:56
 @@ -178,7 +178,7 @@
  
          def load_erb_templated_yaml(content)
@@ -128,8 +225,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/server/cache.rb rubocop-
            require 'yaml'
            YAML.safe_load(yaml_code, permitted_classes: [Regexp, Symbol], aliases: true) || {}
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/target_ruby.rb rubocop-1.92.1/lib/rubocop/target_ruby.rb
---- rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/target_ruby.rb	2026-11-23 18:40:56
 @@ -7,7 +7,7 @@
      KNOWN_RUBIES = [
        2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.0, 3.1, 3.2, 3.3, 3.4, 4.0, 4.1
@@ -140,8 +237,8 @@ diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/target_ruby.rb rubocop-1
      OBSOLETE_RUBIES = {
        1.9 => '0.41',
 diff -ruN -x *.orig -x *.rej rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb
---- rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 12:25:56
-+++ rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 12:25:56
+--- rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 18:40:56
++++ rubocop-1.92.1/lib/rubocop/yaml_duplication_checker.rb	2026-11-23 18:40:56
 @@ -2,33 +2,10 @@
  
  module RuboCop
