@@ -155,6 +155,7 @@ func (f *fctx) selfInstance(e *entry, x expr) (expr, bool) {
 }
 
 func (f *fctx) callEntryAny(n parser.Node, e *entry, recv expr, args []parser.Node, block parser.Node) expr {
+	f.c.noteCallee(e.M)
 	if f.lenient() && block == nil && len(args) > 0 && f.unionArm == 0 && !slices.ContainsFunc(args, f.readsUnionLocal) { // a union argument: unionArgCall first
 		// gem code: arguments the static signature cannot take (a splat, a computed keyword) are matched per call at run time, as MRI does
 		if f.probing() { // output is discarded: no dry run needed

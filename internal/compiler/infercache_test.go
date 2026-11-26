@@ -32,7 +32,7 @@ func TestInferCache(t *testing.T) {
 	}
 	write := func(s string) {
 		t.Helper()
-		err := os.WriteFile(main, []byte(s), 0o600) //nolint:gosec // under t.TempDir()
+		err := os.WriteFile(main, []byte(s), 0o600) //nolint:gosec,nolintlint // under t.TempDir(); gosec flags it or not by what else the package holds
 		if err != nil {
 			t.Fatal(err)
 		}

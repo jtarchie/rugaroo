@@ -75,6 +75,11 @@ type inference struct {
 	// source order. During the not-known-yet rounds they share that one's parameter keys, so every call types them
 	// alike and the slot holds one Go func type, not a union of two that only a dynamic call can call
 	procAlias map[lambdaSrc]lambdaSrc
+	walks     map[string]*walkRec   // the last round's return walks (incremental.go)
+	walkTypes map[pendingKey]string // the types those walks read
+	walkSig   string                // and the rest of the state they read (stateSig)
+	walkSets  map[string]map[pendingKey]bool
+	walkIvars map[string]string
 }
 
 // awaited is the type of a slot no call has typed: not known yet while a round may still type it, else untyped.
@@ -257,6 +262,7 @@ const (
 // argument, escaped self): the last round's type if any; else untyped during a round; else the abort that runs
 // the rounds; else, once they ran, a gem's untyped or the caller's own say. The type is set only for pendTyped.
 func (c *Compiler) pendingType(key pendingKey, file *File) (Type, pendingOutcome) {
+	c.noteRead(key)
 	if c.infer != nil {
 		if t, ok := c.infer.types[key]; ok {
 			return c.rehome(t), pendTyped

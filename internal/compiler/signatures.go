@@ -413,6 +413,7 @@ func (c *Compiler) inheritsRet(m *Method) bool {
 // inferRet: a dry run joins the body's returns; provisional until ivar discovery finishes (discoverIvars clears it).
 func (c *Compiler) inferRet(m *Method) {
 	if !m.inferRet || m.Ret != nil {
+		c.noteCallee(m)
 		return
 	}
 	if m.inferring && c.pruneGems && c.gemFile(m.File) { // a gem's recursion (bindata's `superclass.dsl_parser`): untyped at the inner call, the outer run types the rest
@@ -429,6 +430,7 @@ func (c *Compiler) inferRet(m *Method) {
 	c.retStack = append(c.retStack, m)
 	defer func() { m.inferring = false; c.retStack = c.retStack[:len(c.retStack)-1] }()
 	defer c.bufferRetUses(m)()
+	defer c.beginWalk(m)()
 	if c.inheritsRet(m) {
 		c.inferRet(m.inherited)
 		m.Ret = m.inherited.Ret
@@ -519,6 +521,9 @@ func (c *Compiler) bufferRetUses(m *Method) func() {
 	}
 	outer, buf := c.uses, map[pendingKey][]paramUse{}
 	c.uses = buf
+	if c.walks != nil {
+		c.walks.bufs[m] = buf
+	}
 	return func() {
 		c.uses = outer
 		if c.retWalked[m] {

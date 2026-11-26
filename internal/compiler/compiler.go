@@ -283,6 +283,9 @@ type refineState struct {
 	retWalked           map[*Method]bool          // a round's methods whose return walk recorded their uses, so collectUses does not emit them (decision 491)
 	retUses             map[pendingKey][]paramUse // the round's uses: those of the return walks that counted, then collectUses' emissions
 	retStack            []*Method                 // the methods whose returns are being inferred, innermost last
+	walks               *walkLog                  // a round's return walks: what each read (incremental.go)
+	reused              int                       // the round's return walks taken from the last round
+	changedNow          map[string]bool           // the positions whose types changed since the last round's walks
 	retTainted          map[*Method]bool          // return walks whose uses do not count: one read a recursion's provisional return or past a failure
 	rs                  *roundStats               // this inference round's counters, under RUGAROO_TIMING or RUGAROO_ROUND_DUMP
 	widenChain          bool                      // this pass runs again if it widens a parameter, so it may widen in place (decision 480)
@@ -530,15 +533,30 @@ func (c *Compiler) inferenceRound(opts *options, tick func(string)) {
 	c.rs = c.newRoundStats()
 	_ = catchCompileError(c.refineIvars)
 	tick("r-refine")
-	for _, m := range c.inferredMethods() {
-		m.Ret = nil
-	}
 	c.retUses, c.retWalked = map[pendingKey][]paramUse{}, map[*Method]bool{} // the return walks record the uses (decision 491)
+	var reuse map[*Method]*walkRec
+	if opts.infer != nil {
+		c.walks = &walkLog{recs: map[string]*walkRec{}, bufs: map[*Method]map[pendingKey][]paramUse{}}
+		reuse = c.planReuse(opts.infer) // a walk whose inputs did not change is the last round's (decision 502)
+	}
+	for _, m := range c.inferredMethods() {
+		if r := reuse[m]; r != nil {
+			c.presetWalk(m, r)
+		} else {
+			m.Ret = nil
+		}
+	}
 	c.uses = c.retUses
 	for _, m := range c.inferredMethods() {
 		_ = catchCompileError(func() { c.inferRet(m) })
 	}
+	if c.walks != nil {
+		c.propagateReuse(opts.infer, reuse)
+	}
 	c.rs.compareRets()
+	if opts.infer != nil {
+		c.reportIncremental(opts.infer)
+	}
 	tick("r-rets")
 	c.collectUses()
 	tick("r-uses")
