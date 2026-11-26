@@ -262,13 +262,16 @@ func (c *Compiler) includerRoot(mod *Class, name string) *entry {
 			continue
 		}
 		r := classRoot(k, name)
+		if r == nil {
+			r = siblingModuleRoot(k, name)
+		}
 		if r == nil || root != nil && r.M != root.M {
 			root = nil
 			break
 		}
 		root = r
 	}
-	if root != nil && (!root.Owner.isStruct() || len(root.Owner.TypeParams) > 0) {
+	if root != nil && (!root.Owner.isStruct() && !root.Owner.IsModule || len(root.Owner.TypeParams) > 0) {
 		root = nil
 	}
 	c.rootMemo[key] = root
@@ -301,6 +304,26 @@ func classRoot(k *Class, name string) *entry {
 		root = e
 	}
 	return root
+}
+
+// siblingModuleRoot is name's definition when k resolves it to a module's method (rack's Request::Helpers calling
+// get_header, which Request::Env answers for every class that includes both): nil for a universal or generic module.
+func siblingModuleRoot(k *Class, name string) *entry {
+	e := k.lookup(name)
+	if e == nil || !e.Owner.IsModule || e.Owner.universal || len(e.Owner.TypeParams) > 0 || e.Owner.File == nil || e.Owner.File.isPrelude() {
+		return nil
+	}
+	return e
+}
+
+// anIncluder is the first class that includes mod, directly or through a superclass or another module.
+func (c *Compiler) anIncluder(mod *Class) *Class {
+	for _, k := range c.classList {
+		if !k.IsModule && !k.universal && k.isSubclassOf(mod) {
+			return k
+		}
+	}
+	return nil
 }
 
 // universalDispatch reports whether name resolves on every object to a universal owner's dispatchable method, so no

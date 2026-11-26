@@ -1098,6 +1098,16 @@ func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []pa
 		return expr{}, false
 	}
 	self := expr{code: "any(" + recv.code + ").(" + e.Owner.objType() + ")", typ: TClass{C: e.Owner}}
+	if e.Owner.IsModule {
+		// a sibling module every includer has (siblingModuleRoot): its body over its own constraint, which each of them
+		// satisfies; typed as one includer, whose resolution of the name it is
+		k := f.c.anIncluder(f.owner)
+		if k == nil {
+			return expr{}, false
+		}
+		e = k.lookup(name)
+		self = expr{code: "any(" + recv.code + ").(" + e.Owner.selfName() + "[any])", typ: TClass{C: k}}
+	}
 	call := func() expr {
 		saved := f.implicitCall
 		f.implicitCall = true // a receiver-less call in Ruby: private and protected methods answer it

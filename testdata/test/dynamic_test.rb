@@ -3512,6 +3512,86 @@ module DynamicTests
     def disp_tag = "other-#{disp_extra}"
   end
 
+  # Annotated module methods stay shared (decision 307 copies only unannotated ones): a self call of a name a
+  # sibling module answers for every includer is that module's method (decision 498).
+  module DispStore
+    # @rbs @disp_env: Hash[String, String]
+
+    #: (String) -> String?
+    def disp_get(name)
+      @disp_env[name]
+    end
+
+    #: (String, String) -> String
+    def disp_set(name, value)
+      @disp_env[name] = value
+    end
+  end
+
+  module DispHelpers
+    #: () -> String
+    def disp_host
+      disp_get("HOST").to_s
+    end
+
+    #: (String) -> String
+    def disp_host=(value)
+      disp_set("HOST", value)
+    end
+  end
+
+  class DispReq
+    include DispStore
+    include DispHelpers
+
+    #: (Hash[String, String]) -> void
+    def initialize(env)
+      @disp_env = env
+    end
+  end
+
+  class DispSubReq < DispReq
+  end
+
+  module DispLoud
+    #: () -> String
+    def disp_shout
+      disp_word.upcase
+    end
+  end
+
+  module DispWords
+    #: () -> String
+    def disp_word = "word"
+  end
+
+  class DispPlain
+    include DispWords
+    include DispLoud
+  end
+
+  class DispOwn
+    include DispWords
+    include DispLoud
+
+    #: () -> String
+    def disp_word = "own"
+  end
+
+  class DispSiblingModuleTest < Minitest::Test
+    def test_sibling_module_method_through_self
+      req = DispReq.new({ "HOST" => "a" })
+      sub = DispSubReq.new({ "HOST" => "b" })
+      assert_equal %w[a b], [req.disp_host, sub.disp_host]
+      req.disp_host = "c"
+      assert_equal ["c", ""], [req.disp_host, DispReq.new({}).disp_host]
+    end
+
+    def test_an_includers_own_method_still_wins
+      assert_equal %w[WORD OWN], [DispPlain.new.disp_shout, DispOwn.new.disp_shout]
+    end
+  end
+
   class DispatchPrivateTest < Minitest::Test
     def test_module_self_call_runs_the_override
       assert_equal ["kid:1:tkid-secret", "kid:3:tkid-secret", "base:1:other-x"],
