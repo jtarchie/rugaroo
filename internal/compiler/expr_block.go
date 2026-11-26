@@ -369,6 +369,9 @@ func (f *fctx) bindBlockParams(n parser.Node, names blockParams, yields []Type) 
 	if tt, ok := firstType(yields).(TTuple); ok && len(yields) == 1 && len(names) > 1 {
 		return f.bindTupleParams(n, names, tt)
 	}
+	if tts := tupleUnionYield(names, yields); tts != nil {
+		return f.bindTupleUnionParams(n, names, tts)
+	}
 	// Ruby splats a yielded Array across several block params; each gets
 	// its element, or nil past the end.
 	if ac, ok := firstType(yields).(TClass); len(yields) == 1 && len(names) > 1 && ok && ac.C.RubyName == "Array" && len(ac.Args) == 1 {
@@ -423,6 +426,67 @@ func (f *fctx) bindBlockParams(n parser.Node, names blockParams, yields []Type) 
 					f.noteUnused(v)
 				}
 			}
+		}
+	}
+}
+
+// tupleUnionYield is the tuples of the one yielded value when it is a union of nothing else and the block names
+// several plain parameters for it; nil otherwise.
+func tupleUnionYield(names blockParams, yields []Type) []TTuple {
+	u, ok := firstType(yields).(TUnion)
+	if !ok || len(yields) != 1 || len(names) < 2 || names.hasTuple() {
+		return nil
+	}
+	tts := make([]TTuple, 0, len(u.Members))
+	for _, m := range u.Members {
+		tt, ok := m.(TTuple)
+		if !ok {
+			return nil
+		}
+		tts = append(tts, tt)
+	}
+	return tts
+}
+
+// bindTupleUnionParams is `|el, kind|` over one yielded value that is a union of tuples (kramdown's
+// `@stack.any? { |el, _| ... }` over a stack of `[tree, text_type]` and `[tree, src, ial]`): each name takes its
+// position's field from whichever tuple the value is, typed as the join of that position across the members, nil
+// where a member is shorter (decision 500). Without it the first name was bound to the whole tuple.
+func (f *fctx) bindTupleUnionParams(n parser.Node, names blockParams, tts []TTuple) ([]string, func()) {
+	p := f.newTmp()
+	return []string{p}, func() {
+		types := make([]Type, len(names))
+		vars := make([]*local, len(names))
+		for i, nm := range names {
+			ts := make([]Type, len(tts))
+			for j, tt := range tts {
+				ts[j] = TNil{}
+				if i < len(tt.Elems) {
+					ts[j] = tt.Elems[i]
+				}
+			}
+			types[i] = joinAllUnion(ts)
+			vars[i] = f.blockParam(nm.Name, types[i])
+			if vars[i].goName != "_" {
+				f.emit("var %s %s", vars[i].goName, f.c.goType(types[i]))
+			}
+		}
+		t := f.newTmp()
+		f.emit("switch %s := %s.(type) {", t, p)
+		for _, tt := range tts {
+			f.emit("case %s:", f.c.goType(tt))
+			f.indent++
+			f.emit("_ = %s", t)
+			for i, v := range vars {
+				if v.goName != "_" && i < len(tt.Elems) {
+					f.emit("%s = %s", v.goName, f.coerce(n, expr{code: fmt.Sprintf("%s.F%d", t, i), typ: tt.Elems[i]}, types[i]))
+				}
+			}
+			f.indent--
+		}
+		f.emit("}")
+		for _, v := range vars {
+			f.noteUnused(v)
 		}
 	}
 }

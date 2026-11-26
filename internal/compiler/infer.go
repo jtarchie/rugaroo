@@ -199,7 +199,7 @@ func (s lambdaSrc) argc(n int) pendingKey { return pendingKey(string(s) + "n" + 
 // was passed there (untyped where nothing typed it), in place of decision 183's `(*untyped)`. Its result stays
 // untyped. In a round, or with no calls, it stays variadic.
 func (c *Compiler) typeStoredBlock(b *BlockSig) {
-	if b == nil || b.Src == "" || c.infer == nil || c.round {
+	if b == nil || b.Src == "" || c.infer == nil || c.round && !c.env.InferUnknown {
 		return
 	}
 	n := -1

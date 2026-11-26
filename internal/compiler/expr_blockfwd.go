@@ -107,6 +107,7 @@ func (f *fctx) forwardIter(n parser.Node, call string, yields []Type) {
 // forwardClosure passes the method's own block on to a closure-taking
 // method: `list.map(&block)`.
 func (f *fctx) forwardClosure(n parser.Node, sig *BlockSig, env map[string]Type) string {
+	f.noteForwardedBlock(n, sig, env)
 	code := f.forwardClosureCode(n, sig, env)
 	if code != "blk" && f.m != nil && f.m.Block != nil && (f.m.Block.Optional || f.m.Block.Untyped) {
 		return "rbIfBlk(blk != nil, " + code + ")" // an adapter over a missing block is no block (bindata's `write(io, &block)`)
@@ -312,4 +313,27 @@ func (f *fctx) valueToVoidAdapter(n parser.Node, sig *BlockSig, env map[string]T
 		return f.restVoidAdapter(n, sig, env)
 	}
 	return f.adapterFunc(params, "blk("+strings.Join(args, ", ")+")", sig.Ret, f.blockSig.Ret)
+}
+
+// noteForwardedBlock records what a method's own unannotated &block is given when the method passes it on to one that
+// yields (kramdown's `parse_raw_html(el, &block)` handing it to `handle_html_start_tag(line, &block)`, which yields an
+// Element and two Booleans): each value the callee's block takes is a use of the stored block's parameter there, as a
+// call of the Proc is (typeStoredBlock, decision 307), so the block literal a caller writes is typed (decision 500).
+func (f *fctx) noteForwardedBlock(n parser.Node, sig *BlockSig, env map[string]Type) {
+	b := f.blockSig
+	if b == nil || !b.Src.storedBlock() || sig == nil || sig.Self != nil {
+		return
+	}
+	if sig.Rest || len(sig.Params) == 0 || len(sig.Params) > maxStoredBlockArgs {
+		f.noteUse(Param{Pending: b.Src.argc(maxStoredBlockArgs + 1)}, n, TNil{}) // any count: the block stays variadic
+		return
+	}
+	for i, p := range sig.Params {
+		t := subst(p, env)
+		if mentionsVar(t) {
+			t = TAny{}
+		}
+		f.noteUse(Param{Pending: b.Src.arg(i)}, n, t)
+	}
+	f.noteUse(Param{Pending: b.Src.argc(len(sig.Params))}, n, TNil{})
 }

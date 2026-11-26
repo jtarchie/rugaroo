@@ -6,7 +6,8 @@
 # position that flows through helper methods and through lambdas held in ivars (cyc_gem), a parameter reassigned from
 # a method that takes it (buf_gem), a Ragel-shaped scanner's class-level tables read through `send` (ragel_gem), its
 # state constants read as `self.class.lex_en_x` by two classes (lexen_gem), and arguments that reach a constructor
-# through a `*args` forwarder (fwd_gem), and a parser environment kept in an options Hash and a stack of tuples (env_gem).
+# through a `*args` forwarder (fwd_gem), a parser environment kept in an options Hash and a stack of tuples (env_gem),
+# and a block passed on to the method that yields to it (blockfwd_gem).
 require "cyc_gem"
 require "buf_gem"
 require "ragel_gem"
@@ -15,6 +16,7 @@ require "lexen_gem"
 require "fwd_gem"
 require "env_gem"
 require "ver_gem"
+require "blockfwd_gem"
 
 puts CycLexer.new.advance(30_000)
 
@@ -43,3 +45,5 @@ puts EnvParser.new("hello world").run
 puts VerRuby33.new.lexer.new_syntax?
 
 puts SplatHost.run
+
+puts BfParser.new.run
