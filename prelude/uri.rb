@@ -103,7 +103,10 @@ module URI
     end
 
     #: (String) -> Regexp
-    def __make_regexp(lead) = %x{ return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x") }
+    def __make_regexp(lead) = %x{
+      _ = rxAltReady // the pattern's (?!//) needs the regexp2 engine (decision 242)
+      return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x")
+    }
 
     #: (String) -> String
     def escape(str) = %x{ String(rbURIEscape(string(str))) }
@@ -122,7 +125,10 @@ module URI
     end
 
     #: (String) -> Regexp
-    def __make_regexp(lead) = %x{ return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x") }
+    def __make_regexp(lead) = %x{
+      _ = rxAltReady // the pattern's (?!//) needs the regexp2 engine (decision 242)
+      return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x")
+    }
 
     #: (String) -> String
     def escape(str) = %x{ String(rbURIEscape(string(str))) }
