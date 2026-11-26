@@ -157,7 +157,7 @@ func (f *fctx) injectSymbol(n *parser.CallNode) *parser.CallNode {
 		recvT = recv.typ
 	}
 	e := f.resolve(recvT, n.Name)
-	if e == nil {
+	if e == nil || e.M.Owner == nil { // a program's own top-level `def sum(xs)` (or inject, reduce): its call, not Enumerable's
 		return nil
 	}
 	if n.Name == "sum" && sumOwners[e.M.Owner.RubyName] { // Range's and Array's own sum add numbers only, as Enumerable's
