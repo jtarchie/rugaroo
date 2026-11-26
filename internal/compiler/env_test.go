@@ -8,17 +8,19 @@ import (
 
 func TestLoadEnv(t *testing.T) {
 	flags := map[string]func(envConfig) bool{
-		"RUGAROO_NO_WASM_CACHE": func(e envConfig) bool { return e.NoWasmCache },
-		"RUGAROO_INFER_DEBUG":   func(e envConfig) bool { return e.InferDebug },
-		"RUGAROO_TIMING":        func(e envConfig) bool { return e.Timing },
-		"RUGAROO_ERR_STACK":     func(e envConfig) bool { return e.ErrStack },
-		"RUGAROO_ALL_LIBS":      func(e envConfig) bool { return e.AllLibs },
-		"RUGAROO_GEM_WARNINGS":  func(e envConfig) bool { return e.GemWarnings },
-		"RUGAROO_PRUNE_DEBUG":   func(e envConfig) bool { return e.PruneDebug },
-		"RUGAROO_NO_PRUNE":      func(e envConfig) bool { return e.NoPrune },
-		"RUGAROO_PRUNE_WHY":     func(e envConfig) bool { return e.PruneWhy },
-		"RUGAROO_KEEP_GOING":    func(e envConfig) bool { return e.KeepGoing },
-		"RUGAROO_CGO":           func(e envConfig) bool { return e.CGO },
+		"RUGAROO_NO_WASM_CACHE":  func(e envConfig) bool { return e.NoWasmCache },
+		"RUGAROO_INFER_DEBUG":    func(e envConfig) bool { return e.InferDebug },
+		"RUGAROO_TIMING":         func(e envConfig) bool { return e.Timing },
+		"RUGAROO_ERR_STACK":      func(e envConfig) bool { return e.ErrStack },
+		"RUGAROO_ALL_LIBS":       func(e envConfig) bool { return e.AllLibs },
+		"RUGAROO_GEM_WARNINGS":   func(e envConfig) bool { return e.GemWarnings },
+		"RUGAROO_PRUNE_DEBUG":    func(e envConfig) bool { return e.PruneDebug },
+		"RUGAROO_NO_PRUNE":       func(e envConfig) bool { return e.NoPrune },
+		"RUGAROO_PRUNE_WHY":      func(e envConfig) bool { return e.PruneWhy },
+		"RUGAROO_KEEP_GOING":     func(e envConfig) bool { return e.KeepGoing },
+		"RUGAROO_CGO":            func(e envConfig) bool { return e.CGO },
+		"RUGAROO_NO_INCREMENTAL": func(e envConfig) bool { return e.NoIncremental },
+		"RUGAROO_INFER_GENERIC":  func(e envConfig) bool { return e.InferGeneric },
 	}
 	values := map[string]func(envConfig) string{
 		"RUGAROO_DISPATCH_DEBUG": func(e envConfig) string { return e.DispatchDebug },

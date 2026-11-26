@@ -318,8 +318,12 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 	names, defaults, rest := c.defParams(m, m.Node.Parameters)
 	var ps []string
 	// a parameter with no annotation is typed from use (decision 146): untyped here, resolvePending types it
+	generic, tps := c.genericParams(m, names)
 	pa := func(name string) string {
 		t := ann[name+":"]
+		if len(t) == 0 {
+			t = generic[name] // its calls disagree: each call's own type (decision 503)
+		}
 		if len(t) > 0 {
 			return t[0]
 		}
@@ -365,7 +369,7 @@ func (c *Compiler) paramSig(m *Method) (string, bool) {
 			ps = append(ps, k.name+": "+pa(k.name))
 		}
 	}
-	sig := "(" + strings.Join(ps, ", ") + ") "
+	sig := typeParamList(tps) + "(" + strings.Join(ps, ", ") + ") "
 	n, optional, ok := c.yieldShape(m)
 	from := m // the def whose yields decide the block's value
 	if !ok {
@@ -1178,4 +1182,60 @@ func protoOptShape(m *Method) bool {
 		return false
 	}
 	return !slices.ContainsFunc(m.Params, func(p Param) bool { return p.Default == nil || p.Rest || p.Keyword || p.KwRest })
+}
+
+// genericCandidates are the user parameters whose calls disagree after the rounds (decision 503): typed as a union, or
+// with the union that broke their method's body. Only under RUGAROO_INFER_GENERIC.
+func genericCandidates(opts *options) map[pendingKey]bool {
+	if !opts.env.InferGeneric || opts.infer == nil {
+		return nil
+	}
+	out := map[pendingKey]bool{}
+	for k, t := range opts.infer.types {
+		if isUnion(t) || opts.infer.noUnion[k] {
+			out[k] = true
+		}
+	}
+	for k := range opts.infer.noUnion {
+		out[k] = true
+	}
+	return out
+}
+
+// classNames is every class's Ruby name, so a type parameter's name names none.
+func (c *Compiler) classNames() []string {
+	out := make([]string, 0, len(c.classList))
+	for _, cls := range c.classList {
+		out = append(out, cls.RubyName)
+	}
+	return out
+}
+
+// genericParams are the type parameters decision 503 gives m's positional parameters, by name, and their list in order.
+func (c *Compiler) genericParams(m *Method, names []string) (map[string][]string, []string) {
+	if len(c.generic) == 0 || c.gemFile(m.File) {
+		return nil, nil
+	}
+	out := map[string][]string{}
+	var tps []string
+	for _, name := range names {
+		if !c.generic[paramKey(m, name)] {
+			continue
+		}
+		tv := "T" + strconv.Itoa(len(tps))
+		for slices.Contains(c.classNames(), tv) {
+			tv += "_"
+		}
+		out[name] = []string{tv}
+		tps = append(tps, tv)
+	}
+	return out, tps
+}
+
+// typeParamList is an RBS method type's `[A, B] ` prefix; "" for none.
+func typeParamList(tps []string) string {
+	if len(tps) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(tps, ", ") + "] "
 }

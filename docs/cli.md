@@ -90,6 +90,7 @@ For the compiler:
 | `RUGAROO_UNTYPED_WHY=1` | Each dynamic-call warning also names where the untyped value came from. |
 | `RUGAROO_UNTYPED_REPORT=1` | Print one report of where untyped values start: each root (a parameter, a return value, an instance variable, a signature) ranked by how many dynamic calls it is behind, with what left it untyped. `=path` writes the report to a file instead of stderr. |
 | `RUGAROO_INFER_DEBUG=1` | Show what each round of parameter inference typed and what it could not compile. |
+| `RUGAROO_INFER_GENERIC=1` | Experimental. When a program fails to compile because one method is called with values of different classes (`id(1)` and `id("a")`), compile it again with that parameter typed per call, as a Go type parameter ([decision 503](decisions/503.md)). A program that compiles without it is unchanged. |
 | `RUGAROO_NO_INFER_CACHE=1` | Do not use the inference cache. By default `gen`, `build` and `run` keep the parameter types they inferred in the user cache directory (`rugaroo/infer/`), so the next compile of an unchanged program skips the inference rounds; any changed input file compiles from scratch. The output is the same either way. |
 
 The repository's [CLAUDE.md](../CLAUDE.md) lists the variables for working on

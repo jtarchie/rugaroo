@@ -286,6 +286,7 @@ type refineState struct {
 	walks               *walkLog                  // a round's return walks: what each read (incremental.go)
 	reused              int                       // the round's return walks taken from the last round
 	changedNow          map[string]bool           // the positions whose types changed since the last round's walks
+	generic             map[pendingKey]bool       // decision 503's candidates (options.generic)
 	retTainted          map[*Method]bool          // return walks whose uses do not count: one read a recursion's provisional return or past a failure
 	rs                  *roundStats               // this inference round's counters, under RUGAROO_TIMING or RUGAROO_ROUND_DUMP
 	widenChain          bool                      // this pass runs again if it widens a parameter, so it may widen in place (decision 480)
@@ -417,6 +418,7 @@ type options struct {
 	loadPath     []string // -I directories, which a user `require` searches first
 	gemDirs      []string // gem lib dirs, searched after loadPath (decision 173)
 	infer        *inference
+	generic      map[pendingKey]bool // RUGAROO_INFER_GENERIC: the parameters the final pass types with a type parameter (decision 503)
 	round        bool
 	inferDone    bool
 	seed         *Inference               // types from an earlier compile of these sources, updated by this one
@@ -611,6 +613,7 @@ func compileOnce(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 		roundErr := inferRounds(ctx, preludeFS, sources, opts)
 		opts.inferDone = true
 		out, err = compileWith(ctx, preludeFS, sources, opts, false)
+		out, err = retryGeneric(ctx, preludeFS, sources, opts, compileWith, out, err)
 		var ce compileError
 		if roundErr != nil && errors.As(err, &ce) && ce.untyped {
 			err = roundErr
@@ -732,6 +735,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.roundRefine = opts.roundRefines()
 	c.gemSigs = opts.gemSigs
 	c.infer, c.round, c.inferDone = opts.infer, opts.round, opts.inferDone
+	c.generic = opts.generic
 	c.widenChain = opts.widenChain()
 	c.noPrune = opts.noPrune
 	c.methodRequiresRuntime = opts.mainLast
@@ -1501,4 +1505,23 @@ func (c *Compiler) addPkgVar(decl string) { c.pkgVars[decl] = true }
 // widenChain reports a pass that runs again when it widens a parameter (decision 480).
 func (o *options) widenChain() bool {
 	return o.widenRedo < maxWidenRedo
+}
+
+// retryGeneric is decision 503: a program that does not compile is compiled again with its disagreeing parameters as type
+// parameters, kept only when that compiles; what compiles is as it was.
+func retryGeneric(ctx context.Context, preludeFS fs.FS, sources []Source, opts *options,
+	compile func(context.Context, fs.FS, []Source, *options, bool) ([]byte, error), out []byte, err error,
+) ([]byte, error) {
+	var failed compileError
+	cands := genericCandidates(opts)
+	if !errors.As(err, &failed) || len(cands) == 0 {
+		return out, err
+	}
+	opts.generic, opts.skipped = cands, nil
+	defer func() { opts.generic = nil }()
+	gout, gerr := compile(ctx, preludeFS, sources, opts, false)
+	if gerr != nil {
+		return out, err
+	}
+	return gout, nil
 }
