@@ -427,6 +427,15 @@ module HashTests
   Rec = Struct.new(:name, :tags) #: [String, Hash[String, Integer]]
 
   class HashArgsTest < Minitest::Test
+    # a nilable tuple as a key (`@seen[@ast]` with `@ast` a `[Symbol, String]?`): equal tuples are one key, nil another
+    def test_nilable_tuple_key
+      seen = {}
+      [[:a, "x"], nil, [:a, "x"], [:b, "y"], nil].each do |k|
+        key = k.nil? ? nil : [k[0], k[1]] #: [Symbol, String]?
+        seen[key] = true
+      end
+      assert_equal [3, true, true], [seen.size, seen.key?([:a, "x"]), seen.key?(nil)]
+    end
     # a dynamic fetch whose default is not the Hash's value type answers it (concurrent-ruby's
     # `opts.fetch(:auto_terminate, true)` on a Hash[Symbol, Integer])
     def test_untyped_fetch_other_default

@@ -1041,9 +1041,21 @@ func rbPlainKey[K comparable]() bool {
 	case String, Symbol, Integer, Float, Boolean:
 		return true
 	case interface{ rbPlain() bool }:
-		return z.rbPlain()
+		return rbPlainOf(z)
 	}
 	return false
+}
+
+// rbPlainOf is z.rbPlain(), false where K is a pointer to a tuple (a nilable tuple key, `@seen[@ast]` with `@ast` a
+// `[Symbol, String]?`): the zero K is then nil, whose value method panics, and Go's == on the pointers is identity,
+// never eql?.
+func rbPlainOf(z interface{ rbPlain() bool }) (plain bool) {
+	defer func() {
+		if recover() != nil {
+			plain = false
+		}
+	}()
+	return z.rbPlain()
 }
 
 // rbStrPKey reports whether K is String? (decision 448).

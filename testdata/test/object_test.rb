@@ -2727,6 +2727,9 @@ module ObjectTests
       assert_equal -1, (v1 <=> v2)
       assert_equal 1, (v3 <=> v1)
       assert_equal 0, (v1 <=> Version.new(1, 2))
+      # Comparable#== is `<=>` answering 0, not identity
+      assert_equal [true, false, true, false], [v1 == Version.new(1, 2), v1 == v2, v1 != v3, v1 != Version.new(1, 2)]
+      assert_equal [true, 1], [[v2, v1].include?(Version.new(1, 2)), [v3, v1].index(Version.new(1, 2))]
       assert_equal true, (v2.between?(v1, v3))
       assert_equal false, (v3.between?(v1, v2))
       assert_equal true, (v1.between?(v1, v1))

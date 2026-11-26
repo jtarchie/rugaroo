@@ -74,15 +74,7 @@ func (c *Compiler) linkAliases(ctx context.Context) {
 		fromHash := a.cls.hashBase && e.Owner == a.cls.Super && e.M.Node != nil && (e.M.Kind == kindDef || e.M.Kind == kindPrimitive)
 		if !fromHash && (len(e.Owner.TypeParams) > 0 || e.M.Node == nil || e.M.Kind != kindDef || containsSuper(e.M.Node.Body)) {
 			if c.gemFile(a.f) { // a forwarder instead of a copy: differs from MRI only if the old name is redefined later
-				fwd, params := "*args", "*args"
-				if e.M.Block != nil {
-					fwd, params = "*args, &blk", "*args, &blk"
-				}
-				call := a.oldName + "(" + fwd + ")"
-				if !isIdentMethod(a.oldName) {
-					call = "self.send(:" + strconv.Quote(a.oldName) + ", " + fwd + ")"
-				}
-				c.addForwarder(ctx, a, "("+params+") = "+call)
+				c.aliasForwarder(ctx, a, e)
 				continue
 			}
 			c.errorf(a.f, a.n, "alias of %s#%s: rugaroo copies an inherited method only when it is a plain def without super from a non-generic class", e.Owner.RubyName, a.oldName)
@@ -97,6 +89,41 @@ func (c *Compiler) linkAliases(ctx context.Context) {
 			cls.msetCache, cls.msetIndex = nil, nil
 		}
 	}
+}
+
+// aliasForwarder defines a gem's alias of an inherited method it cannot copy as a def calling the old name. A
+// fixed-arity old method keeps its arity and signature, so `alias_method :eql?, :==` of Comparable#== is an
+// eql?(other) a value-keyed Hash finds, not an eql?(*args) (parser's Source::Range as a key).
+func (c *Compiler) aliasForwarder(ctx context.Context, a pendingAlias, e *entry) {
+	fwd, params, sig := "*args", "*args", ""
+	if n := fixedArity(e.M.Node); n >= 0 && e.M.Block == nil {
+		ps := make([]string, n)
+		for i := range ps {
+			ps[i] = "a" + strconv.Itoa(i)
+		}
+		fwd, params = strings.Join(ps, ", "), strings.Join(ps, ", ")
+		if !strings.Contains(e.M.sigText, "self") {
+			sig = e.M.sigText // Object's eql? slot is `(untyped) -> bool`
+		}
+	} else if e.M.Block != nil {
+		fwd, params = "*args, &blk", "*args, &blk"
+	}
+	call := a.oldName + "(" + fwd + ")"
+	if !isIdentMethod(a.oldName) {
+		call = "self.send(:" + strconv.Quote(a.oldName) + ", " + fwd + ")"
+	}
+	c.addForwarderSig(ctx, a, sig, "("+params+") = "+call)
+}
+
+// addForwarderSig is addForwarder with a `#: sig` annotation above the def; none when sig is empty.
+func (c *Compiler) addForwarderSig(ctx context.Context, a pendingAlias, sig, rest string) {
+	if sig == "" {
+		c.addForwarder(ctx, a, rest)
+		return
+	}
+	src := "#: " + sig + "\ndef " + a.newName + rest + "\n"
+	sf, def := c.synthDef(ctx, a.f, a.n, "alias "+a.newName, src, synthOpt{Origin: originSource, Pad: max(a.f.line(a.n.GetLocation().StartOffset)-2, 0)})
+	c.addDef(sf, a.cls, def, false, nil)
 }
 
 // addForwarder defines the alias's new name as `def new<rest>`, on the alias's own line.
@@ -691,4 +718,24 @@ func literalSymbols(v parser.Node) []parser.Node {
 		}
 	}
 	return arr.Elements
+}
+
+// fixedArity is how many required positional parameters n takes when it takes nothing else; -1 otherwise.
+func fixedArity(n *parser.DefNode) int {
+	if n == nil {
+		return -1
+	}
+	ps := n.Parameters
+	if ps == nil {
+		return 0
+	}
+	if len(ps.Optionals) > 0 || ps.Rest != nil || len(ps.Posts) > 0 || len(ps.Keywords) > 0 || ps.KeywordRest != nil || ps.Block != nil {
+		return -1
+	}
+	for _, r := range ps.Requireds {
+		if _, plain := r.(*parser.RequiredParameterNode); !plain {
+			return -1
+		}
+	}
+	return len(ps.Requireds)
 }

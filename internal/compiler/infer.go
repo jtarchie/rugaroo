@@ -828,22 +828,7 @@ func (c *Compiler) collectUses() {
 				f.genBody(&parser.StatementsNode{Body: []parser.Node{p.Default}}, c.paramLocals(m), tail{kind: tailReturn, types: &ts}, nil)
 			}))
 			if len(ts) > 0 {
-				t := ts[len(ts)-1]
-				if hc, ok := t.(TClass); ok && c.gemFile(m.File) && hc.C.RubyName == "Hash" && len(hc.Args) == 2 {
-					if _, lit := p.Default.(*parser.HashNode); lit { // kramdown's `opts = {indent: 0}`: an options bag callers add any value to (decision 330)
-						t = TClass{C: hc.C, Args: []Type{hc.Args[0], TAny{}}}
-					}
-				}
-				if k := classOf(stripOpt(t)); k != nil && k.constSingleton && c.gemFile(m.File) {
-					// a sentinel object with its own methods (rubocop's `named: ANY`, whose `==` answers true): callers pass
-					// values of other classes, so it types nothing (decision 444)
-					t = TAny{}
-				}
-				c.uses[p.Pending] = append(c.uses[p.Pending], paramUse{typ: t, file: m.File, off: p.Default.GetLocation().StartOffset, deflt: true})
-				if h, ok := p.Default.(*parser.HashNode); ok && len(h.Elements) == 0 && c.env.InferUnknown { // `opts = {}`: a record of no fields (infer_record.go)
-					mk := recMarkKey(p.Pending)
-					c.uses[mk] = append(c.uses[mk], paramUse{typ: TClass{C: c.classes["Boolean"]}, file: m.File, off: p.Default.GetLocation().StartOffset, deflt: true})
-				}
+				c.noteDefaultUse(m, p, ts[len(ts)-1])
 			}
 		}
 	}
@@ -854,6 +839,37 @@ func (c *Compiler) collectUses() {
 			f.retVar = ""
 			f.genBody(&parser.StatementsNode{Body: b.stmts}, nil, tail{}, nil)
 		}))
+	}
+}
+
+// noteDefaultUse records the value t of parameter p's default as a use of p: a default passed by no call still types
+// its parameter.
+func (c *Compiler) noteDefaultUse(m *Method, p Param, t Type) {
+	if hc, ok := t.(TClass); ok && c.gemFile(m.File) && hc.C.RubyName == "Hash" && len(hc.Args) == 2 {
+		if _, lit := p.Default.(*parser.HashNode); lit { // kramdown's `opts = {indent: 0}`: an options bag callers add any value to (decision 330)
+			t = TClass{C: hc.C, Args: []Type{hc.Args[0], TAny{}}}
+		}
+	}
+	if k := classOf(stripOpt(t)); k != nil && k.constSingleton && c.gemFile(m.File) {
+		// a sentinel object with its own methods (rubocop's `named: ANY`, whose `==` answers true): callers pass values
+		// of other classes, so it types nothing (decision 444)
+		t = TAny{}
+	}
+	deflt := true
+	if _, other := p.Default.(*parser.LocalVariableReadNode); other && c.gemFile(m.File) && isAny(t) {
+		if isUnknown(t) {
+			return // the parameter it defaults to is not known yet: neither types it nor untypes it
+		}
+		// a default that is another parameter's untyped value (rubocop's `offense_range: node`) runs whenever a call
+		// leaves the keyword out: the value is a real argument, so it untypes the parameter as a gem call's untyped
+		// argument does, and is not a default use that counts for nothing (decision 499)
+		deflt = false
+	}
+	at := p.Default.GetLocation().StartOffset
+	c.uses[p.Pending] = append(c.uses[p.Pending], paramUse{typ: t, file: m.File, off: at, deflt: deflt})
+	if h, ok := p.Default.(*parser.HashNode); ok && len(h.Elements) == 0 && c.env.InferUnknown { // `opts = {}`: a record of no fields (infer_record.go)
+		mk := recMarkKey(p.Pending)
+		c.uses[mk] = append(c.uses[mk], paramUse{typ: TClass{C: c.classes["Boolean"]}, file: m.File, off: at, deflt: true})
 	}
 }
 

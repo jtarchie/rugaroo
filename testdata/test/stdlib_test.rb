@@ -1158,6 +1158,15 @@ module StdlibTests
 
   # Was testdata/run/uri_mid.rb.
   class URITest < Minitest::Test
+    def test_make_regexp_with_schemes
+      text = "see https://a.b/c and ftp://x.y/z then HTTP://Q.r"
+      all = URI::RFC2396_PARSER.make_regexp
+      web = URI::RFC2396_PARSER.make_regexp(%w[http https])
+      assert_equal %w[https ftp HTTP], text.scan(all).map(&:first)
+      assert_equal %w[https HTTP], text.scan(web).map(&:first)
+      assert_equal [0, nil], ["http://a.b" =~ web, "mailto:a@b" =~ web]
+    end
+
     def test_parse
       u = URI.parse("http://user:pass@host:8080/path?q=1#frag")
       assert_equal "URI::HTTP", u.class.to_s

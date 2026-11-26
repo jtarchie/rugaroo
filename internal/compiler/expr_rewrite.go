@@ -131,6 +131,9 @@ func (f *fctx) callSugar(n *parser.CallNode, expected Type) (expr, bool) {
 		idx := &parser.CallNode{Location: n.Location, Receiver: n.Receiver, Name: "[]", Arguments: &parser.ArgumentsNode{Location: n.Location, Arguments: []parser.Node{key}}}
 		return f.genExpr(&parser.OrNode{Location: n.Location, Left: idx, Right: def}, expected), true
 	}
+	if e, ok := f.fetchOtherDefault(n, expected); ok {
+		return e, true
+	}
 	if c := f.injectSymbol(n); c != nil {
 		return f.genCall(c, expected), true
 	}
@@ -600,4 +603,52 @@ func slicePattern(n *parser.CallNode) *parser.CallNode {
 	c := *n
 	c.Arguments, c.Block = nil, blk
 	return &c
+}
+
+// fetchOtherDefault is a gem's `h.fetch(k, d)` whose default is of another class than the Hash's values (rubocop's
+// `REVERSE_COMPARISON.fetch(operator.to_s, operator)`, a Symbol beside String values): MRI answers d as it is, where
+// the typed fetch converted it to the value type and raised TypeError. The call is `h.key?(k) ? h.fetch(k) : d`, with h
+// and k evaluated once. MRI evaluates d whether or not the key is there, so only a literal or a variable read qualifies.
+func (f *fctx) fetchOtherDefault(n *parser.CallNode, expected Type) (expr, bool) {
+	args := callArgs(n)
+	if !f.lenient() || n.Name != "fetch" || n.Receiver == nil || len(args) != 2 || n.Block != nil {
+		return expr{}, false
+	}
+	switch args[1].(type) {
+	case *parser.LocalVariableReadNode, *parser.InstanceVariableReadNode: // reading it or not is unobservable
+	default:
+		if !sideEffectFree(args[1]) {
+			return expr{}, false
+		}
+	}
+	var rt, dt Type
+	f.probe(func() { rt, dt = f.genExpr(n.Receiver, nil).typ, f.genExpr(args[1], nil).typ })
+	ht, ok := rt.(TClass)
+	if !ok || ht.C.RubyName != "Hash" || len(ht.Args) != 2 {
+		return expr{}, false
+	}
+	if dt == nil || isNil(dt) || isOpt(dt) || isVoid(dt) || !isAny(dt) && fits(dt, ht.Args[1]) {
+		return expr{}, false // a nil default is nilableFetch's; one that fits is the typed fetch's
+	}
+	if _, class := ht.Args[1].(TClass); !class {
+		return expr{}, false
+	}
+	pin := func(node parser.Node) parser.Node {
+		e := f.genExpr(node, nil)
+		if pinnable(e.code) && !e.lit && !isVoid(e.typ) {
+			t := f.newTmp()
+			f.emit("%s := %s", t, e.code)
+			e.code, e.view = t, ""
+		}
+		return &exprNode{Node: node, e: e}
+	}
+	recv, key := pin(n.Receiver), pin(args[0])
+	loc := n.Location
+	call := func(name string) parser.Node {
+		return &parser.CallNode{Location: loc, Receiver: recv, Name: name, Arguments: &parser.ArgumentsNode{Location: loc, Arguments: []parser.Node{key}}}
+	}
+	stmts := func(x parser.Node) *parser.StatementsNode {
+		return &parser.StatementsNode{Location: loc, Body: []parser.Node{x}}
+	}
+	return f.genExpr(&parser.IfNode{Location: loc, Predicate: call("key?"), Statements: stmts(call("fetch")), Subsequent: &parser.ElseNode{Location: loc, Statements: stmts(args[1])}}, expected), true
 }

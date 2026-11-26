@@ -254,6 +254,17 @@ module Comparable
   #: (self) -> Integer
   def <=>(other) = raise(NotImplementedError)
 
+  # MRI's Comparable#==: the same object, or `<=>` answering 0 (nil is not equal). An includer's own == wins, as in
+  # MRI; without this, a gem class with only <=> (parser's Source::Range) compared by identity, and rubocop's
+  # `modifier_locations.include?(node.loc.keyword)` never matched.
+  #: (untyped) -> bool
+  def ==(other)
+    return true if equal?(other)
+
+    me = self #: untyped
+    (me <=> other) == 0
+  end
+
   #: (self) -> bool
   def <(other) = (self <=> other) < 0
 

@@ -94,8 +94,16 @@ module URI
 
   # The escape/unescape half of MRI's URI parsers, which Rack::Utils reaches through URI::RFC2396_PARSER.
   class RFC2396_Parser
-    #: () -> Regexp
-    def make_regexp = %x{ return rbRegexpLenient("(?m)", rbURIAbsRefSrc, "x") }
+    # With schemes, only a URI of one of them, whatever its case (MRI's lookahead in front of the same pattern).
+    #: (?Array[String]? schemes) -> Regexp
+    def make_regexp(schemes = nil)
+      return __make_regexp("") if schemes.nil?
+
+      __make_regexp("(?=(?i:#{schemes.map { |s| Regexp.escape(s) }.join("|")}):)")
+    end
+
+    #: (String) -> Regexp
+    def __make_regexp(lead) = %x{ return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x") }
 
     #: (String) -> String
     def escape(str) = %x{ String(rbURIEscape(string(str))) }
@@ -105,8 +113,16 @@ module URI
   end
 
   class RFC3986_Parser
-    #: () -> Regexp
-    def make_regexp = %x{ return rbRegexpLenient("(?m)", rbURIAbsRefSrc, "x") }
+    # With schemes, only a URI of one of them, whatever its case (MRI's lookahead in front of the same pattern).
+    #: (?Array[String]? schemes) -> Regexp
+    def make_regexp(schemes = nil)
+      return __make_regexp("") if schemes.nil?
+
+      __make_regexp("(?=(?i:#{schemes.map { |s| Regexp.escape(s) }.join("|")}):)")
+    end
+
+    #: (String) -> Regexp
+    def __make_regexp(lead) = %x{ return rbRegexpLenient("(?m)", string(lead)+rbURIAbsRefSrc, "x") }
 
     #: (String) -> String
     def escape(str) = %x{ String(rbURIEscape(string(str))) }
