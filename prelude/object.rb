@@ -258,12 +258,20 @@ module Comparable
   # MRI; without this, a gem class with only <=> (parser's Source::Range) compared by identity, and rubocop's
   # `modifier_locations.include?(node.loc.keyword)` never matched.
   #: (untyped) -> bool
-  def ==(other)
-    return true if equal?(other)
-
-    me = self #: untyped
-    (me <=> other) == 0
-  end
+  def ==(other) = %x{
+    if rbIdentical(self, other) {
+      return true
+    }
+    o, ok := any(other).(Self)
+    if !ok {
+      return false
+    }
+    if c, ok := any(self).(interface{ cmpNil(Self) rbOpt[Integer] }); ok { // a <=> that may answer nil: not equal
+      r := c.cmpNil(o)
+      return Boolean(r.ok && r.v == 0)
+    }
+    return self.Op_cmp(o) == 0
+  }
 
   #: (self) -> bool
   def <(other) = (self <=> other) < 0
