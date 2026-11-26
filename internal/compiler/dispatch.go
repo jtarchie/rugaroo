@@ -310,7 +310,7 @@ func classRoot(k *Class, name string) *entry {
 // get_header, which Request::Env answers for every class that includes both): nil for a universal or generic module.
 func siblingModuleRoot(k *Class, name string) *entry {
 	e := k.lookup(name)
-	if e == nil || !e.Owner.IsModule || e.Owner.universal || len(e.Owner.TypeParams) > 0 || e.Owner.File == nil || e.Owner.File.isPrelude() {
+	if e == nil || !e.Owner.IsModule || e.Owner.universal || len(e.Owner.TypeParams) > 0 || len(e.M.TypeParams) > 0 || e.Owner.File == nil || e.Owner.File.isPrelude() {
 		return nil
 	}
 	return e

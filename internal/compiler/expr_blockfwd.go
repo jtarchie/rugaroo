@@ -150,7 +150,8 @@ func (f *fctx) forwardClosureCode(n parser.Node, sig *BlockSig, env map[string]T
 		return f.selfBlockAdapter(sig, env)
 	}
 	unify(sig.Ret, f.blockSig.Ret, env)
-	if f.lenient() && sig.Self == nil && f.blockSig.Self == nil && !sig.Rest && f.paramTypesDiffer(sig, env) {
+	f.untypedRetVars(sig, env)
+	if f.lenient() && sig.Self == nil && f.blockSig.Self == nil && !sig.Rest && (f.paramTypesDiffer(sig, env) || f.retTypesDiffer(sig, env)) {
 		// the callee yields another type than this block takes (rubocop's `each_ancestor(&block)` handing its block,
 		// typed by its callers, to `scan_ancestors`, which yields an untyped local): Go func types are invariant, so each
 		// value is converted as an argument is (decision 484)
@@ -173,6 +174,32 @@ func (f *fctx) paramTypesDiffer(sig *BlockSig, env map[string]Type) bool {
 		}
 	}
 	return false
+}
+
+// untypedRetVars: a block typed by its forwards answers untyped (decision 500), so what the callee's result still
+// leaves unbound (`flat_map(&block)`'s U) is untyped too.
+func (f *fctx) untypedRetVars(sig *BlockSig, env map[string]Type) {
+	if !f.lenient() || !isAny(f.blockSig.Ret) {
+		return
+	}
+	var vars []string
+	freeVars(sig.Ret, &vars)
+	for _, v := range vars {
+		if _, bound := env[v]; !bound && v != "Self" {
+			env[v] = TAny{}
+		}
+	}
+}
+
+// retTypesDiffer reports a callee block whose result is another Go type than the forwarded block answers
+// (`comments.find(&block)` wants a Boolean of a block that answers untyped): the adapter converts it, a condition's
+// by truthiness.
+func (f *fctx) retTypesDiffer(sig *BlockSig, env map[string]Type) bool {
+	ret := subst(sig.Ret, env)
+	if isVoid(ret) || isVoid(f.blockSig.Ret) || mentionsVar(ret) {
+		return false
+	}
+	return f.c.goType(ret) != f.c.goType(f.blockSig.Ret)
 }
 
 // selfBlockAdapter passes this method's bound block (`T.proc.bind(Resource::Patch)`) on to a callee whose block binds

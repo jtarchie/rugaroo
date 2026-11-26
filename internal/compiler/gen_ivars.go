@@ -307,6 +307,27 @@ func (c *Compiler) walkIvarClasses() {
 		}
 	}
 	c.discovering = false
+	c.eraseDiscoveryUnknowns()
+}
+
+// eraseDiscoveryUnknowns: discovery's walks read what was not known yet (unknownNow), and an ivar a write of such a
+// value declared keeps it past them: after discovery it is untyped. Kept, the flag joins away (`join(nil, unknown)` is
+// nil): rubocop-ast's `return if !ast || !comments; @ast_with_comments ||= associate(...)` returned nil to every
+// caller (decision 499). A return inferred while discovering read the same values, so it is inferred again.
+func (c *Compiler) eraseDiscoveryUnknowns() {
+	for _, cls := range c.classList {
+		for _, iv := range cls.Ivars {
+			iv.Type = eraseUnknown(iv.Type)
+		}
+	}
+	if !c.env.InferUnknown {
+		return
+	}
+	for _, m := range c.inferredMethods() {
+		if m.Ret != nil && holdsUnknown(m.Ret) {
+			m.Ret = nil
+		}
+	}
 }
 
 // typeUncalledWriters gives each attr writer no call types its ivar's type from the ivar's other writes; with none,

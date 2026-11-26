@@ -3526,6 +3526,14 @@ module DynamicTests
     def disp_set(name, value)
       @disp_env[name] = value
     end
+
+    private
+
+    # a private one keeps its direct call: instantiated at this module's constraint, whichever class includes both
+    #: (String) -> String
+    def disp_key(name)
+      "key:#{name}"
+    end
   end
 
   module DispHelpers
@@ -3537,6 +3545,11 @@ module DynamicTests
     #: (String) -> String
     def disp_host=(value)
       disp_set("HOST", value)
+    end
+
+    #: () -> String
+    def disp_host_key
+      disp_key("HOST")
     end
   end
 
@@ -3551,6 +3564,19 @@ module DynamicTests
   end
 
   class DispSubReq < DispReq
+  end
+
+  class DispOtherReq
+    include DispStore
+    include DispHelpers
+
+    #: () -> void
+    def initialize
+      @disp_env = { "HOST" => "other" }
+    end
+
+    #: () -> Integer
+    def disp_extra = 1
   end
 
   module DispLoud
@@ -3585,6 +3611,12 @@ module DynamicTests
       assert_equal %w[a b], [req.disp_host, sub.disp_host]
       req.disp_host = "c"
       assert_equal ["c", ""], [req.disp_host, DispReq.new({}).disp_host]
+    end
+
+    def test_sibling_modules_private_method_with_several_includers
+      assert_equal %w[key:HOST key:HOST key:HOST other],
+                   [DispReq.new({}).disp_host_key, DispSubReq.new({}).disp_host_key, DispOtherReq.new.disp_host_key,
+                    DispOtherReq.new.disp_host]
     end
 
     def test_an_includers_own_method_still_wins

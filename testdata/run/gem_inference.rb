@@ -7,7 +7,8 @@
 # a method that takes it (buf_gem), a Ragel-shaped scanner's class-level tables read through `send` (ragel_gem), its
 # state constants read as `self.class.lex_en_x` by two classes (lexen_gem), and arguments that reach a constructor
 # through a `*args` forwarder (fwd_gem), a parser environment kept in an options Hash and a stack of tuples (env_gem),
-# and a block passed on to the method that yields to it (blockfwd_gem).
+# a block passed on to the method that yields to it (blockfwd_gem), and a token literal with an element typed a round
+# late (littok_gem).
 require "cyc_gem"
 require "buf_gem"
 require "ragel_gem"
@@ -17,6 +18,8 @@ require "fwd_gem"
 require "env_gem"
 require "ver_gem"
 require "blockfwd_gem"
+require "littok_gem"
+require "hagish_gem"
 
 puts CycLexer.new.advance(30_000)
 
@@ -47,3 +50,16 @@ puts VerRuby33.new.lexer.new_syntax?
 puts SplatHost.run
 
 puts BfParser.new.run
+bf_list = BfList.new([1, 2, 4, 7, 8])
+p bf_list.pick { |x| x > 3 }, bf_list.pick { |x| x if x > 9 }, bf_list.spread { |x| [x, x] }.size, bf_list.split(&:even?), bf_list.runs { |a, b| b == a + 1 }
+
+lit = LitVisitor.new
+puts lit.visit(LitNode.new([5, :int, "five"]))
+puts lit.visit_hash(LitNode.new([7, :int, "seven"]))
+
+ha_cop = Hagish::Cop.new
+ha_cop.reset!
+ha_cop.check(:a, Hagish::KeyAlign.new)
+ha_cop.check(:b, Hagish::TableAlign.new)
+ha_cop.check(:skip, Hagish::KeyAlign.new)
+p ha_cop.report

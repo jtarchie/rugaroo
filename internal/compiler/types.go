@@ -133,6 +133,42 @@ func isAny(t Type) bool { _, ok := t.(TAny); return ok }
 // isUnknown reports a type an inference round has not learned yet.
 func isUnknown(t Type) bool { a, ok := t.(TAny); return ok && a.Unknown }
 
+// eraseUnknown is t with every not-known-yet part plain untyped.
+func eraseUnknown(t Type) Type {
+	if t == nil || !holdsUnknown(t) {
+		return t
+	}
+	switch x := t.(type) {
+	case TAny:
+		return TAny{}
+	case TOpt:
+		return TOpt{Elem: eraseUnknown(x.Elem)}
+	case TClass:
+		args := make([]Type, len(x.Args))
+		for i, a := range x.Args {
+			args[i] = eraseUnknown(a)
+		}
+		x.Args = args
+		return x
+	case TTuple:
+		es := make([]Type, len(x.Elems))
+		for i, e := range x.Elems {
+			es[i] = eraseUnknown(e)
+		}
+		x.Elems = es
+		return x
+	case TUnion:
+		ms := make([]Type, len(x.Members))
+		for i, m := range x.Members {
+			ms[i] = eraseUnknown(m)
+		}
+		x.Members = ms
+		return x
+	case TFunc, TNil, TVar, TVoid: // holdsUnknown is false for them
+	}
+	return t
+}
+
 // holdsUnknown reports whether t is or contains a not-known-yet type.
 func holdsUnknown(t Type) bool {
 	switch t := t.(type) {

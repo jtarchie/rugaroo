@@ -181,6 +181,13 @@ func (f *fctx) genArray(n *parser.ArrayNode, expected Type) expr {
 		elems[i] = f.genExpr(el, hint)
 		f.pinExprs(mark, elems[:i])
 	}
+	if elemT == nil && f.c.unknownNow() && slices.ContainsFunc(elems, func(e expr) bool { return isUnknown(e.typ) }) {
+		// an element no round has typed yet: the literal's elements are not known yet either. Joined, it would drop
+		// out (not-known-yet joins to whatever the other is, right for a slot over rounds and wrong for one literal's
+		// elements): prism's `builder.integer([node.value, srange(node.location)])` typed the token
+		// `Array[Range?]` in round 1, the state only goes up, and the Integer was converted to a Range at run time
+		elemT = TAny{Unknown: true}
+	}
 	if elemT == nil {
 		elemT = inferElemType(elems)
 		// [Integer, String] with nothing expected is a tuple (a sort key, a
@@ -262,6 +269,15 @@ func (f *fctx) insertAt(mark int, gen func()) {
 
 // inferElemType picks the element type of an unannotated array literal.
 // Ruby's `[]` is untyped; so is ours.
+// unknownIfAny is t, or not-known-yet when a round has not typed one of the literal's parts ts yet: joined, that part
+// would drop out of the literal's type (genArray).
+func (f *fctx) unknownIfAny(t Type, ts []Type) Type {
+	if f.c.unknownNow() && slices.ContainsFunc(ts, isUnknown) {
+		return TAny{Unknown: true}
+	}
+	return t
+}
+
 func inferElemType(elems []expr) Type {
 	ts := make([]Type, len(elems))
 	for i, e := range elems {
@@ -333,6 +349,7 @@ func (f *fctx) genHash(n parser.Node, elements []parser.Node, expected Type) exp
 	}
 	if kT == nil {
 		kT, vT = joinOrAny(ks), joinOrAny(vs)
+		kT, vT = f.unknownIfAny(kT, ks), f.unknownIfAny(vT, vs)  // as genArray's
 		if isAny(expected) && f.lenient() && len(elements) > 0 { // a gem's options bag into an untyped slot (kramdown's `opts = {indent: 0}`), as genArray's (decision 330)
 			vT = TAny{}
 		}

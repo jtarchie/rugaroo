@@ -59,3 +59,28 @@ class BfParser
     @out.join(" ")
   end
 end
+
+# A block passed on to core methods that want other results of it (rubocop-ast's `find_comment(&block)` over
+# `comments.find(&block)`, CollectionNode's `flat_map`, `partition`, `chunk_while`): the forwarded block answers
+# untyped, and each callee takes it through an adapter, a condition by truthiness.
+class BfList
+  def initialize(items)
+    @items = items
+  end
+
+  def pick(&block)
+    @items.find(&block)
+  end
+
+  def spread(&block)
+    @items.flat_map(&block)
+  end
+
+  def split(&block)
+    @items.partition(&block)
+  end
+
+  def runs(&block)
+    @items.chunk_while(&block).to_a
+  end
+end

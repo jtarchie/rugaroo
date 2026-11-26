@@ -1127,6 +1127,15 @@ func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []pa
 		}
 		x = call()
 	}
+	if e.Owner.IsModule {
+		// the sibling's body at its own constraint, whatever includer typed the call: an includer's own interface as
+		// the type argument does not take the asserted value (rubocop's DocumentationComment calling Util#comment_line?)
+		code, ok := atConstraint(x.code, freeFuncName(e.M), e.Owner.selfName()+"[any]")
+		if !ok {
+			return expr{}, false
+		}
+		x.code = code
+	}
 	if isVoid(x.typ) || isAny(x.typ) {
 		return x, true
 	}
@@ -1134,4 +1143,30 @@ func (f *fctx) includerRootCall(n parser.Node, recv expr, name string, args []pa
 		return r, true
 	}
 	return expr{code: f.coerce(n, x, TAny{}), typ: TAny{}}, true
+}
+
+// atConstraint rewrites the one call of the generic free func fn in code to instantiate it at cons: `fn[...](` becomes
+// `fn[cons](`. false when code holds no such call, or more than one, or fn takes more than its Self.
+func atConstraint(code, fn, cons string) (string, bool) {
+	i := strings.Index(code, fn+"[")
+	if i < 0 || strings.Count(code, fn+"[") != 1 || i > 0 && (code[i-1] == '_' || code[i-1] >= 'a' && code[i-1] <= 'z' || code[i-1] >= 'A' && code[i-1] <= 'Z' || code[i-1] >= '0' && code[i-1] <= '9') {
+		return "", false
+	}
+	open := i + len(fn)
+	depth := 0
+	for j := open; j < len(code); j++ {
+		switch code[j] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				if j+1 >= len(code) || code[j+1] != '(' || strings.Contains(code[open:j], ", ") {
+					return "", false
+				}
+				return code[:open] + "[" + cons + "]" + code[j+1:], true
+			}
+		}
+	}
+	return "", false
 }

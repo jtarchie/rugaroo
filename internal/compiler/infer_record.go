@@ -395,10 +395,19 @@ func (c *Compiler) inferRecords(inf *inference, next map[pendingKey]Type, order 
 			next[recBadKey(key)] = boolean
 			continue
 		}
+		prefix := p + "%"
+		if !slices.ContainsFunc(slices.Collect(maps.Keys(c.uses)), func(fk pendingKey) bool {
+			name, ok := strings.CutPrefix(string(fk), prefix)
+			return ok && name != "" && name != "!" && !strings.HasPrefix(name, "?")
+		}) {
+			// only ever `{}`: nothing says its keys are Symbols. rubocop's `self.offenses_by = {}` keys it by class
+			// later, and Hash[Symbol, untyped] raised TypeError at the first write (decision 499)
+			next[recBadKey(key)] = boolean
+			continue
+		}
 		// every call passes a literal with Symbol keys, so the parameter is that Hash and not the join of the literals'
 		// own types (`{}` beside `{src: scanner}`), which is untyped: its reads are then Hash reads, not dynamic calls
 		next[key] = TClass{C: c.classes["Hash"], Args: []Type{TClass{C: c.classes["Symbol"]}, TAny{}}}
-		prefix := p + "%"
 		for _, fk := range slices.Sorted(maps.Keys(c.uses)) {
 			name, ok := strings.CutPrefix(string(fk), prefix)
 			if !ok || name == "" || name == "!" || strings.HasPrefix(name, "?") {
