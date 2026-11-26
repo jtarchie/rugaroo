@@ -16,7 +16,7 @@ type envConfig struct {
 	PruneWhy      bool   // RUGAROO_PRUNE_WHY: the keep chains of the pruner
 	KeepGoing     bool   // RUGAROO_KEEP_GOING: record a collect error and go on
 	DispatchDebug string // RUGAROO_DISPATCH_DEBUG: "all", or any other non-empty value for Kernel/Object/module owners
-	InferUnknown  bool   // RUGAROO_INFER_UNKNOWN: inference rounds with an explicit not-known-yet type (docs/research/inference-2026-11.md), until its gates pass
+	InferUnknown  bool   // inference rounds with an explicit not-known-yet type (docs/research/inference-2026-11.md), the default since decision 499; RUGAROO_INFER_UNKNOWN=0 is the older rounds
 	InferUses     string // RUGAROO_INFER_USES: print each round's recorded uses of the parameters whose key holds this text (file:line:col:Class#name)
 	TreeCheck     bool   // RUGAROO_TREE_CHECK: report each def whose syntax tree a pass rewrote in place (decision 478)
 	NoFileReuse   bool   // RUGAROO_NO_FILE_REUSE: parse the sources again in every round and pass (A/B for decision 479)
@@ -51,7 +51,7 @@ func loadEnv() envConfig {
 		PruneWhy:      set("RUGAROO_PRUNE_WHY"),
 		KeepGoing:     set("RUGAROO_KEEP_GOING"),
 		DispatchDebug: os.Getenv("RUGAROO_DISPATCH_DEBUG"),
-		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "",
+		InferUnknown:  os.Getenv("RUGAROO_INFER_UNKNOWN") != "0",
 		InferUses:     os.Getenv("RUGAROO_INFER_USES"),
 		RoundDump:     os.Getenv("RUGAROO_ROUND_DUMP"),
 		NoFileReuse:   os.Getenv("RUGAROO_NO_FILE_REUSE") != "",

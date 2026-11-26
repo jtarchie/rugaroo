@@ -35,7 +35,7 @@ func TestLoadEnv(t *testing.T) {
 	for name := range values {
 		t.Setenv(name, "")
 	}
-	if got := loadEnv(); got != (envConfig{}) {
+	if got := loadEnv(); got != (envConfig{InferUnknown: true}) { // the not-known-yet rounds are the default (decision 499)
 		t.Fatalf("empty environment: %+v", got)
 	}
 	for name, field := range flags {

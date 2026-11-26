@@ -15,7 +15,7 @@ func TestUntypedReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, lane := range []string{"", "1"} {
+	for _, lane := range []string{"0", "1"} {
 		t.Run("unknown="+lane, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "report.txt")
 			t.Setenv("RUGAROO_UNTYPED_REPORT", path)
@@ -53,7 +53,7 @@ func TestUntypedReport(t *testing.T) {
 			if sites != calls {
 				t.Errorf("the roots hold %d sites, the warnings %d", sites, calls)
 			}
-			if lane == "" && !strings.Contains(report, "param CycStrings#advance(p) at testdata/run/gem_inference/lib/cyc_gem.rb:18\n      why: no use carries a type") {
+			if lane == "0" && !strings.Contains(report, "param CycStrings#advance(p) at testdata/run/gem_inference/lib/cyc_gem.rb:18\n      why: no use carries a type") {
 				t.Errorf("no reason for CycStrings#advance(p), untyped in the default lane:\n%s", report)
 			}
 		})

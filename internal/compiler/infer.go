@@ -1093,6 +1093,11 @@ func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[
 		old = c.rehome(old) // the previous round's classes are another compile's
 		t, ok := next[k]
 		switch {
+		case !ok && inf.resolved && !c.gemParams[k] && len(c.uses[k]) > 0 && !slices.ContainsFunc(c.uses[k], func(u paramUse) bool { return !isNil(u.typ) && !holdsAny(u.typ) || !u.deflt && isNil(u.typ) }):
+			// a program's parameter every call now passes an untyped value: what an earlier round typed it from is
+			// untyped after resolution (an ivar a computed send may write), so the parameter is, as in the older
+			// rounds; kept, its type would be checked at run time against a value MRI takes (decision 499)
+			inf.amendWhy(k, "not kept from an earlier round: after resolution every use is untyped")
 		case !ok:
 			next[k] = old
 			if at, ok := inf.from[k]; ok {
@@ -1107,6 +1112,9 @@ func (c *Compiler) growState(inf *inference, next map[pendingKey]Type, from map[
 				}
 				inf.amendWhy(k, kept)
 			}
+		case inf.noUnion[k] && isUnion(old):
+			// the union broke the parameter's own method (decision 150): this round's type stands, and the call that
+			// does not fit it is the error, as in the older rounds
 		case !typeEq(old, t):
 			if j, ok := join(old, t); ok {
 				next[k] = mergeSameClass(j)
