@@ -153,7 +153,10 @@ func bootSources(ctx context.Context, sources []Source, loadPath []string) ([]So
 		if seen[realPath(a.Loaded)] {
 			continue
 		}
-		if g := gemDir.FindStringSubmatch(a.Loaded); g != nil && builtinLib(g[1]) { // an installed copy of a gem rugaroo bundles (prism, decision 427)
+		if g := gemDir.FindStringSubmatch(a.Loaded); g != nil && (builtinLib(g[1]) || mriLib(g[1])) {
+			// an installed copy of a gem rugaroo bundles (prism, decision 427), or of MRI's own library: where Bundler is
+			// installed as a gem (a Ruby built from source, after `bundle install`), its autoloads resolve under the gem
+			// directory and not under rubylibdir, and compiling them brought in thor and `erb` (example 135)
 			continue
 		}
 		if d, _ := under(a.Loaded, m.StdDirs); d != "" { // MRI's own library (Bundler's and Thor's autoloads under `bundler/setup`): the prelude is rugaroo's copy, never a source (decisions 173, 404)

@@ -175,7 +175,11 @@ func (c *Compiler) declare(f *File, name string, line int, isModule, named bool)
 			c.noteConstName(name)
 		}
 	} else if cls.IsModule != isModule && (name != "Numeric" || f.isPrelude()) { // MRI's class Numeric is the prelude's module (decision 142): `class Numeric` reopens it
-		c.errorAt(srcPos{f, line}, "%s is already defined as a %s", name, map[bool]string{true: "module", false: "class"}[cls.IsModule])
+		at := ""
+		if w := cls.String(); w != "" {
+			at = " at " + w // the other definition: in a gem program it may be a file the program never names
+		}
+		c.errorAt(srcPos{f, line}, "%s is already defined as a %s%s", name, map[bool]string{true: "module", false: "class"}[cls.IsModule], at)
 	}
 	if c.consts[name] != nil {
 		c.errorAt(srcPos{f, line}, "%s is already a constant", name)
