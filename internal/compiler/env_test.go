@@ -21,6 +21,7 @@ func TestLoadEnv(t *testing.T) {
 		"RUGAROO_CGO":            func(e envConfig) bool { return e.CGO },
 		"RUGAROO_NO_INCREMENTAL": func(e envConfig) bool { return e.NoIncremental },
 		"RUGAROO_INFER_GENERIC":  func(e envConfig) bool { return e.InferGeneric },
+		"RUGAROO_TYPEGRAPH":      func(e envConfig) bool { return e.TypeGraph },
 	}
 	values := map[string]func(envConfig) string{
 		"RUGAROO_DISPATCH_DEBUG": func(e envConfig) string { return e.DispatchDebug },

@@ -22,6 +22,7 @@ type envConfig struct {
 	NoFileReuse   bool   // RUGAROO_NO_FILE_REUSE: parse the sources again in every round and pass (A/B for decision 479)
 	NoIncremental bool   // RUGAROO_NO_INCREMENTAL: every round walks every return again (A/B for decision 502)
 	InferGeneric  bool   // RUGAROO_INFER_GENERIC: a user parameter whose calls disagree takes a type parameter (decision 503)
+	TypeGraph     bool   // RUGAROO_TYPEGRAPH: the type-graph spike's report after inference (typegraph.go)
 	RoundDump     string // RUGAROO_ROUND_DUMP: a file each inference round appends its state to (parameters, kept ivar typings, returns)
 	ArmDebug      bool   // RUGAROO_ARM_DEBUG: print why an arm of an untyped receiver's block call does not compile
 	GopoisonDump  string // RUGAROO_GOPOISON_DUMP: path prefix for the Go before rejected gem methods become stubs
@@ -59,6 +60,7 @@ func loadEnv() envConfig {
 		NoFileReuse:   os.Getenv("RUGAROO_NO_FILE_REUSE") != "",
 		NoIncremental: os.Getenv("RUGAROO_NO_INCREMENTAL") != "",
 		InferGeneric:  os.Getenv("RUGAROO_INFER_GENERIC") != "",
+		TypeGraph:     os.Getenv("RUGAROO_TYPEGRAPH") != "",
 		TreeCheck:     os.Getenv("RUGAROO_TREE_CHECK") != "",
 		ArmDebug:      os.Getenv("RUGAROO_ARM_DEBUG") != "",
 		GopoisonDump:  os.Getenv("RUGAROO_GOPOISON_DUMP"),

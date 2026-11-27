@@ -836,6 +836,7 @@ func compileWith(ctx context.Context, preludeFS fs.FS, sources []Source, opts *o
 	c.inferReturns()
 	c.relinkOverrides()
 	tick("infer")
+	c.typeGraphReport()
 	c.goFuncs = map[string]goFunc{}
 	c.emitProgram()
 	opts.goFuncs = c.goFuncs

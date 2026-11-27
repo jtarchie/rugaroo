@@ -34,6 +34,7 @@ RUGAROO_ROUND_DUMP=rounds.txt go run ./cmd/rugaroo gen ... # each inference roun
 RUGAROO_NO_FILE_REUSE=1 go run ./cmd/rugaroo gen ...      # parse every source and gem file again in each inference round and pass (A/B for decision 479)
 RUGAROO_NO_INCREMENTAL=1 go run ./cmd/rugaroo gen ...     # every inference round walks every return again (A/B for decision 502); RUGAROO_TIMING's `incremental` line says how many it reused
 RUGAROO_INFER_GENERIC=1 go run ./cmd/rugaroo run x.rb      # a program that fails because a parameter's calls disagree is compiled again with type parameters (decision 503; off by default)
+RUGAROO_TYPEGRAPH=1 go run ./cmd/rugaroo gen ... >/dev/null  # spike: a Crystal-style type graph beside the compiler's inference, its agreement and time (docs/research/typegraph-spike-2026-11.md; report only)
 RUGAROO_TREE_CHECK=1 go run ./cmd/rugaroo gen ...         # each def whose syntax tree a pass rewrote in place (what decision 479's cache drops)
 RUGAROO_GEM_WARNINGS=1 RUGAROO_UNTYPED_WHY=1 go run ./cmd/rugaroo gen ...  # each dynamic-call warning names the root of its untyped receiver (sig untyped, widened local, unannotated return, ...)
 RUGAROO_UNTYPED_REPORT=1 go run ./cmd/rugaroo gen ... >/dev/null  # one report: the roots of untyped receivers ranked by dynamic-call sites, each with the rule and uses (or writes, returns, sig) that left it untyped; =path writes a file; both inference lanes (internal/compiler/untypedreport.go)
