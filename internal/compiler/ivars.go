@@ -106,6 +106,9 @@ func (c *Compiler) subclassIvar(cls *Class, name string) *Ivar {
 }
 
 func (c *Compiler) findIvar(cls *Class, name string) *Ivar {
+	if cls == nil { // an ivar written where no class is self (a top-level block's body): none is found
+		return nil
+	}
 	for k := cls; k != nil; k = k.Super {
 		if iv := k.Ivars[name]; iv != nil {
 			return iv

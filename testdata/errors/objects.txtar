@@ -1350,3 +1350,15 @@ end
     end
   end
 end
+-- toplevel_ivar_in_block.rb --
+# error: main.rb:9: instance variables are only supported in struct classes
+# a top-level ivar written inside a block crashed the compiler (a nil class in findIvar; ruby/spec's core/kernel/proc_spec.rb)
+def ivar_run_it
+  yield
+end
+
+@reached = nil
+ivar_run_it do
+  @reached = true
+end
+p @reached
