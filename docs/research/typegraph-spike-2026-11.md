@@ -76,3 +76,31 @@ gen-compare against unseeded rounds; a seed that is wrong is joined by the round
 not-known-yet rounds the state only goes up, so a seed may only be a type the rounds would reach anyway, which the
 gen-compare checks. If that halves the rounds, migrating construct by construct (narrowing, splats, `super`, the boot
 record) raises the share of seeded slots each time, and the rounds become the checker rather than the solver.
+
+## Graph-seeded rounds: measured and rejected (2026-11-27)
+
+Built on a branch (`RUGAROO_GRAPH_SEED=1`, not merged): one compile before the rounds links the program, solves the
+graph, and writes its parameter types into the rounds' state as if a round had found them. Seeds were limited to what
+the compiler represents as the graph does: no parameter a splat reaches (the graph does not spread `*args`), no union,
+no mixed container (the compiler makes a 2-3 element mixed literal a tuple, decision 22), no type missing an argument
+(`Hash.new` first seeded a bare `Hash`, which crashed the compiler's key lookup).
+
+| program | parameters seeded | rounds, off -> on | transpile, off -> on | generated Go |
+|---|---:|---:|---:|---|
+| `gem_inference` | 33 | 10 -> 9 | 2.7 -> 2.2 s | 297 lines differ |
+| `gem_lenient` | 190 | 10 -> 10 | 5.2 -> 5.3 s | 82 lines differ |
+| `124_liquid` | 47 | 14 -> 15 | 7.3 -> 7.7 s | identical |
+| `123_kramdown` | 47 | 10 -> 9 | 19.3 -> 18.7 s | 27 lines differ |
+| `116_cuba_web` | 12 | 6 -> 6 | 5.6 -> 5.7 s | 6 lines differ |
+
+**Why it does not help:** the round count is not set by how far a type has to travel through calls, which is what a
+seed shortcuts. It is set by the rounds' structure: three phases (decision 499), each run until a round changes
+nothing, so at least two rounds a phase, and by types that arrive late (ivars after discovery, dynamic calls' uses
+in the settling phase), which restart a phase. A seeded parameter is one the first phase types in its first round or
+two anyway. And because the graph's answer is not the compiler's in every case, a seed changes the generated Go,
+which then has to be checked against MRI program by program.
+
+**What this leaves for the graph:** it pays only as the inference engine itself, the rounds gone, with code generation
+following its types; the rounds cannot be made cheap by feeding them. That is the migration the spike sized: the
+gaps in the table above, plus every typing rule that decides a representation (tuples, unions, nil boxing), which the
+graph would then have to own.
