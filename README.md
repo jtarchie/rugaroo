@@ -108,7 +108,7 @@ their fixes. Or try it in the browser at the [playground](https://play.rugaroo.d
 | | Tier |
 |---|---|
 | Classes, modules, blocks, procs, exceptions, pattern matching, `Struct`/`Data`, threads and fibers, Ruby 4.0 syntax, reflection the compiler can answer (`send`, `method_missing`, `const_get`, `instance_variable_get`) | stable |
-| Core classes: `String`, `Array`, `Hash`, `Integer`, `Float`, `Range`, `Set`, `Enumerable`, `Regexp`, `Time`, `File`, `IO`, `Kernel`, ... (Array 87%, Hash 86%, String 77% of the ruby/spec examples that run; per class in docs/support.md) | stable |
+| Core classes: `String`, `Array`, `Hash`, `Integer`, `Float`, `Range`, `Set`, `Enumerable`, `Regexp`, `Time`, `File`, `IO`, `Kernel`, ... (Array 87%, Hash 87%, String 76% of the ruby/spec examples that run; per class in docs/support.md) | stable |
 | Standard library: `json`, `csv`, `date`, `time`, `net/http`, `webrick`, `socket`, `fileutils`, `optparse`, `logger`, `erb`, `bigdecimal`, `rexml`, `minitest` and about 25 more | stable |
 | Gems compiled from source (rack, Cuba, pairing_heap; kramdown and liquid through `-trace`), a Rails app transpiled by [roundhouse](https://rubys.github.io/roundhouse/) to its Spinel shape, `fiddle`, `sqlite3`, `prism`, `yaml` (loads by Psych's rules; dump text is not libyaml's), `openssl` (RSA verify, HMAC, PBKDF2), Sorbet signatures, `Ractor`, `--int-overflow=promote`, `--nil-check=runtime` | experimental |
 | `eval`, `define_method` in your own code, in-place String mutation, encodings beyond ten | not supported |
@@ -147,7 +147,7 @@ A hot program can go a further 0-15% with a profile of its own run
 Correctness is measured against MRI: every [example](examples/), minitest
 suite and compile-error archive runs against `ruby` under `go test`. As a
 wider probe, `cmd/rubyspec` runs [ruby/spec](https://github.com/ruby/spec):
-12,652 of its examples pass (9,509 in `core`, 1,951 in `library`, 1,192 in `language`;
+12,700 of its examples pass (9,555 in `core`, 1,951 in `library`, 1,194 in `language`;
 73% of the `core` examples that run), and most of the rest are skipped for something rugaroo leaves out by
 design. [docs/support.md](docs/support.md#core-classes--stable) has the rate
 for each core class.
